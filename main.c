@@ -12,6 +12,53 @@ typedef struct slice {
 
 
 
+enum {
+	OPERATOR_ADD,
+	OPERATOR_SUB,
+	OPERATOR_MUL,
+	OPERATOR_DIV
+};
+
+enum {
+	AST_LITERAL,
+	AST_SYMBOL,
+	AST_BINOP,
+	AST_APPLY
+};
+
+struct ast_node;
+
+struct ast_literal {
+	slice_t value;
+};
+
+struct ast_symbol {
+	slice_t value;
+};
+
+struct ast_binop {
+	int op;
+	struct ast_node *lhs, *rhs;
+};
+
+struct ast_apply {
+	struct ast_node *func;
+	struct ast_node **args;
+	uint arg_count;
+};
+
+struct ast_node {
+	int type;
+	union {
+		struct ast_literal literal;
+		struct ast_symbol symbol;
+		struct ast_binop binop;
+		struct ast_apply apply;
+	} u;
+};
+
+
+
 #define ERROR_MAX 512
 
 struct parse_ctx {
@@ -278,35 +325,8 @@ static bool parse_atom(struct parse_ctx *ctx) {
 	case UPPER_LETTER: {
 		slice_t var_name;
 		EXPECT_IDENT(var_name, "in expression");
+		printf("var: '%.*s'\n", var_name.len, var_name.ptr);
 		SKIP();
-
-		if (MATCH_CHAR('(')) { /* function call */
-			SKIP();
-			printf("func: '%.*s'\n", var_name.len, var_name.ptr);
-
-			if (MATCH_CHAR(')')) {
-				SKIP();
-			}
-			else {
-				while (true) {
-					if (!parse_expr(ctx, 1)) {
-						return false;
-					}
-					if (MATCH_CHAR(',')) {
-						SKIP();
-						continue;
-					}
-					if (MATCH_CHAR(')')) {
-						SKIP();
-						break;
-					}
-					UNEXPECTED("in function argument list");
-				}
-			}
-		}
-		else {
-			printf("var: '%.*s'\n", var_name.len, var_name.ptr);
-		}
 		return true;
 	}
 	case DIGIT:
@@ -319,16 +339,34 @@ static bool parse_atom(struct parse_ctx *ctx) {
 	UNEXPECTED("while parsing expression atom");
 }
 
-enum {
-	OPERATOR_ADD,
-	OPERATOR_SUB,
-	OPERATOR_MUL,
-	OPERATOR_DIV
-};
-
 static bool parse_expr(struct parse_ctx *ctx, int min_precedence) {
 	if (!parse_atom(ctx)) {
 		return false;
+	}
+
+	if (MATCH_CHAR('(')) { /* function call */
+		SKIP();
+		printf("funcall\n");
+
+		if (MATCH_CHAR(')')) {
+			SKIP();
+		}
+		else {
+			while (true) {
+				if (!parse_expr(ctx, 1)) {
+					return false;
+				}
+				if (MATCH_CHAR(',')) {
+					SKIP();
+					continue;
+				}
+				if (MATCH_CHAR(')')) {
+					SKIP();
+					break;
+				}
+				UNEXPECTED("in function argument list");
+			}
+		}
 	}
 
 	while (true) {
@@ -482,9 +520,6 @@ static bool parse_module(struct parse_ctx *ctx) {
 		}
 	}
 
-    EXPECT("implementation", "after interface definition");
-    EXPECT_SKIP("after 'implementation'");
-
     while (true) {
         if (MATCH("end")) {
             break;
@@ -504,16 +539,19 @@ static bool parse_module(struct parse_ctx *ctx) {
 
 int main(int argc, char *argv[]) {
 	char *text =
-"module Test;\n"
-"import IO, String;\n"
-"type\n"
-"  TFoo = int,\n"
-"  TVar = int;\n"
-"implementation\n"
-"func Foo(x: int, y: int)\n"
-"foo(asdf, (12), 0x32, 1.123+9*(3+10))\n"
-"end\n"
-"end\n";
+
+		"module Test;\n"
+		"import IO, String;\n"
+
+		"type\n"
+		"  TFoo = int,\n"
+		"  TVar = int;\n"
+
+		"func Foo(x: int, y: int)\n"
+		"  Foo(asdf, (12), 0x32, 1.123+9*(3+10))\n"
+		"end\n"
+
+		"end\n";
 
     struct parse_ctx ctx = {0,};
     ctx.pos = text;
