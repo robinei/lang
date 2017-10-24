@@ -11,33 +11,68 @@ typedef struct slice {
 } slice_t;
 
 
-
 enum {
-	OPERATOR_ADD,
-	OPERATOR_SUB,
-	OPERATOR_MUL,
-	OPERATOR_DIV
+	UNOP_PLUS,
+	UNOP_NEGATE,
+	UNOP_LOGI_NOT,
+	UNOP_BITWISE_NOT,
 };
 
 enum {
-	AST_LITERAL,
-	AST_SYMBOL,
+	BINOP_LOGI_OR,
+
+	BINOP_LOGI_AND,
+
+	BINOP_BITWISE_OR,
+
+	BINOP_BITWISE_XOR,
+
+	BINOP_BITWISE_AND,
+
+	BINOP_EQ,
+	BINOP_NEQ,
+
+	BINOP_LT,
+	BINOP_GT,
+	BINOP_LTEQ,
+	BINOP_GTEQ,
+
+	BINOP_BITWISE_LSH,
+	BINOP_BITWISE_RSH,
+
+	BINOP_ADD,
+	BINOP_SUB,
+
+	BINOP_MUL,
+	BINOP_DIV,
+	BINOP_MOD,
+};
+
+enum {
+	AST_LIT,
+	AST_SYM,
+	AST_UNOP,
 	AST_BINOP,
-	AST_APPLY
+	AST_APPLY,
 };
 
 struct ast_node;
 
-struct ast_literal {
+struct ast_lit {
 	slice_t value;
 };
 
-struct ast_symbol {
+struct ast_sym {
 	slice_t value;
+};
+
+struct ast_unop {
+	uint type;
+	struct ast_node *arg;
 };
 
 struct ast_binop {
-	int op;
+	uint type;
 	struct ast_node *lhs, *rhs;
 };
 
@@ -48,10 +83,11 @@ struct ast_apply {
 };
 
 struct ast_node {
-	int type;
+	uint type;
 	union {
-		struct ast_literal literal;
-		struct ast_symbol symbol;
+		struct ast_lit lit;
+		struct ast_sym sym;
+		struct ast_unop unop;
 		struct ast_binop binop;
 		struct ast_apply apply;
 	} u;
@@ -302,6 +338,8 @@ static bool parse_number(struct parse_ctx *ctx) {
 	}
 
 	end = &PEEK(0);
+	SKIP();
+
 	printf("num: '%.*s'\n", (int)(end - start), start);
 	return true;
 }
@@ -309,7 +347,9 @@ static bool parse_number(struct parse_ctx *ctx) {
 static bool parse_expr(struct parse_ctx *ctx, int min_precedence);
 
 static bool parse_atom(struct parse_ctx *ctx) {
-	if (MATCH_CHAR('(')) {
+	switch (PEEK(0)) {
+	case '(':
+		STEP(1);
 		SKIP();
 		if (!parse_expr(ctx, 1)) {
 			return false;
@@ -317,9 +357,34 @@ static bool parse_atom(struct parse_ctx *ctx) {
 		EXPECT_CHAR(')', "after expression");
 		SKIP();
 		return true;
-	}
-
-	switch (PEEK(0)) {
+	case '!':
+		STEP(1);
+		SKIP();
+		if (!parse_atom(ctx)) {
+			return false;
+		}
+		return true;
+	case '~':
+		STEP(1);
+		SKIP();
+		if (!parse_atom(ctx)) {
+			return false;
+		}
+		return true;
+	case '+':
+		STEP(1);
+		SKIP();
+		if (!parse_atom(ctx)) {
+			return false;
+		}
+		return true;
+	case '-':
+		STEP(1);
+		SKIP();
+		if (!parse_atom(ctx)) {
+			return false;
+		}
+		return true;
 	case '_':
 	case LOWER_LETTER:
 	case UPPER_LETTER: {
@@ -373,12 +438,38 @@ static bool parse_expr(struct parse_ctx *ctx, int min_precedence) {
 		int op = -1, len = 1, precedence, next_min_precedence;
 		bool left_assoc = true;
 		char *pos = ctx->pos;
-
+		
 		switch (PEEK(0)) {
-		case '+': precedence = 1; op = OPERATOR_ADD; break;
-		case '-': precedence = 1; op = OPERATOR_SUB; break;
-		case '*': precedence = 2; op = OPERATOR_MUL; break;
-		case '/': precedence = 2; op = OPERATOR_DIV; break;
+		case '|':
+			if (PEEK(1) == '|') { precedence = 1; op = BINOP_LOGI_OR; len = 2; }
+			else { precedence = 3; op = BINOP_BITWISE_OR; }
+			break;
+		case '&':
+			if (PEEK(1) == '&') { precedence = 2; op = BINOP_LOGI_AND; len = 2; }
+			else { precedence = 5; op = BINOP_BITWISE_AND; }
+			break;
+		case '^': precedence = 4; op = BINOP_BITWISE_XOR; break;
+		case '=':
+			if (PEEK(1) == '=') { precedence = 6; op = BINOP_EQ; len = 2; }
+			break;
+		case '!':
+			if (PEEK(1) == '=') { precedence = 6; op = BINOP_NEQ; len = 2; }
+			break;
+		case '<':
+			if (PEEK(1) == '=') { precedence = 7; op = BINOP_LTEQ; len = 2; }
+			if (PEEK(1) == '<') { precedence = 8; op = BINOP_BITWISE_LSH; len = 2; }
+			else { precedence = 7; op = BINOP_LT; }
+			break;
+		case '>':
+			if (PEEK(1) == '=') { precedence = 7; op = BINOP_GTEQ; len = 2; }
+			if (PEEK(1) == '>') { precedence = 8; op = BINOP_BITWISE_RSH; len = 2; }
+			else { precedence = 7; op = BINOP_GT; }
+			break;
+		case '+': precedence = 9; op = BINOP_ADD; break;
+		case '-': precedence = 9; op = BINOP_SUB; break;
+		case '*': precedence = 10; op = BINOP_MUL; break;
+		case '/': precedence = 10; op = BINOP_DIV; break;
+		case '%': precedence = 10; op = BINOP_MOD; break;
 		}
 
 		if (op < 0 || precedence < min_precedence) {
@@ -422,19 +513,28 @@ static bool parse_func(struct parse_ctx *ctx) {
 	}
 	else {
 		while (true) {
-			slice_t param_name;
-			EXPECT_IDENT(param_name, "as parameter name in function declaration");
-			printf("param: '%.*s'\n", param_name.len, param_name.ptr);
+			while (true) {
+				slice_t param_name;
+				EXPECT_IDENT(param_name, "as parameter name in function declaration");
+				printf("param: '%.*s'\n", param_name.len, param_name.ptr);
 
-			SKIP();
-			EXPECT_CHAR(':', "after parameter name");
-			SKIP();
+				SKIP();
+				if (MATCH_CHAR(',')) {
+					SKIP();
+					continue;
+				}
+				if (MATCH_CHAR(':')) {
+					SKIP();
+					break;
+				}
+				UNEXPECTED("in function parameter list");
+			}
 
 			if (!parse_type(ctx)) {
 				return false;
 			}
 
-			if (MATCH_CHAR(',')) {
+			if (MATCH_CHAR(';')) {
 				SKIP();
 				continue;
 			}
@@ -547,8 +647,9 @@ int main(int argc, char *argv[]) {
 		"  TFoo = int,\n"
 		"  TVar = int;\n"
 
-		"func Foo(x: int, y: int)\n"
-		"  Foo(asdf, (12), 0x32, 1.123+9*(3+10))\n"
+		"func Foo(x: int; y, z: int)\n"
+		"  Foo(asdf, (12), 0x32, 1.123+9*(3+10),\n"
+		"      213 | 4, 122 & 1 % 243)\n"
 		"end\n"
 
 		"end\n";
