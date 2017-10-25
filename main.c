@@ -10,6 +10,13 @@ typedef struct slice {
     uint len;
 } slice_t;
 
+static int slice_eq_str(slice_t s, const char *str) {
+	int len = strlen(str);
+	if (s.len != len) {
+		return false;
+	}
+	return !memcmp(s.ptr, str, len);
+}
 
 enum {
 	UNOP_PLUS,
@@ -19,6 +26,8 @@ enum {
 };
 
 enum {
+	BINOP_SEQ,
+
 	BINOP_LOGI_OR,
 
 	BINOP_LOGI_AND,
@@ -105,12 +114,15 @@ struct parse_ctx {
     char error[ERROR_MAX];
 };
 
-#define ERROR(fmt, ...) \
+#define ERROR_AT(pos, fmt, ...) \
     do { \
         snprintf(ctx->error, ERROR_MAX, "(line %d:%d) syntax error: " fmt ":\n%.60s...", \
-            ctx->line + 1, ctx->col + 1, __VA_ARGS__, ctx->pos); \
+            ctx->line + 1, ctx->col + 1, __VA_ARGS__, pos); \
         return false; \
     } while (false)
+
+#define ERROR(fmt, ...) \
+	ERROR_AT(ctx->pos, fmt, __VA_ARGS__)
 
 #define UNEXPECTED(context_desc) \
     do { \
@@ -269,33 +281,68 @@ static inline bool do_match_char(struct parse_ctx *ctx, char ch) {
     case '8': \
     case '9'
 
-#define EXPECT_IDENT(slice, context_desc) \
-    do { \
-        (slice).ptr = &PEEK(0); \
-        switch (PEEK(0)) { \
-        case '_': \
-        case LOWER_LETTER: \
-        case UPPER_LETTER: \
-            STEP(1); \
-            break; \
-        default: \
-            ERROR("expected valid identifier %s", context_desc); \
-        } \
-        while (true) { \
-            switch (PEEK(0)) { \
-                case '_': \
-                case DIGIT: \
-                case LOWER_LETTER: \
-                case UPPER_LETTER: \
-                    STEP(1); \
-                    continue; \
-                default: \
-                    break; \
-            } \
-            break; \
-        } \
-        (slice).len = (uint)(&PEEK(0) - (slice).ptr); \
-    } while(false)
+enum {
+	NOT_IDENT,
+	IDENT,
+	IDENT_MODULE,
+	IDENT_IMPORT,
+	IDENT_FN,
+	IDENT_LET,
+	IDENT_IN,
+	IDENT_INT,
+};
+
+int parse_ident(struct parse_ctx *ctx, slice_t *slice) {
+	slice->ptr = &PEEK(0);
+
+	switch (PEEK(0)) {
+	case '_':
+	case LOWER_LETTER:
+	case UPPER_LETTER:
+		STEP(1);
+		break;
+	default:
+		slice->len = 0;
+		return NOT_IDENT;
+	}
+
+	while (true) {
+		switch (PEEK(0)) {
+		case '_':
+		case DIGIT:
+		case LOWER_LETTER:
+		case UPPER_LETTER:
+			STEP(1);
+			continue;
+		default:
+			break;
+		}
+		break;
+	}
+
+	slice->len = (uint)(&PEEK(0) - slice->ptr);
+	SKIP();
+
+	switch (slice->ptr[0]) {
+	case 'f':
+		if (slice_eq_str(*slice, "fn")) { return IDENT_FN; }
+		break;
+	case 'i':
+		if (slice_eq_str(*slice, "in")) { return IDENT_IN; }
+		if (slice_eq_str(*slice, "int")) { return IDENT_INT; }
+		if (slice_eq_str(*slice, "import")) { return IDENT_MODULE; }
+		break;
+	case 'l':
+		if (slice_eq_str(*slice, "let")) { return IDENT_LET; }
+		break;
+	case 'm':
+		if (slice_eq_str(*slice, "module")) { return IDENT_MODULE; }
+		break;
+	}
+
+	return IDENT;
+}
+
 
 
 static bool parse_number(struct parse_ctx *ctx) {
@@ -346,8 +393,79 @@ static bool parse_number(struct parse_ctx *ctx) {
 
 static bool parse_expr(struct parse_ctx *ctx, int min_precedence);
 
+static bool parse_type(struct parse_ctx *ctx) {
+	slice_t type_name;
+	switch (parse_ident(ctx, &type_name)) {
+	case IDENT_INT:
+		printf("type: '%.*s'\n", type_name.len, type_name.ptr);
+		return true;
+	default:
+		ERROR_AT(type_name.ptr, "unexpected input in type expression");
+	}
+}
+
+static bool parse_fn(struct parse_ctx *ctx) {
+	EXPECT_CHAR('(', "after 'fn'");
+	SKIP();
+
+	if (MATCH_CHAR(')')) {
+		SKIP();
+	}
+	else {
+		while (true) {
+			while (true) {
+				slice_t param_name;
+				switch (parse_ident(ctx, &param_name)) {
+				case IDENT:
+					printf("param: '%.*s'\n", param_name.len, param_name.ptr);
+					break;
+				default:
+					ERROR_AT(param_name.ptr, "expected parameter name");
+				}
+
+				if (MATCH_CHAR(',')) {
+					SKIP();
+					continue;
+				}
+				if (MATCH_CHAR(':')) {
+					SKIP();
+					break;
+				}
+				UNEXPECTED("in function parameter list");
+			}
+
+			if (!parse_type(ctx)) {
+				return false;
+			}
+
+			if (MATCH_CHAR(';')) {
+				SKIP();
+				continue;
+			}
+			if (MATCH_CHAR(')')) {
+				SKIP();
+				break;
+			}
+			UNEXPECTED("in function parameter list");
+		}
+	}
+
+	if (!parse_type(ctx)) {
+		return false;
+	}
+
+	EXPECT_CHAR(':', "after return type");
+	SKIP();
+
+	if (!parse_expr(ctx, 1)) {
+		return false;
+	}
+	return true;
+}
+
 static bool parse_atom(struct parse_ctx *ctx) {
-	switch (PEEK(0)) {
+	char ch = PEEK(0);
+	switch (ch) {
 	case '(':
 		STEP(1);
 		SKIP();
@@ -388,10 +506,23 @@ static bool parse_atom(struct parse_ctx *ctx) {
 	case '_':
 	case LOWER_LETTER:
 	case UPPER_LETTER: {
-		slice_t var_name;
-		EXPECT_IDENT(var_name, "in expression");
-		printf("var: '%.*s'\n", var_name.len, var_name.ptr);
-		SKIP();
+		slice_t ident;
+		switch (parse_ident(ctx, &ident)) {
+		case IDENT:
+			printf("var: '%.*s'\n", ident.len, ident.ptr);
+			return true;
+		case IDENT_FN:
+			printf("fn\n");
+			if (!parse_fn(ctx)) {
+				return false;
+			}
+			return true;
+		case IDENT_LET:
+			printf("fn\n");
+			return true;
+		default:
+			ERROR_AT(ident.ptr, "unexpected identifier in expression");
+		}
 		return true;
 	}
 	case DIGIT:
@@ -440,36 +571,44 @@ static bool parse_expr(struct parse_ctx *ctx, int min_precedence) {
 		char *pos = ctx->pos;
 		
 		switch (PEEK(0)) {
+		case ';':
+			if (PEEK(1) == ';') {
+				STEP(2);
+				SKIP();
+				return true;
+			}
+			precedence = 1; op = BINOP_SEQ;
+			break;
 		case '|':
-			if (PEEK(1) == '|') { precedence = 1; op = BINOP_LOGI_OR; len = 2; }
-			else { precedence = 3; op = BINOP_BITWISE_OR; }
+			if (PEEK(1) == '|') { precedence = 2; op = BINOP_LOGI_OR; len = 2; }
+			else { precedence = 4; op = BINOP_BITWISE_OR; }
 			break;
 		case '&':
-			if (PEEK(1) == '&') { precedence = 2; op = BINOP_LOGI_AND; len = 2; }
-			else { precedence = 5; op = BINOP_BITWISE_AND; }
+			if (PEEK(1) == '&') { precedence = 3; op = BINOP_LOGI_AND; len = 2; }
+			else { precedence = 6; op = BINOP_BITWISE_AND; }
 			break;
-		case '^': precedence = 4; op = BINOP_BITWISE_XOR; break;
+		case '^': precedence = 5; op = BINOP_BITWISE_XOR; break;
 		case '=':
-			if (PEEK(1) == '=') { precedence = 6; op = BINOP_EQ; len = 2; }
+			if (PEEK(1) == '=') { precedence = 7; op = BINOP_EQ; len = 2; }
 			break;
 		case '!':
-			if (PEEK(1) == '=') { precedence = 6; op = BINOP_NEQ; len = 2; }
+			if (PEEK(1) == '=') { precedence = 7; op = BINOP_NEQ; len = 2; }
 			break;
 		case '<':
-			if (PEEK(1) == '=') { precedence = 7; op = BINOP_LTEQ; len = 2; }
-			if (PEEK(1) == '<') { precedence = 8; op = BINOP_BITWISE_LSH; len = 2; }
-			else { precedence = 7; op = BINOP_LT; }
+			if (PEEK(1) == '=') { precedence = 8; op = BINOP_LTEQ; len = 2; }
+			if (PEEK(1) == '<') { precedence = 9; op = BINOP_BITWISE_LSH; len = 2; }
+			else { precedence = 8; op = BINOP_LT; }
 			break;
 		case '>':
-			if (PEEK(1) == '=') { precedence = 7; op = BINOP_GTEQ; len = 2; }
-			if (PEEK(1) == '>') { precedence = 8; op = BINOP_BITWISE_RSH; len = 2; }
-			else { precedence = 7; op = BINOP_GT; }
+			if (PEEK(1) == '=') { precedence = 8; op = BINOP_GTEQ; len = 2; }
+			if (PEEK(1) == '>') { precedence = 9; op = BINOP_BITWISE_RSH; len = 2; }
+			else { precedence = 8; op = BINOP_GT; }
 			break;
-		case '+': precedence = 9; op = BINOP_ADD; break;
-		case '-': precedence = 9; op = BINOP_SUB; break;
-		case '*': precedence = 10; op = BINOP_MUL; break;
-		case '/': precedence = 10; op = BINOP_DIV; break;
-		case '%': precedence = 10; op = BINOP_MOD; break;
+		case '+': precedence = 10; op = BINOP_ADD; break;
+		case '-': precedence = 10; op = BINOP_SUB; break;
+		case '*': precedence = 11; op = BINOP_MUL; break;
+		case '/': precedence = 11; op = BINOP_DIV; break;
+		case '%': precedence = 11; op = BINOP_MOD; break;
 		}
 
 		if (op < 0 || precedence < min_precedence) {
@@ -490,84 +629,18 @@ static bool parse_expr(struct parse_ctx *ctx, int min_precedence) {
 	return true;
 }
 
-static bool parse_type(struct parse_ctx *ctx) {
-	slice_t type_name;
-	EXPECT_IDENT(type_name, "for type");
-	printf("type: '%.*s'\n", type_name.len, type_name.ptr);
-	return true;
-}
-
-static bool parse_func(struct parse_ctx *ctx) {
-	EXPECT_SKIP("after 'func'");
-
-	slice_t func_name;
-	EXPECT_IDENT(func_name, "as name in function declaration");
-	printf("func: '%.*s'\n", func_name.len, func_name.ptr);
-
-	SKIP();
-	EXPECT_CHAR('(', "after function name");
-	SKIP();
-
-	if (MATCH_CHAR(')')) {
-		SKIP();
-	}
-	else {
-		while (true) {
-			while (true) {
-				slice_t param_name;
-				EXPECT_IDENT(param_name, "as parameter name in function declaration");
-				printf("param: '%.*s'\n", param_name.len, param_name.ptr);
-
-				SKIP();
-				if (MATCH_CHAR(',')) {
-					SKIP();
-					continue;
-				}
-				if (MATCH_CHAR(':')) {
-					SKIP();
-					break;
-				}
-				UNEXPECTED("in function parameter list");
-			}
-
-			if (!parse_type(ctx)) {
-				return false;
-			}
-
-			if (MATCH_CHAR(';')) {
-				SKIP();
-				continue;
-			}
-			if (MATCH_CHAR(')')) {
-				SKIP();
-				break;
-			}
-			UNEXPECTED("in function parameter list");
-		}
-	}
-
-	if (MATCH("end")) {
-		SKIP();
-	}
-	else {
-		if (!parse_expr(ctx, 1)) {
-			return false;
-		}
-		EXPECT("end", "after function body");
-		SKIP();
-	}
-
-	return true;
-}
-
 static bool parse_module(struct parse_ctx *ctx) {
     SKIP();
     EXPECT("module", "at top of file");
     EXPECT_SKIP("after 'module'");
 	slice_t module_name;
-    EXPECT_IDENT(module_name, "as name in module declaration");
-	printf("module: '%.*s'\n", module_name.len, module_name.ptr);
-    SKIP();
+	switch (parse_ident(ctx, &module_name)) {
+	case IDENT:
+		printf("module: '%.*s'\n", module_name.len, module_name.ptr);
+		break;
+	default:
+		ERROR_AT(module_name.ptr, "expected module name");
+	}
     EXPECT_CHAR(';', "after module name");
     SKIP();
 
@@ -576,10 +649,14 @@ static bool parse_module(struct parse_ctx *ctx) {
 
         while (true) {
             slice_t import_name;
-            EXPECT_IDENT(import_name, "in import list");
-			printf("import: '%.*s'\n", import_name.len, import_name.ptr);
+			switch (parse_ident(ctx, &import_name)) {
+			case IDENT:
+				printf("import: '%.*s'\n", import_name.len, import_name.ptr);
+				break;
+			default:
+				ERROR_AT(import_name.ptr, "expected import name");
+			}
             
-            SKIP();
             if (MATCH_CHAR(',')) {
                 SKIP();
                 continue;
@@ -592,45 +669,21 @@ static bool parse_module(struct parse_ctx *ctx) {
         }
     }
 
-	if (MATCH("type")) {
-		EXPECT_SKIP("after 'type'");
-
-		while (true) {
-			slice_t type_name;
-			EXPECT_IDENT(type_name, "in type declaration");
-			printf("type name: '%.*s'\n", type_name.len, type_name.ptr);
-
-			SKIP();
-			EXPECT_CHAR('=', "after type name");
-			SKIP();
-
-			if (!parse_type(ctx)) {
-				return false;
-			}
-
-			if (MATCH_CHAR(',')) {
-				SKIP();
-				continue;
-			}
-			if (MATCH_CHAR(';')) {
-				SKIP();
-				break;
-			}
-			UNEXPECTED("in type declaration");
+    while (PEEK(0)) {
+		slice_t ident;
+		switch (parse_ident(ctx, &ident)) {
+		case IDENT:
+			printf("def top-level: '%.*s'\n", ident.len, ident.ptr);
+			break;
+		default:
+			ERROR_AT(ident.ptr, "expected identifier at top level");
 		}
-	}
+		EXPECT_CHAR('=', "after identifier at top level");
+		SKIP();
 
-    while (true) {
-        if (MATCH("end")) {
-            break;
-        }
-        if (MATCH("func")) {
-			if (!parse_func(ctx)) {
-				return false;
-			}
-			continue;
-        }
-        UNEXPECTED("while parsing module");
+		if (!parse_expr(ctx, 1)) {
+			return false;
+		}
     }
 
     return true;
@@ -643,16 +696,11 @@ int main(int argc, char *argv[]) {
 		"module Test;\n"
 		"import IO, String;\n"
 
-		"type\n"
-		"  TFoo = int,\n"
-		"  TVar = int;\n"
+		"Foo = fn(x: int; y, z: int) int:\n"
+		"  print(1); 1 + 2;;\n"
 
-		"func Foo(x: int; y, z: int)\n"
-		"  Foo(asdf, (12), 0x32, 1.123+9*(3+10),\n"
-		"      213 | 4, 122 & 1 % 243)\n"
-		"end\n"
-
-		"end\n";
+		"Bar = fn() int: 1;;"
+		;
 
     struct parse_ctx ctx = {0,};
     ctx.pos = text;
