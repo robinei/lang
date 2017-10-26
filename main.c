@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include "lexer.h"
 
 typedef unsigned int uint;
 
@@ -58,58 +59,69 @@ enum {
 };
 
 enum {
-	AST_LIT,
-	AST_SYM,
-	AST_UNOP,
-	AST_BINOP,
-	AST_APPLY,
+	EXPR_LIT,
+	EXPR_SYM,
+	EXPR_UNOP,
+	EXPR_BINOP,
+	EXPR_CALL,
 };
 
-struct ast_node;
+struct expr;
 
-struct ast_lit {
+struct expr_lit {
 	slice_t value;
 };
 
-struct ast_sym {
+struct expr_sym {
 	slice_t value;
 };
 
-struct ast_unop {
-	uint type;
-	struct ast_node *arg;
+struct expr_fn {
+	uint param_count;
+	slice_t *param_names;
+	struct expr *body;
 };
 
-struct ast_binop {
-	uint type;
-	struct ast_node *lhs, *rhs;
+struct expr_unop {
+	uint unop;
+	struct expr *arg;
 };
 
-struct ast_apply {
-	struct ast_node *func;
-	struct ast_node **args;
+struct expr_binop {
+	uint binop;
+	struct expr *lhs, *rhs;
+};
+
+struct expr_call {
+	struct expr *func;
+	struct expr **args;
 	uint arg_count;
 };
 
-struct ast_node {
-	uint type;
+struct expr {
+	uint expr;
 	union {
-		struct ast_lit lit;
-		struct ast_sym sym;
-		struct ast_unop unop;
-		struct ast_binop binop;
-		struct ast_apply apply;
+		struct expr_lit lit;
+		struct expr_sym sym;
+		struct expr_fn fn;
+		struct expr_unop unop;
+		struct expr_binop binop;
+		struct expr_call call;
 	} u;
 };
 
+
+static struct expr *expr_create(struct parse_ctx *ctx, uint expr_type) {
+	struct expr *e = calloc(1, sizeof(struct expr));
+	e->expr = expr_type;
+	return e;
+}
 
 
 #define ERROR_MAX 512
 
 struct parse_ctx {
-    char *pos;
-    uint line;
-    uint col;
+    struct lexer_ctx lexer;
 
     char error[ERROR_MAX];
 };
@@ -130,6 +142,7 @@ struct parse_ctx {
         ERROR("unexpected end of file %s", context_desc); \
     } while(false)
 
+#if 0
 #define PEEK(n) (*(ctx->pos + (n)))
 #define STEP(n) do { ctx->pos += (n); ctx->col += (n); } while(false)
 
@@ -282,7 +295,7 @@ static inline bool do_match_char(struct parse_ctx *ctx, char ch) {
     case '9'
 
 enum {
-	NOT_IDENT,
+	NOT_IDENT = 1,
 	IDENT,
 	IDENT_MODULE,
 	IDENT_IMPORT,
@@ -345,7 +358,7 @@ int parse_ident(struct parse_ctx *ctx, slice_t *slice) {
 
 
 
-static bool parse_number(struct parse_ctx *ctx) {
+static bool parse_number(struct parse_ctx *ctx, struct expr **result) {
 	char *start = &PEEK(0);
 	char *end;
 
@@ -387,11 +400,15 @@ static bool parse_number(struct parse_ctx *ctx) {
 	end = &PEEK(0);
 	SKIP();
 
+	*result = expr_create(ctx, EXPR_LIT);
+	(*result)->u.lit.value.len = start;
+	(*result)->u.lit.value.len = (int)(end - start);
+
 	printf("num: '%.*s'\n", (int)(end - start), start);
 	return true;
 }
 
-static bool parse_expr(struct parse_ctx *ctx, int min_precedence);
+static bool parse_expr(struct parse_ctx *ctx, struct expr **result);
 
 static bool parse_type(struct parse_ctx *ctx) {
 	slice_t type_name;
@@ -404,7 +421,7 @@ static bool parse_type(struct parse_ctx *ctx) {
 	}
 }
 
-static bool parse_fn(struct parse_ctx *ctx) {
+static bool parse_fn(struct parse_ctx *ctx, struct expr **result) {
 	EXPECT_CHAR('(', "after 'fn'");
 	SKIP();
 
@@ -457,87 +474,94 @@ static bool parse_fn(struct parse_ctx *ctx) {
 	EXPECT_CHAR(':', "after return type");
 	SKIP();
 
-	if (!parse_expr(ctx, 1)) {
+	if (!parse_expr(ctx)) {
 		return false;
 	}
 	return true;
 }
 
-static bool parse_atom(struct parse_ctx *ctx) {
+static bool parse_unop(struct parse_ctx *ctx, struct expr **result) {
+	struct expr *e, *r;
+	uint unop;
+	switch (PEEK(0)) {
+	case '!': unop = UNOP_LOGI_NOT; break;
+	case '~': unop = UNOP_BITWISE_NOT; break;
+	case '+': unop = UNOP_PLUS; break;
+	case '-': unop = UNOP_NEGATE; break;
+	default:
+		UNEXPECTED("while parsing unary expression");
+	}
+
+	STEP(1);
+	SKIP();
+
+	e = NULL;
+	if (!parse_atom(ctx, &e)) {
+		return false;
+	}
+	if (!e) {
+		UNEXPECTED("while parsing unary expression");
+	}
+
+	r = expr_create(ctx, EXPR_UNOP);
+	r->u.unop.unop = unop;
+	r->u.unop.arg = e;
+
+	*result = r;
+	return true;
+}
+
+static bool parse_atom(struct parse_ctx *ctx, struct expr **result) {
 	char ch = PEEK(0);
 	switch (ch) {
 	case '(':
 		STEP(1);
 		SKIP();
-		if (!parse_expr(ctx, 1)) {
+		if (!parse_expr(ctx, result)) {
 			return false;
 		}
 		EXPECT_CHAR(')', "after expression");
 		SKIP();
 		return true;
 	case '!':
-		STEP(1);
-		SKIP();
-		if (!parse_atom(ctx)) {
-			return false;
-		}
-		return true;
 	case '~':
-		STEP(1);
-		SKIP();
-		if (!parse_atom(ctx)) {
-			return false;
-		}
-		return true;
 	case '+':
-		STEP(1);
-		SKIP();
-		if (!parse_atom(ctx)) {
-			return false;
-		}
-		return true;
 	case '-':
-		STEP(1);
-		SKIP();
-		if (!parse_atom(ctx)) {
-			return false;
-		}
-		return true;
+		return parse_unop(ctx, result);
 	case '_':
 	case LOWER_LETTER:
 	case UPPER_LETTER: {
 		slice_t ident;
 		switch (parse_ident(ctx, &ident)) {
-		case IDENT:
+		case IDENT: {
+			struct expr *r = expr_create(ctx, EXPR_SYM);
+			r->u.sym.value = ident;
 			printf("var: '%.*s'\n", ident.len, ident.ptr);
+			*result = r;
 			return true;
+		}
 		case IDENT_FN:
 			printf("fn\n");
-			if (!parse_fn(ctx)) {
-				return false;
-			}
-			return true;
-		case IDENT_LET:
-			printf("fn\n");
-			return true;
-		default:
-			ERROR_AT(ident.ptr, "unexpected identifier in expression");
+			return parse_fn(ctx, result);
 		}
-		return true;
+		ERROR_AT(ident.ptr, "unexpected identifier in expression");
 	}
 	case DIGIT:
-		if (!parse_number(ctx)) {
-			return false;
-		}
-		return true;
+		return parse_number(ctx, result);
 	}
 
-	UNEXPECTED("while parsing expression atom");
+	return true;
 }
 
-static bool parse_expr(struct parse_ctx *ctx, int min_precedence) {
-	if (!parse_atom(ctx)) {
+static bool parse_infix_expr(struct parse_ctx *ctx, int min_precedence, struct expr **result) {
+	struct expr *e;
+
+	e = NULL;
+	if (!parse_atom(ctx, &e)) {
 		return false;
+	}
+	if (!e) {
+		return true;
 	}
 
 	if (MATCH_CHAR('(')) { /* function call */
@@ -549,7 +573,7 @@ static bool parse_expr(struct parse_ctx *ctx, int min_precedence) {
 		}
 		else {
 			while (true) {
-				if (!parse_expr(ctx, 1)) {
+				if (!parse_expr(ctx)) {
 					return false;
 				}
 				if (MATCH_CHAR(',')) {
@@ -619,7 +643,7 @@ static bool parse_expr(struct parse_ctx *ctx, int min_precedence) {
 		SKIP();
 
 		next_min_precedence = precedence + (left_assoc ? 1 : 0);
-		if (!parse_expr(ctx, next_min_precedence)) {
+		if (!parse_infix_expr(ctx, next_min_precedence)) {
 			return false;
 		}
 
@@ -627,6 +651,12 @@ static bool parse_expr(struct parse_ctx *ctx, int min_precedence) {
 	}
 
 	return true;
+}
+
+static bool parse_expr(struct parse_ctx *ctx, struct expr **result) {
+	if (!parse_infix_expr(ctx, 1)) {
+		return false;
+	}
 }
 
 static bool parse_module(struct parse_ctx *ctx) {
@@ -681,14 +711,14 @@ static bool parse_module(struct parse_ctx *ctx) {
 		EXPECT_CHAR('=', "after identifier at top level");
 		SKIP();
 
-		if (!parse_expr(ctx, 1)) {
+		if (!parse_expr(ctx)) {
 			return false;
 		}
     }
 
     return true;
 }
-
+#endif
 
 int main(int argc, char *argv[]) {
 	char *text =
@@ -703,13 +733,17 @@ int main(int argc, char *argv[]) {
 		;
 
     struct parse_ctx ctx = {0,};
-    ctx.pos = text;
+    ctx.lexer.cursor = text;
 
-    if (!parse_module(&ctx)) {
-        printf("\nERROR %s\n", ctx.error);
-    } else {
-        printf("\nOK\n");
+    while (1) {
+        char *begin;
+        int tok = lexer_next_token(&ctx.lexer, &begin);
+        printf("%s: '%.*s'\n", lexer_token_strings[tok], (int)(ctx.lexer.cursor - begin), begin);
+        if (tok == TOK_ERR || tok == TOK_END) {
+            break;
+        }
     }
+    printf("lines: %d\n", ctx.lexer.line);
 
 	fgetc(stdin);
     return 0;

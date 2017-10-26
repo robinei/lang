@@ -1,0 +1,84 @@
+#include "lexer.h"
+
+#define DECL_TOK_STR(Tok) #Tok,
+const char *lexer_token_strings[] = {
+    LEXER_ALL_TOKENS(DECL_TOK_STR)
+};
+
+#define TOK(Tok) return TOK_##Tok
+
+int lexer_next_token(struct lexer_ctx *ctx, char **begin) {
+    char *marker = (void *)0;
+next_token_start:;
+    *begin = ctx->cursor;
+/*!re2c
+    re2c:define:YYCTYPE = char;
+    re2c:define:YYCURSOR  = ctx->cursor;
+    re2c:define:YYMARKER  = marker;
+    re2c:yyfill:enable = 0;
+
+    end = "\x00";
+    bin = '0b' [01]+;
+    oct = "0" [0-7]*;
+    dec = [1-9][0-9]*;
+    hex = '0x' [0-9a-fA-F]+;
+
+    *       { TOK(ERR); }
+    end     { TOK(END); }
+    
+    [ \t\v\r]* { goto next_token_start; }
+    "//" .* end { TOK(END); }
+    "//" .* "\n" {
+        ++ctx->line;
+        goto next_token_start;
+    }
+    "\n" {
+        ++ctx->line;
+        goto next_token_start;
+    }
+    
+    "="     { TOK(ASSIGN); }
+    "=="    { TOK(EQ); }
+    "!="    { TOK(NEQ); }
+    "<"     { TOK(LT); }
+    ">"     { TOK(GT); }
+    "<="    { TOK(LTEQ); }
+    ">="    { TOK(GTEQ); }
+    "+"     { TOK(PLUS); }
+    "-"     { TOK(MINUS); }
+    "*"     { TOK(MUL); }
+    "/"     { TOK(DIV); }
+    "%"     { TOK(MOD); }
+    "<<"    { TOK(LSH); }
+    ">>"    { TOK(RSH); }
+    "&&"    { TOK(AND); }
+    "&"     { TOK(AND_BW); }
+    "||"    { TOK(OR); }
+    "|"     { TOK(OR_BW); }
+    "^"     { TOK(XOR_BW); }
+    "!"     { TOK(NOT); }
+    "~"     { TOK(NOT_BW); }
+    ","     { TOK(COMMA); }
+    ":"     { TOK(COLON); }
+    ";"     { TOK(SEMICOLON); }
+    "("     { TOK(LPAREN); }
+    ")"     { TOK(RPAREN); }
+    "module"    { TOK(KW_MODULE); }
+    "import"    { TOK(KW_IMPORT); }
+    "struct"    { TOK(KW_STRUCT); }
+    "fn"    { TOK(KW_FN); }
+    "let"   { TOK(KW_LET); }
+    "in"    { TOK(KW_IN); }
+    "if"    { TOK(KW_IF); }
+    "elif"  { TOK(KW_ELIF); }
+    "else"  { TOK(KW_ELSE); }
+    "while" { TOK(KW_WHILE); }
+    "int"   { TOK(KW_INT); }
+    
+    [a-zA-Z_][a-zA-Z_0-9]* { TOK(IDENT); }
+    bin { TOK(BIN); }
+    oct { TOK(OCT); }
+    dec { TOK(DEC); }
+    hex { TOK(HEX); }
+*/
+}
