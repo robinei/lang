@@ -63,6 +63,8 @@ next_token_start:;
     ";"     { TOK(SEMICOLON); }
     "("     { TOK(LPAREN); }
     ")"     { TOK(RPAREN); }
+    "["     { TOK(LBRACKET); }
+    "]"     { TOK(RBRACKET); }
     "module"    { TOK(KW_MODULE); }
     "import"    { TOK(KW_IMPORT); }
     "struct"    { TOK(KW_STRUCT); }

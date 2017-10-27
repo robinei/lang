@@ -1,7 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <string.h>
-#include <stdbool.h>
+#include <assert.h>
 #include "lexer.h"
 
 typedef unsigned int uint;
@@ -12,730 +13,524 @@ typedef struct slice {
 } slice_t;
 
 static int slice_eq_str(slice_t s, const char *str) {
-	int len = strlen(str);
-	if (s.len != len) {
-		return false;
-	}
-	return !memcmp(s.ptr, str, len);
+    int len = strlen(str);
+    if (s.len != len) {
+        return 0;
+    }
+    return !memcmp(s.ptr, str, len);
 }
 
 enum {
-	UNOP_PLUS,
-	UNOP_NEGATE,
-	UNOP_LOGI_NOT,
-	UNOP_BITWISE_NOT,
+    UNOP_PLUS,
+    UNOP_NEGATE,
+    UNOP_LOGI_NOT,
+    UNOP_BITWISE_NOT,
 };
 
 enum {
-	BINOP_SEQ,
+    BINOP_SEQ,
 
-	BINOP_LOGI_OR,
+    BINOP_LOGI_OR,
 
-	BINOP_LOGI_AND,
+    BINOP_LOGI_AND,
 
-	BINOP_BITWISE_OR,
+    BINOP_BITWISE_OR,
 
-	BINOP_BITWISE_XOR,
+    BINOP_BITWISE_XOR,
 
-	BINOP_BITWISE_AND,
+    BINOP_BITWISE_AND,
 
-	BINOP_EQ,
-	BINOP_NEQ,
+    BINOP_EQ,
+    BINOP_NEQ,
 
-	BINOP_LT,
-	BINOP_GT,
-	BINOP_LTEQ,
-	BINOP_GTEQ,
+    BINOP_LT,
+    BINOP_GT,
+    BINOP_LTEQ,
+    BINOP_GTEQ,
 
-	BINOP_BITWISE_LSH,
-	BINOP_BITWISE_RSH,
+    BINOP_BITWISE_LSH,
+    BINOP_BITWISE_RSH,
 
-	BINOP_ADD,
-	BINOP_SUB,
+    BINOP_ADD,
+    BINOP_SUB,
 
-	BINOP_MUL,
-	BINOP_DIV,
-	BINOP_MOD,
+    BINOP_MUL,
+    BINOP_DIV,
+    BINOP_MOD,
 };
 
 enum {
-	EXPR_LIT,
-	EXPR_SYM,
-	EXPR_UNOP,
-	EXPR_BINOP,
-	EXPR_CALL,
+    EXPR_LIT,
+    EXPR_SYM,
+    EXPR_FN,
+    EXPR_UNOP,
+    EXPR_BINOP,
+    EXPR_CALL,
 };
+
+#define FN_MAX_PARAM 100
 
 struct expr;
 
 struct expr_lit {
-	slice_t value;
+    slice_t value;
 };
 
 struct expr_sym {
-	slice_t value;
+    slice_t value;
 };
 
 struct expr_fn {
-	uint param_count;
-	slice_t *param_names;
-	struct expr *body;
+    uint param_count;
+    slice_t *param_names;
+    struct expr *body;
 };
 
 struct expr_unop {
-	uint unop;
-	struct expr *arg;
+    uint unop;
+    struct expr *arg;
 };
 
 struct expr_binop {
-	uint binop;
-	struct expr *lhs, *rhs;
+    uint binop;
+    struct expr *lhs, *rhs;
 };
 
 struct expr_call {
-	struct expr *func;
-	struct expr **args;
-	uint arg_count;
+    struct expr *func;
+    struct expr **args;
+    uint arg_count;
 };
 
 struct expr {
-	uint expr;
-	union {
-		struct expr_lit lit;
-		struct expr_sym sym;
-		struct expr_fn fn;
-		struct expr_unop unop;
-		struct expr_binop binop;
-		struct expr_call call;
-	} u;
+    uint expr;
+    union {
+        struct expr_lit lit;
+        struct expr_sym sym;
+        struct expr_fn fn;
+        struct expr_unop unop;
+        struct expr_binop binop;
+        struct expr_call call;
+    } u;
 };
 
 
 static struct expr *expr_create(struct parse_ctx *ctx, uint expr_type) {
-	struct expr *e = calloc(1, sizeof(struct expr));
-	e->expr = expr_type;
-	return e;
+    struct expr *e = calloc(1, sizeof(struct expr));
+    e->expr = expr_type;
+    return e;
 }
+
 
 
 #define ERROR_MAX 512
 
 struct parse_ctx {
     struct lexer_ctx lexer;
+    char *text;
+    int token;
+    slice_t token_text;
 
-    char error[ERROR_MAX];
+    char error[ERROR_MAX + 1];
 };
 
-#define ERROR_AT(pos, fmt, ...) \
-    do { \
-        snprintf(ctx->error, ERROR_MAX, "(line %d:%d) syntax error: " fmt ":\n%.60s...", \
-            ctx->line + 1, ctx->col + 1, __VA_ARGS__, pos); \
-        return false; \
-    } while (false)
+static void parse_error(struct parse_ctx *ctx, const char *format, ...) {
+    va_list args;
+    int used = 0;
+    char *line;
+    int line_len;
+    int err_line_offset;
+    int err_len;
+    int i;
 
-#define ERROR(fmt, ...) \
-	ERROR_AT(ctx->pos, fmt, __VA_ARGS__)
-
-#define UNEXPECTED(context_desc) \
-    do { \
-        if (PEEK(0)) ERROR("unexpected input %s", context_desc); \
-        ERROR("unexpected end of file %s", context_desc); \
-    } while(false)
-
-#if 0
-#define PEEK(n) (*(ctx->pos + (n)))
-#define STEP(n) do { ctx->pos += (n); ctx->col += (n); } while(false)
-
-/* skip whitespace and comments, while paying attention to newlines */
-#define SKIP() \
-    do { \
-        switch (PEEK(0)) { \
-        case '\r': \
-            if (PEEK(1) == '\n') { \
-                STEP(1); \
-                continue; \
-            } \
-        case '\n': \
-            ++ctx->line; \
-            ctx->col = -1; \
-        case ' ': \
-        case '\t': \
-            STEP(1); \
-            continue; \
-        case '/': \
-            if (PEEK(1) == '/') { \
-                STEP(2); \
-                do { \
-                    char ch = PEEK(0); \
-                    if (ch == '\r' || ch == '\n' || ch == '\0') break; \
-                    STEP(1); \
-                } while(true); \
-                continue; \
-            } \
-        default: \
-            break; \
-        } \
-        break; \
-    } while(true)
-
-#define EXPECT_SKIP(context_desc) \
-    do { \
-        char *pos = ctx->pos; \
-        SKIP(); \
-        if (pos == ctx->pos) ERROR("expected whitespace %s", context_desc); \
-    } while(false)
-
-#define EXPECT(str, context_desc) \
-    do { \
-        uint i = 0; \
-        while (str[i]) { \
-            if (PEEK(0) != str[i]) ERROR("expected '%s' %s", str, context_desc); \
-            STEP(1); \
-            ++i; \
-        } \
-    } while(false)
-
-#define EXPECT_CHAR(ch, context_desc) \
-    do { \
-        if (PEEK(0) != ch) ERROR("expected '%c' %s", ch, context_desc); \
-        STEP(1); \
-    } while(false)
-
-#define MATCH(str) do_match(ctx, str)
-static inline bool do_match(struct parse_ctx *ctx, char *str) {
-    uint len = strlen(str);
-    if (strncmp(ctx->pos, str, len)) {
-        return false;
+    used += snprintf(ctx->error + used, ERROR_MAX - used, "(line %d) parse error: ", ctx->lexer.line + 1);
+    if (used > ERROR_MAX) {
+        used = ERROR_MAX;
     }
-    STEP(len);
-    return true;
-}
 
-#define MATCH_CHAR(ch) do_match_char(ctx, ch)
-static inline bool do_match_char(struct parse_ctx *ctx, char ch) {
-    if (*ctx->pos != ch) {
-        return false;
+    va_start(args, format);
+    used += vsnprintf(ctx->error + used, ERROR_MAX - used, format, args);
+    va_end(args);
+    if (used > ERROR_MAX) {
+        used = ERROR_MAX;
     }
-    STEP(1);
-    return true;
+
+    line = ctx->token_text.ptr;
+    while (line > ctx->text && line[-1] != '\n') {
+        --line;
+    }
+
+    line_len = 0;
+    while (line[line_len] && line[line_len] != '\n') {
+        ++line_len;
+    }
+
+    if (used < ERROR_MAX) {
+        ctx->error[used++] = '\n';
+    }
+
+    err_line_offset = (int)(ctx->token_text.ptr - line);
+    for (i = 0; i < err_line_offset && used < ERROR_MAX; ++i) {
+        ctx->error[used++] = ' ';
+    }
+    err_len = ctx->token_text.len;
+    if (err_len <= 0) {
+        err_len = 1;
+    }
+    for (i = 0; i < err_len && used < ERROR_MAX; ++i) {
+        ctx->error[used++] = 'v';
+    }
+
+    used += snprintf(ctx->error + used, ERROR_MAX - used, "\n%.*s", line_len, line);
+    if (used > ERROR_MAX) {
+        used = ERROR_MAX;
+    }
+
+    ctx->error[used] = '\0';
 }
 
-#define LOWER_HEX_LETTER \
-    'a': \
-    case 'b': \
-    case 'c': \
-    case 'd': \
-    case 'e': \
-    case 'f'
+#define NEXT_TOKEN() \
+    do { \
+        ctx->token = lexer_next_token(&ctx->lexer, &ctx->token_text.ptr); \
+        ctx->token_text.len = (int)(ctx->lexer.cursor - ctx->token_text.ptr); \
+        printf("%s: '%.*s'\n", lexer_token_strings[ctx->token], (int)(ctx->lexer.cursor - ctx->token_text.ptr), ctx->token_text.ptr); \
+    } while (0)
 
-#define LOWER_LETTER \
-	LOWER_HEX_LETTER: \
-    case 'g': \
-    case 'h': \
-    case 'i': \
-    case 'j': \
-    case 'k': \
-    case 'l': \
-    case 'm': \
-    case 'n': \
-    case 'o': \
-    case 'p': \
-    case 'q': \
-    case 'r': \
-    case 's': \
-    case 't': \
-    case 'u': \
-    case 'v': \
-    case 'w': \
-    case 'x': \
-    case 'y': \
-    case 'z'
 
-#define UPPER_HEX_LETTER \
-    'A': \
-    case 'B': \
-    case 'C': \
-    case 'D': \
-    case 'E': \
-    case 'F'
+static struct expr *parse_expr(struct parse_ctx *ctx);
+static struct expr *parse_atom(struct parse_ctx *ctx);
 
-#define UPPER_LETTER \
-	UPPER_HEX_LETTER: \
-    case 'G': \
-    case 'H': \
-    case 'I': \
-    case 'J': \
-    case 'K': \
-    case 'L': \
-    case 'M': \
-    case 'N': \
-    case 'O': \
-    case 'P': \
-    case 'Q': \
-    case 'R': \
-    case 'S': \
-    case 'T': \
-    case 'U': \
-    case 'V': \
-    case 'W': \
-    case 'X': \
-    case 'Y': \
-    case 'Z'
 
-#define DIGIT \
-    '0': \
-    case '1': \
-    case '2': \
-    case '3': \
-    case '4': \
-    case '5': \
-    case '6': \
-    case '7': \
-    case '8': \
-    case '9'
+static struct expr *parse_unary(struct parse_ctx *ctx, int unop) {
+    struct expr *arg, *e = NULL;
 
-enum {
-	NOT_IDENT = 1,
-	IDENT,
-	IDENT_MODULE,
-	IDENT_IMPORT,
-	IDENT_FN,
-	IDENT_LET,
-	IDENT_IN,
-	IDENT_INT,
-};
-
-int parse_ident(struct parse_ctx *ctx, slice_t *slice) {
-	slice->ptr = &PEEK(0);
-
-	switch (PEEK(0)) {
-	case '_':
-	case LOWER_LETTER:
-	case UPPER_LETTER:
-		STEP(1);
-		break;
-	default:
-		slice->len = 0;
-		return NOT_IDENT;
-	}
-
-	while (true) {
-		switch (PEEK(0)) {
-		case '_':
-		case DIGIT:
-		case LOWER_LETTER:
-		case UPPER_LETTER:
-			STEP(1);
-			continue;
-		default:
-			break;
-		}
-		break;
-	}
-
-	slice->len = (uint)(&PEEK(0) - slice->ptr);
-	SKIP();
-
-	switch (slice->ptr[0]) {
-	case 'f':
-		if (slice_eq_str(*slice, "fn")) { return IDENT_FN; }
-		break;
-	case 'i':
-		if (slice_eq_str(*slice, "in")) { return IDENT_IN; }
-		if (slice_eq_str(*slice, "int")) { return IDENT_INT; }
-		if (slice_eq_str(*slice, "import")) { return IDENT_MODULE; }
-		break;
-	case 'l':
-		if (slice_eq_str(*slice, "let")) { return IDENT_LET; }
-		break;
-	case 'm':
-		if (slice_eq_str(*slice, "module")) { return IDENT_MODULE; }
-		break;
-	}
-
-	return IDENT;
+    NEXT_TOKEN();
+    arg = parse_atom(ctx);
+    if (arg) {
+        e = expr_create(ctx, EXPR_UNOP);
+        e->u.unop.arg = arg;
+    }
+    return e;
 }
 
+static struct expr *parse_atom(struct parse_ctx *ctx) {
+    struct expr *e = NULL;
 
+    switch (ctx->token) {
+    case TOK_LPAREN:
+        NEXT_TOKEN();
+        e = parse_expr(ctx);
+        if (!e) {
+            return NULL;
+        }
+        if (ctx->token != TOK_RPAREN) {
+            parse_error(ctx, "expected ')'");
+            return NULL;
+        }
+        NEXT_TOKEN();
+        break;
+    case TOK_PLUS: return parse_unary(ctx, UNOP_PLUS);
+    case TOK_MINUS: return parse_unary(ctx, UNOP_NEGATE);
+    case TOK_NOT: return parse_unary(ctx, UNOP_LOGI_NOT);
+    case TOK_NOT_BW: return parse_unary(ctx, UNOP_BITWISE_NOT);
+    case TOK_IDENT:
+        e = expr_create(ctx, EXPR_SYM);
+        e->u.sym.value = ctx->token_text;
+        NEXT_TOKEN();
+        break;
+    case TOK_BIN:
+    case TOK_OCT:
+    case TOK_DEC:
+    case TOK_HEX:
+        e = expr_create(ctx, EXPR_LIT);
+        e->u.lit.value = ctx->token_text;
+        NEXT_TOKEN();
+        break;
+    default:
+        parse_error(ctx, "unexpected token in expression");
+        return NULL;
+    }
 
-static bool parse_number(struct parse_ctx *ctx, struct expr **result) {
-	char *start = &PEEK(0);
-	char *end;
-
-	if (PEEK(0) == '0' && PEEK(1) == 'x') {
-		STEP(2);
-		while (true) {
-			switch (PEEK(0)) {
-			case DIGIT:
-			case LOWER_HEX_LETTER:
-			case UPPER_HEX_LETTER:
-				STEP(1);
-				continue;
-			}
-			break;
-		}
-	}
-	else {
-		while (true) {
-			switch (PEEK(0)) {
-			case DIGIT:
-				STEP(1);
-				continue;
-			case '.':
-				STEP(1);
-				while (true) {
-					switch (PEEK(0)) {
-					case DIGIT:
-						STEP(1);
-						continue;
-					}
-					break;
-				}
-				break;
-			}
-			break;
-		}
-	}
-
-	end = &PEEK(0);
-	SKIP();
-
-	*result = expr_create(ctx, EXPR_LIT);
-	(*result)->u.lit.value.len = start;
-	(*result)->u.lit.value.len = (int)(end - start);
-
-	printf("num: '%.*s'\n", (int)(end - start), start);
-	return true;
+    return e;
 }
 
-static bool parse_expr(struct parse_ctx *ctx, struct expr **result);
+static struct expr *parse_infix(struct parse_ctx *ctx, int min_precedence) {
+    struct expr *lhs = parse_atom(ctx);
+    if (!lhs) {
+        return NULL;
+    }
 
-static bool parse_type(struct parse_ctx *ctx) {
-	slice_t type_name;
-	switch (parse_ident(ctx, &type_name)) {
-	case IDENT_INT:
-		printf("type: '%.*s'\n", type_name.len, type_name.ptr);
-		return true;
-	default:
-		ERROR_AT(type_name.ptr, "unexpected input in type expression");
-	}
+    while (1) {
+        int op = -1, left_assoc = 1, precedence, next_min_precedence;
+        struct expr *rhs, *temp;
+
+        switch (ctx->token) {
+        case TOK_OR:        op = BINOP_LOGI_OR;     precedence = 1; break;
+
+        case TOK_AND:       op = BINOP_LOGI_AND;    precedence = 2; break;
+
+        case TOK_OR_BW:     op = BINOP_BITWISE_OR;  precedence = 3; break;
+
+        case TOK_XOR_BW:    op = BINOP_BITWISE_XOR; precedence = 4; break;
+
+        case TOK_AND_BW:    op = BINOP_BITWISE_AND; precedence = 5; break;
+
+        case TOK_EQ:        op = BINOP_EQ;          precedence = 6; break;
+        case TOK_NEQ:       op = BINOP_NEQ;         precedence = 6; break;
+
+        case TOK_LT:        op = BINOP_LT;          precedence = 7; break;
+        case TOK_GT:        op = BINOP_GT;          precedence = 7; break;
+        case TOK_LTEQ:      op = BINOP_LTEQ;        precedence = 7; break;
+        case TOK_GTEQ:      op = BINOP_GTEQ;        precedence = 7; break;
+
+        case TOK_LSH:       op = BINOP_BITWISE_LSH; precedence = 8; break;
+        case TOK_RSH:       op = BINOP_BITWISE_RSH; precedence = 8; break;
+
+        case TOK_PLUS:      op = BINOP_ADD;         precedence = 9; break;
+        case TOK_MINUS:     op = BINOP_SUB;         precedence = 9; break;
+
+        case TOK_MUL:       op = BINOP_MUL;         precedence = 10; break;
+        case TOK_DIV:       op = BINOP_DIV;         precedence = 10; break;
+        case TOK_MOD:       op = BINOP_MOD;         precedence = 10; break;
+        }
+
+        if (op < 0 || precedence < min_precedence) {
+            break;
+        }
+
+        next_min_precedence = precedence + (left_assoc ? 1 : 0);
+        rhs = parse_infix(ctx, next_min_precedence);
+        if (!rhs) {
+            return NULL;
+        }
+
+        temp = expr_create(ctx, EXPR_BINOP);
+        temp->u.binop.binop = op;
+        temp->u.binop.lhs = lhs;
+        temp->u.binop.rhs = rhs;
+        lhs = temp;
+    }
+
+    return lhs;
 }
 
-static bool parse_fn(struct parse_ctx *ctx, struct expr **result) {
-	EXPECT_CHAR('(', "after 'fn'");
-	SKIP();
+static struct expr *parse_fn(struct parse_ctx *ctx) {
+    slice_t param_names[FN_MAX_PARAM];
+    int num_params = 0;
+    struct expr *type, *body, *fn;
 
-	if (MATCH_CHAR(')')) {
-		SKIP();
-	}
-	else {
-		while (true) {
-			while (true) {
-				slice_t param_name;
-				switch (parse_ident(ctx, &param_name)) {
-				case IDENT:
-					printf("param: '%.*s'\n", param_name.len, param_name.ptr);
-					break;
-				default:
-					ERROR_AT(param_name.ptr, "expected parameter name");
-				}
+    assert(ctx->token == TOK_KW_FN);
+    NEXT_TOKEN();
 
-				if (MATCH_CHAR(',')) {
-					SKIP();
-					continue;
-				}
-				if (MATCH_CHAR(':')) {
-					SKIP();
-					break;
-				}
-				UNEXPECTED("in function parameter list");
-			}
+    if (ctx->token == TOK_LPAREN) {
+        NEXT_TOKEN();
+        if (ctx->token == TOK_RPAREN) {
+            NEXT_TOKEN();
+        }
+        else {
+            while (1) {
+                while (1) {
+                    if (ctx->token != TOK_IDENT) {
+                        parse_error(ctx, "expected identifier in parameter list");
+                        return NULL;
+                    }
+                    param_names[num_params++] = ctx->token_text;
+                    NEXT_TOKEN();
+                    if (ctx->token == TOK_COMMA) {
+                        NEXT_TOKEN();
+                        continue;
+                    }
+                    if (ctx->token == TOK_COLON) {
+                        NEXT_TOKEN();
+                        break;
+                    }
+                    parse_error(ctx, "unexpected token in parameter list");
+                    return NULL;
+                }
 
-			if (!parse_type(ctx)) {
-				return false;
-			}
+                type = parse_expr(ctx);
+                if (!type) {
+                    parse_error(ctx, "expected type expression");
+                    return NULL;
+                }
 
-			if (MATCH_CHAR(';')) {
-				SKIP();
-				continue;
-			}
-			if (MATCH_CHAR(')')) {
-				SKIP();
-				break;
-			}
-			UNEXPECTED("in function parameter list");
-		}
-	}
-
-	if (!parse_type(ctx)) {
-		return false;
-	}
-
-	EXPECT_CHAR(':', "after return type");
-	SKIP();
-
-	if (!parse_expr(ctx)) {
-		return false;
-	}
-	return true;
-}
-
-static bool parse_unop(struct parse_ctx *ctx, struct expr **result) {
-	struct expr *e, *r;
-	uint unop;
-	switch (PEEK(0)) {
-	case '!': unop = UNOP_LOGI_NOT; break;
-	case '~': unop = UNOP_BITWISE_NOT; break;
-	case '+': unop = UNOP_PLUS; break;
-	case '-': unop = UNOP_NEGATE; break;
-	default:
-		UNEXPECTED("while parsing unary expression");
-	}
-
-	STEP(1);
-	SKIP();
-
-	e = NULL;
-	if (!parse_atom(ctx, &e)) {
-		return false;
-	}
-	if (!e) {
-		UNEXPECTED("while parsing unary expression");
-	}
-
-	r = expr_create(ctx, EXPR_UNOP);
-	r->u.unop.unop = unop;
-	r->u.unop.arg = e;
-
-	*result = r;
-	return true;
-}
-
-static bool parse_atom(struct parse_ctx *ctx, struct expr **result) {
-	char ch = PEEK(0);
-	switch (ch) {
-	case '(':
-		STEP(1);
-		SKIP();
-		if (!parse_expr(ctx, result)) {
-			return false;
-		}
-		EXPECT_CHAR(')', "after expression");
-		SKIP();
-		return true;
-	case '!':
-	case '~':
-	case '+':
-	case '-':
-		return parse_unop(ctx, result);
-	case '_':
-	case LOWER_LETTER:
-	case UPPER_LETTER: {
-		slice_t ident;
-		switch (parse_ident(ctx, &ident)) {
-		case IDENT: {
-			struct expr *r = expr_create(ctx, EXPR_SYM);
-			r->u.sym.value = ident;
-			printf("var: '%.*s'\n", ident.len, ident.ptr);
-			*result = r;
-			return true;
-		}
-		case IDENT_FN:
-			printf("fn\n");
-			return parse_fn(ctx, result);
-		}
-		ERROR_AT(ident.ptr, "unexpected identifier in expression");
-	}
-	case DIGIT:
-		return parse_number(ctx, result);
-	}
-
-	return true;
-}
-
-static bool parse_infix_expr(struct parse_ctx *ctx, int min_precedence, struct expr **result) {
-	struct expr *e;
-
-	e = NULL;
-	if (!parse_atom(ctx, &e)) {
-		return false;
-	}
-	if (!e) {
-		return true;
-	}
-
-	if (MATCH_CHAR('(')) { /* function call */
-		SKIP();
-		printf("funcall\n");
-
-		if (MATCH_CHAR(')')) {
-			SKIP();
-		}
-		else {
-			while (true) {
-				if (!parse_expr(ctx)) {
-					return false;
-				}
-				if (MATCH_CHAR(',')) {
-					SKIP();
-					continue;
-				}
-				if (MATCH_CHAR(')')) {
-					SKIP();
-					break;
-				}
-				UNEXPECTED("in function argument list");
-			}
-		}
-	}
-
-	while (true) {
-		int op = -1, len = 1, precedence, next_min_precedence;
-		bool left_assoc = true;
-		char *pos = ctx->pos;
-		
-		switch (PEEK(0)) {
-		case ';':
-			if (PEEK(1) == ';') {
-				STEP(2);
-				SKIP();
-				return true;
-			}
-			precedence = 1; op = BINOP_SEQ;
-			break;
-		case '|':
-			if (PEEK(1) == '|') { precedence = 2; op = BINOP_LOGI_OR; len = 2; }
-			else { precedence = 4; op = BINOP_BITWISE_OR; }
-			break;
-		case '&':
-			if (PEEK(1) == '&') { precedence = 3; op = BINOP_LOGI_AND; len = 2; }
-			else { precedence = 6; op = BINOP_BITWISE_AND; }
-			break;
-		case '^': precedence = 5; op = BINOP_BITWISE_XOR; break;
-		case '=':
-			if (PEEK(1) == '=') { precedence = 7; op = BINOP_EQ; len = 2; }
-			break;
-		case '!':
-			if (PEEK(1) == '=') { precedence = 7; op = BINOP_NEQ; len = 2; }
-			break;
-		case '<':
-			if (PEEK(1) == '=') { precedence = 8; op = BINOP_LTEQ; len = 2; }
-			if (PEEK(1) == '<') { precedence = 9; op = BINOP_BITWISE_LSH; len = 2; }
-			else { precedence = 8; op = BINOP_LT; }
-			break;
-		case '>':
-			if (PEEK(1) == '=') { precedence = 8; op = BINOP_GTEQ; len = 2; }
-			if (PEEK(1) == '>') { precedence = 9; op = BINOP_BITWISE_RSH; len = 2; }
-			else { precedence = 8; op = BINOP_GT; }
-			break;
-		case '+': precedence = 10; op = BINOP_ADD; break;
-		case '-': precedence = 10; op = BINOP_SUB; break;
-		case '*': precedence = 11; op = BINOP_MUL; break;
-		case '/': precedence = 11; op = BINOP_DIV; break;
-		case '%': precedence = 11; op = BINOP_MOD; break;
-		}
-
-		if (op < 0 || precedence < min_precedence) {
-			break;
-		}
-
-		STEP(len);
-		SKIP();
-
-		next_min_precedence = precedence + (left_assoc ? 1 : 0);
-		if (!parse_infix_expr(ctx, next_min_precedence)) {
-			return false;
-		}
-
-		printf("op: '%.*s'\n", len, pos);
-	}
-
-	return true;
-}
-
-static bool parse_expr(struct parse_ctx *ctx, struct expr **result) {
-	if (!parse_infix_expr(ctx, 1)) {
-		return false;
-	}
-}
-
-static bool parse_module(struct parse_ctx *ctx) {
-    SKIP();
-    EXPECT("module", "at top of file");
-    EXPECT_SKIP("after 'module'");
-	slice_t module_name;
-	switch (parse_ident(ctx, &module_name)) {
-	case IDENT:
-		printf("module: '%.*s'\n", module_name.len, module_name.ptr);
-		break;
-	default:
-		ERROR_AT(module_name.ptr, "expected module name");
-	}
-    EXPECT_CHAR(';', "after module name");
-    SKIP();
-
-    if (MATCH("import")) {
-        EXPECT_SKIP("after 'import'");
-
-        while (true) {
-            slice_t import_name;
-			switch (parse_ident(ctx, &import_name)) {
-			case IDENT:
-				printf("import: '%.*s'\n", import_name.len, import_name.ptr);
-				break;
-			default:
-				ERROR_AT(import_name.ptr, "expected import name");
-			}
-            
-            if (MATCH_CHAR(',')) {
-                SKIP();
-                continue;
+                if (ctx->token == TOK_SEMICOLON) {
+                    NEXT_TOKEN();
+                    continue;
+                }
+                if (ctx->token == TOK_RPAREN) {
+                    NEXT_TOKEN();
+                    break;
+                }
+                parse_error(ctx, "unexpected token in parameter list");
+                return NULL;
             }
-            if (MATCH_CHAR(';')) {
-                SKIP();
-                break;
+        }
+
+
+        if (ctx->token != TOK_COLON) {
+            type = parse_expr(ctx);
+            if (!type) {
+                parse_error(ctx, "expected return type expression or ':'");
+                return NULL;
             }
-            UNEXPECTED("in import declaration");
+        }
+
+        if (ctx->token != TOK_COLON) {
+            parse_error(ctx, "expected ':' after 'fn' parameter list");
+            return NULL;
+        }
+
+        NEXT_TOKEN();
+    }
+    else {
+        NEXT_TOKEN();
+        if (ctx->token != TOK_COLON) {
+            parse_error(ctx, "expected '(' or ':' after 'fn'");
+            return NULL;
         }
     }
 
-    while (PEEK(0)) {
-		slice_t ident;
-		switch (parse_ident(ctx, &ident)) {
-		case IDENT:
-			printf("def top-level: '%.*s'\n", ident.len, ident.ptr);
-			break;
-		default:
-			ERROR_AT(ident.ptr, "expected identifier at top level");
-		}
-		EXPECT_CHAR('=', "after identifier at top level");
-		SKIP();
-
-		if (!parse_expr(ctx)) {
-			return false;
-		}
+    body = parse_expr(ctx);
+    if (!body) {
+        parse_error(ctx, "expected function body expression");
+        return NULL;
     }
 
-    return true;
+    fn = expr_create(ctx, EXPR_FN);
+    fn->u.fn.param_count = num_params;
+    fn->u.fn.param_names = malloc(sizeof(slice_t) * num_params);
+    memcpy(fn->u.fn.param_names, param_names, sizeof(slice_t) * num_params);
+    fn->u.fn.body = body;
+    return fn;
 }
-#endif
+
+static struct expr *parse_let(struct parse_ctx *ctx) {
+    assert(ctx->token == TOK_KW_LET);
+    return NULL;
+}
+
+static struct expr *parse_expr(struct parse_ctx *ctx) {
+    struct expr *first, *second, *e;
+
+    switch (ctx->token) {
+    case TOK_KW_FN:
+        return parse_fn(ctx);
+    case TOK_KW_LET:
+        return parse_let(ctx);
+    }
+
+    first = parse_infix(ctx, 1);
+    if (!first) {
+        return NULL;
+    }
+
+    switch (ctx->token) {
+    case TOK_RPAREN:
+    case TOK_RBRACKET:
+    case TOK_SEMICOLON:
+    case TOK_COLON:
+    case TOK_COMMA:
+    case TOK_KW_IN:
+    case TOK_KW_ELIF:
+    case TOK_KW_ELSE:
+        /* no more expressions */
+        return first;
+    }
+
+    second = parse_expr(ctx);
+    if (!second) {
+        return NULL;
+    }
+
+    e = expr_create(ctx, EXPR_BINOP);
+    e->u.binop.binop = BINOP_SEQ;
+    e->u.binop.lhs = first;
+    e->u.binop.rhs = second;
+
+    return e;
+}
+
+static int parse_module(struct parse_ctx *ctx) {
+    struct expr *e;
+
+    NEXT_TOKEN();
+
+    if (ctx->token != TOK_KW_MODULE) {
+        parse_error(ctx, "expected 'module' at top of file");
+        return 0;
+    }
+    NEXT_TOKEN();
+    if (ctx->token != TOK_IDENT) {
+        parse_error(ctx, "expected identifier after 'module'");
+        return 0;
+    }
+    NEXT_TOKEN();
+    if (ctx->token != TOK_SEMICOLON) {
+        parse_error(ctx, "expected ';' after 'module' declaration");
+        return 0;
+    }
+    NEXT_TOKEN();
+
+    if (ctx->token == TOK_KW_IMPORT) {
+        while (1) {
+            NEXT_TOKEN();
+            if (ctx->token != TOK_IDENT) {
+                parse_error(ctx, "expected identifier in import list");
+                return 0;
+            }
+            NEXT_TOKEN();
+            if (ctx->token == TOK_COMMA) {
+                continue;
+            }
+            if (ctx->token == TOK_SEMICOLON) {
+                NEXT_TOKEN();
+                break;
+            }
+            parse_error(ctx, "unexpected token in import list");
+            return 0;
+        }
+    }
+
+    while (ctx->token != TOK_END) {
+        if (ctx->token == TOK_IDENT) {
+            NEXT_TOKEN();
+            if (ctx->token != TOK_ASSIGN) {
+                parse_error(ctx, "expected '=' after top level identifier");
+                return 0;
+            }
+            NEXT_TOKEN();
+            e = parse_expr(ctx);
+            if (!e) {
+                return 0;
+            }
+            if (ctx->token != TOK_SEMICOLON) {
+                parse_error(ctx, "expected ';' after top level expression");
+                return 0;
+            }
+            NEXT_TOKEN();
+        }
+        parse_error(ctx, "unexpected token at top level");
+        return 0;
+    }
+
+    return 1;
+}
 
 int main(int argc, char *argv[]) {
-	char *text =
+    char *text =
 
-		"module Test;\n"
-		"import IO, String;\n"
+        "module Test;\n"
+        "import IO, String;\n"
 
-		"Foo = fn(x: int; y, z: int) int:\n"
-		"  print(1); 1 + 2;;\n"
-
-		"Bar = fn() int: 1;;"
-		;
+        "Bar = fn() int: 1;"
+        ;
 
     struct parse_ctx ctx = {0,};
     ctx.lexer.cursor = text;
+    ctx.text = text;
 
-    while (1) {
+    /*while (1) {
         char *begin;
         int tok = lexer_next_token(&ctx.lexer, &begin);
         printf("%s: '%.*s'\n", lexer_token_strings[tok], (int)(ctx.lexer.cursor - begin), begin);
@@ -743,8 +538,15 @@ int main(int argc, char *argv[]) {
             break;
         }
     }
-    printf("lines: %d\n", ctx.lexer.line);
+    printf("lines: %d\n", ctx.lexer.line);*/
 
-	fgetc(stdin);
+    if (parse_module(&ctx)) {
+        printf("OK\n");
+    }
+    else {
+        printf("%s\n", ctx.error);
+    }
+
+    fgetc(stdin);
     return 0;
 }

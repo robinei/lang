@@ -30,6 +30,8 @@
     X(SEMICOLON) \
     X(LPAREN) \
     X(RPAREN) \
+    X(LBRACKET) \
+    X(RBRACKET) \
     X(KW_MODULE) \
     X(KW_IMPORT) \
     X(KW_STRUCT) \
