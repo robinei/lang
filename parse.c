@@ -116,7 +116,7 @@ static struct expr *parse_unary(struct parse_ctx *ctx, int unop) {
 }
 
 static struct expr *parse_call(struct parse_ctx *ctx, struct expr *fn_expr) {
-    struct expr *arg_exprs[FN_MAX_PARAM];
+    struct expr *arg_exprs[BINDING_LIST_MAX];
     int arg_count = 0;
     struct expr *result;
 
@@ -271,8 +271,9 @@ static struct expr *parse_infix(struct parse_ctx *ctx, int min_precedence) {
 }
 
 static struct expr *parse_fn(struct parse_ctx *ctx) {
-    slice_t param_names[FN_MAX_PARAM];
-    struct expr *param_types[FN_MAX_PARAM];
+    slice_t param_names[BINDING_LIST_MAX];
+    struct expr *param_types[BINDING_LIST_MAX];
+    struct expr *param_exprs[BINDING_LIST_MAX];
     int param_count = 0, orig_count, i;
     struct expr *result, *type, *return_type = NULL, *body;
 
@@ -289,7 +290,7 @@ static struct expr *parse_fn(struct parse_ctx *ctx) {
                 orig_count = param_count;
 
                 while (1) {
-                    if (param_count == FN_MAX_PARAM) {
+                    if (param_count == BINDING_LIST_MAX) {
                         parse_error(ctx, "too many fn params (%d)", param_count);
                         return NULL;
                     }
@@ -318,6 +319,8 @@ static struct expr *parse_fn(struct parse_ctx *ctx) {
 
                 for (i = orig_count; i < param_count; ++i) {
                     param_types[i] = type;
+                    param_exprs[i] = expr_create(ctx, EXPR_ARG);
+                    param_exprs[i]->u.arg.index = i;
                 }
 
                 if (ctx->token == TOK_SEMICOLON) {
@@ -354,27 +357,27 @@ static struct expr *parse_fn(struct parse_ctx *ctx) {
     }
 
     result = expr_create(ctx, EXPR_FN);
-    result->u.fn.param_count = param_count;
-    result->u.fn.param_names = malloc(sizeof(slice_t) * param_count);
-    result->u.fn.param_types = malloc(sizeof(struct expr *) * param_count);
-    memcpy(result->u.fn.param_names, param_names, sizeof(slice_t) * param_count);
-    memcpy(result->u.fn.param_types, param_types, sizeof(struct expr *) * param_count);
+    result->u.fn.params.count = param_count;
+    result->u.fn.params.names = malloc(sizeof(slice_t) * param_count);
+    result->u.fn.params.types = malloc(sizeof(struct expr *) * param_count);
+    memcpy(result->u.fn.params.names, param_names, sizeof(slice_t) * param_count);
+    memcpy(result->u.fn.params.types, param_types, sizeof(struct expr *) * param_count);
     result->u.fn.return_type = return_type;
     result->u.fn.body = body;
     return result;
 }
 
 static struct expr *parse_let(struct parse_ctx *ctx) {
-    slice_t binding_names[LET_MAX_BINDING];
-    struct expr *binding_types[LET_MAX_BINDING];
-    struct expr *binding_exprs[LET_MAX_BINDING];
+    slice_t binding_names[BINDING_LIST_MAX];
+    struct expr *binding_types[BINDING_LIST_MAX];
+    struct expr *binding_exprs[BINDING_LIST_MAX];
     int binding_count = 0;
     struct expr *result, *body;
 
     assert(ctx->token == TOK_KW_LET);
 
     while (1) {
-        if (binding_count == LET_MAX_BINDING) {
+        if (binding_count == BINDING_LIST_MAX) {
             parse_error(ctx, "too many let bindings (%d)", binding_count);
             return NULL;
         }
@@ -420,19 +423,19 @@ static struct expr *parse_let(struct parse_ctx *ctx) {
     }
 
     result = expr_create(ctx, EXPR_LET);
-    result->u.let.binding_count = binding_count;
-    result->u.let.binding_names = malloc(sizeof(slice_t) * binding_count);
-    result->u.let.binding_types = malloc(sizeof(struct expr *) * binding_count);
-    result->u.let.binding_exprs = malloc(sizeof(struct expr *) * binding_count);
-    memcpy(result->u.let.binding_names, binding_names, sizeof(slice_t) * binding_count);
-    memcpy(result->u.let.binding_types, binding_types, sizeof(struct expr *) * binding_count);
-    memcpy(result->u.let.binding_exprs, binding_exprs, sizeof(struct expr *) * binding_count);
+    result->u.let.bindings.count = binding_count;
+    result->u.let.bindings.names = malloc(sizeof(slice_t) * binding_count);
+    result->u.let.bindings.types = malloc(sizeof(struct expr *) * binding_count);
+    result->u.let.bindings.exprs = malloc(sizeof(struct expr *) * binding_count);
+    memcpy(result->u.let.bindings.names, binding_names, sizeof(slice_t) * binding_count);
+    memcpy(result->u.let.bindings.types, binding_types, sizeof(struct expr *) * binding_count);
+    memcpy(result->u.let.bindings.exprs, binding_exprs, sizeof(struct expr *) * binding_count);
 
     return result;
 }
 
 static struct expr *parse_if(struct parse_ctx *ctx, int is_elif) {
-    struct expr *result, *cond_expr, *then_expr, *else_expr;
+    struct expr *result, *cond_expr, *then_expr, *else_expr = NULL;
 
     assert(is_elif ? ctx->token == TOK_KW_ELIF : ctx->token == TOK_KW_IF);
     NEXT_TOKEN();
@@ -482,6 +485,77 @@ static struct expr *parse_while(struct parse_ctx *ctx) {
     return NULL;
 }
 
+struct expr *parse_fields(struct parse_ctx *ctx, int end_token) {
+    slice_t field_names[BINDING_LIST_MAX];
+    struct expr *field_types[BINDING_LIST_MAX];
+    struct expr *field_exprs[BINDING_LIST_MAX];
+    uint field_count = 0;
+    struct expr *result;
+
+    while (1) {
+        if (ctx->token == end_token) {
+            break;
+        }
+
+        if (ctx->token == TOK_IDENT) {
+            if (field_count == BINDING_LIST_MAX) {
+                parse_error(ctx, "too many fields (%d)", field_count);
+                return NULL;
+            }
+
+            field_names[field_count] = ctx->token_text;
+            NEXT_TOKEN();
+
+            if (ctx->token == TOK_COLON) {
+                NEXT_TOKEN();
+                field_types[field_count] = parse_atom(ctx);
+                if (!field_types[field_count]) {
+                    return NULL;
+                }
+            }
+
+            if (ctx->token == TOK_ASSIGN) {
+                NEXT_TOKEN();
+                field_exprs[field_count] = parse_expr(ctx);
+                if (!field_exprs[field_count]) {
+                    return NULL;
+                }
+            }
+            else {
+                field_exprs[field_count] = NULL;
+            }
+
+            if (ctx->token != TOK_SEMICOLON) {
+                parse_error(ctx, "expected ';' after binding");
+                return NULL;
+            }
+
+            ++field_count;
+            NEXT_TOKEN();
+            continue;
+        }
+
+        parse_error(ctx, "unexpected token while parsing bindings");
+        return 0;
+    }
+
+    result = expr_create(ctx, EXPR_STRUCT);
+    result->u._struct.fields.count = field_count;
+    result->u._struct.fields.names = malloc(sizeof(slice_t) * field_count);
+    result->u._struct.fields.types = malloc(sizeof(struct expr *) * field_count);
+    result->u._struct.fields.exprs = malloc(sizeof(struct expr *) * field_count);
+    memcpy(result->u._struct.fields.names, field_names, sizeof(slice_t) * field_count);
+    memcpy(result->u._struct.fields.types, field_types, sizeof(struct expr *) * field_count);
+    memcpy(result->u._struct.fields.exprs, field_exprs, sizeof(struct expr *) * field_count);
+    return result;
+}
+
+static struct expr *parse_struct(struct parse_ctx *ctx) {
+    assert(ctx->token == TOK_KW_STRUCT);
+    NEXT_TOKEN();
+    return parse_fields(ctx, TOK_SEMICOLON);
+}
+
 static struct expr *parse_expr(struct parse_ctx *ctx) {
     struct expr *first, *second, *e;
 
@@ -494,6 +568,8 @@ static struct expr *parse_expr(struct parse_ctx *ctx) {
         return parse_if(ctx, 0);
     case TOK_KW_WHILE:
         return parse_while(ctx);
+    case TOK_KW_STRUCT:
+        return parse_struct(ctx);
     }
 
     first = parse_infix(ctx, 1);
@@ -518,72 +594,7 @@ static struct expr *parse_expr(struct parse_ctx *ctx) {
     return e;
 }
 
-int parse_module(struct parse_ctx *ctx) {
-    struct expr *e;
-
+struct expr *parse_module(struct parse_ctx *ctx) {
     NEXT_TOKEN();
-
-    if (ctx->token != TOK_KW_MODULE) {
-        parse_error(ctx, "expected 'module' at top of file");
-        return 0;
-    }
-    NEXT_TOKEN();
-    if (ctx->token != TOK_IDENT) {
-        parse_error(ctx, "expected identifier after 'module'");
-        return 0;
-    }
-    NEXT_TOKEN();
-    if (ctx->token != TOK_SEMICOLON) {
-        parse_error(ctx, "expected ';' after 'module' declaration");
-        return 0;
-    }
-    NEXT_TOKEN();
-
-    if (ctx->token == TOK_KW_IMPORT) {
-        while (1) {
-            NEXT_TOKEN();
-            if (ctx->token != TOK_IDENT) {
-                parse_error(ctx, "expected identifier in import list");
-                return 0;
-            }
-            NEXT_TOKEN();
-            if (ctx->token == TOK_COMMA) {
-                continue;
-            }
-            if (ctx->token == TOK_SEMICOLON) {
-                NEXT_TOKEN();
-                break;
-            }
-            parse_error(ctx, "unexpected token in import list");
-            return 0;
-        }
-    }
-
-    while (1) {
-        if (ctx->token == TOK_IDENT) {
-            NEXT_TOKEN();
-            if (ctx->token != TOK_ASSIGN) {
-                parse_error(ctx, "expected '=' after top level identifier");
-                return 0;
-            }
-            NEXT_TOKEN();
-            e = parse_expr(ctx);
-            if (!e) {
-                return 0;
-            }
-            if (ctx->token != TOK_SEMICOLON) {
-                parse_error(ctx, "expected ';' after top level expression");
-                return 0;
-            }
-            NEXT_TOKEN();
-            continue;
-        }
-        if (ctx->token == TOK_END) {
-            break;
-        }
-        parse_error(ctx, "unexpected token at top level");
-        return 0;
-    }
-
-    return 1;
+    return parse_fields(ctx, TOK_END);
 }

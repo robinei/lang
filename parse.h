@@ -53,16 +53,24 @@ enum {
 enum {
     EXPR_LIT,
     EXPR_SYM,
+    EXPR_ARG,
     EXPR_FN,
     EXPR_LET,
+    EXPR_STRUCT,
     EXPR_IF,
     EXPR_UNOP,
     EXPR_BINOP,
     EXPR_CALL,
 };
 
-#define FN_MAX_PARAM 100
-#define LET_MAX_BINDING 100
+#define BINDING_LIST_MAX 100
+
+struct binding_list {
+    uint count;
+    slice_t *names;
+    struct expr **types;
+    struct expr **exprs;
+};
 
 struct expr;
 
@@ -74,20 +82,23 @@ struct expr_sym {
     slice_t name;
 };
 
+struct expr_arg {
+    uint index;
+};
+
 struct expr_fn {
-    uint param_count;
-    slice_t *param_names;
-    struct expr **param_types;
+    struct binding_list params;
     struct expr *return_type;
     struct expr *body;
 };
 
 struct expr_let {
-    uint binding_count;
-    slice_t *binding_names;
-    struct expr **binding_types;
-    struct expr **binding_exprs;
+    struct binding_list bindings;
     struct expr *body;
+};
+
+struct expr_struct {
+    struct binding_list fields;
 };
 
 struct expr_if {
@@ -117,8 +128,10 @@ struct expr {
     union {
         struct expr_lit lit;
         struct expr_sym sym;
+        struct expr_arg arg;
         struct expr_fn fn;
         struct expr_let let;
+        struct expr_struct _struct;
         struct expr_if _if;
         struct expr_unop unop;
         struct expr_binop binop;
@@ -138,6 +151,6 @@ struct parse_ctx {
     char error[ERROR_MAX + 1];
 };
 
-int parse_module(struct parse_ctx *ctx);
+struct expr *parse_module(struct parse_ctx *ctx);
 
 #endif

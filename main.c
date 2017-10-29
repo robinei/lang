@@ -4,14 +4,13 @@
 
 int main(int argc, char *argv[]) {
     char *text =
-        "module Test;\n"
-        "import IO, String;\n"
-
         "Foo = 1 + 2 3;\n"
         "Bar = let x = 1 in x;\n"
         "Baz = fn(a, b: int; c: int) int: a + b * c;\n"
         "IfTest = if 1: 2 3 elif 4 5: 6 else 7;;\n"
-        "CallTest = Baz(1, 2, 3)();"
+        "IfTest2 = if 1 == 2: 3;;\n"
+        "CallTest = Baz(1, 2, 3)();\n"
+        "StructTest = struct x: int;;\n"
         ;
 
     struct parse_ctx ctx = {0,};
