@@ -27,9 +27,15 @@
     <ClCompile Include="..\scan.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\parse.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\scan.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\parse.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

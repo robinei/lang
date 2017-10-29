@@ -19,12 +19,14 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\parse.c" />
     <ClCompile Include="..\scan.c" />
     <ClCompile Include="..\main.c" />
     <ClCompile Include="..\strtod.c" />
     <ClCompile Include="..\strtoll.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\parse.h" />
     <ClInclude Include="..\scan.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
