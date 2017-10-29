@@ -19,13 +19,13 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\lexer.c" />
+    <ClCompile Include="..\scan.c" />
     <ClCompile Include="..\main.c" />
     <ClCompile Include="..\strtod.c" />
     <ClCompile Include="..\strtoll.c" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\lexer.h" />
+    <ClInclude Include="..\scan.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>

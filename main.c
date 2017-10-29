@@ -3,7 +3,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <assert.h>
-#include "lexer.h"
+#include "scan.h"
 
 typedef unsigned int uint;
 
@@ -154,7 +154,7 @@ static void expr_print(struct expr *e, int indent) {
 #define ERROR_MAX 512
 
 struct parse_ctx {
-    struct lexer_ctx lexer;
+    struct scan_ctx scan;
     char *text;
     int token;
     slice_t token_text;
@@ -171,7 +171,7 @@ static void parse_error(struct parse_ctx *ctx, const char *format, ...) {
     int err_len;
     int i;
 
-    used += snprintf(ctx->error + used, ERROR_MAX - used, "(line %d) parse error: ", ctx->lexer.line + 1);
+    used += snprintf(ctx->error + used, ERROR_MAX - used, "(line %d) parse error: ", ctx->scan.line + 1);
     if (used > ERROR_MAX) {
         used = ERROR_MAX;
     }
@@ -219,9 +219,9 @@ static void parse_error(struct parse_ctx *ctx, const char *format, ...) {
 
 #define NEXT_TOKEN() \
     do { \
-        ctx->token = lexer_next_token(&ctx->lexer, &ctx->token_text.ptr); \
-        ctx->token_text.len = (int)(ctx->lexer.cursor - ctx->token_text.ptr); \
-        printf("%s: '%.*s'\n", lexer_token_strings[ctx->token], (int)(ctx->lexer.cursor - ctx->token_text.ptr), ctx->token_text.ptr); \
+        ctx->token = scan_next_token(&ctx->scan, &ctx->token_text.ptr); \
+        ctx->token_text.len = (int)(ctx->scan.cursor - ctx->token_text.ptr); \
+        printf("%s: '%.*s'\n", token_strings[ctx->token], (int)(ctx->scan.cursor - ctx->token_text.ptr), ctx->token_text.ptr); \
     } while (0)
 
 
@@ -744,7 +744,7 @@ int main(int argc, char *argv[]) {
         ;
 
     struct parse_ctx ctx = {0,};
-    ctx.lexer.cursor = text;
+    ctx.scan.cursor = text;
     ctx.text = text;
 
     if (parse_module(&ctx)) {

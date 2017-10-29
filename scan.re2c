@@ -1,13 +1,13 @@
-#include "lexer.h"
+#include "scan.h"
 
 #define DECL_TOK_STR(Tok) #Tok,
-const char *lexer_token_strings[] = {
-    LEXER_ALL_TOKENS(DECL_TOK_STR)
+const char *token_strings[] = {
+    FOR_ALL_TOKENS(DECL_TOK_STR)
 };
 
 #define TOK(Tok) return TOK_##Tok
 
-int lexer_next_token(struct lexer_ctx *ctx, char **begin) {
+int scan_next_token(struct scan_ctx *ctx, char **begin) {
     char *marker = (void *)0;
 next_token_start:;
     *begin = ctx->cursor;

@@ -18,18 +18,18 @@
     <ClCompile Include="..\main.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\lexer.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\strtoll.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\strtod.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\scan.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\lexer.h">
+    <ClInclude Include="..\scan.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

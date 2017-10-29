@@ -1,7 +1,7 @@
-#ifndef LEXER_H
-#define LEXER_H
+#ifndef SCAN_H
+#define SCAN_H
 
-#define LEXER_ALL_TOKENS(X) \
+#define FOR_ALL_TOKENS(X) \
     X(ERR) \
     X(END) \
     X(ASSIGN) \
@@ -49,19 +49,19 @@
     X(DEC) \
     X(HEX)
 
-#define LEXER_DECL_TOK_ENUM(Tok) TOK_##Tok,
+#define DECL_TOK_ENUM(Tok) TOK_##Tok,
 enum {
-    LEXER_ALL_TOKENS(LEXER_DECL_TOK_ENUM)
+    FOR_ALL_TOKENS(DECL_TOK_ENUM)
 };
-#undef LEXER_DECL_TOK_ENUM
+#undef DECL_TOK_ENUM
 
-const char *lexer_token_strings[];
+const char *token_strings[];
 
-struct lexer_ctx {
+struct scan_ctx {
     char *cursor;
     int line;
 };
 
-int lexer_next_token(struct lexer_ctx *ctx, char **begin);
+int scan_next_token(struct scan_ctx *ctx, char **begin);
 
 #endif
