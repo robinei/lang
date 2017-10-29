@@ -74,8 +74,13 @@ next_token_start:;
     "if"    { TOK(KW_IF); }
     "elif"  { TOK(KW_ELIF); }
     "else"  { TOK(KW_ELSE); }
+    "case"  { TOK(KW_CASE); }
+    "of"    { TOK(KW_OF); }
     "while" { TOK(KW_WHILE); }
     "int"   { TOK(KW_INT); }
+    "bool"  { TOK(KW_BOOL); }
+    "true"  { TOK(KW_TRUE); }
+    "false" { TOK(KW_FALSE); }
     
     [a-zA-Z_][a-zA-Z_0-9]* { TOK(IDENT); }
     bin { TOK(BIN); }

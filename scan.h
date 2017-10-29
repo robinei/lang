@@ -41,8 +41,13 @@
     X(KW_IF) \
     X(KW_ELIF) \
     X(KW_ELSE) \
+    X(KW_CASE) \
+    X(KW_OF) \
     X(KW_WHILE) \
     X(KW_INT) \
+    X(KW_BOOL) \
+    X(KW_TRUE) \
+    X(KW_FALSE) \
     X(IDENT) \
     X(BIN) \
     X(OCT) \
