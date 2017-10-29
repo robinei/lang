@@ -19,6 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\murmur3.c" />
     <ClCompile Include="..\parse.c" />
     <ClCompile Include="..\scan.c" />
     <ClCompile Include="..\main.c" />
@@ -26,6 +27,8 @@
     <ClCompile Include="..\strtoll.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\hashtable.h" />
+    <ClInclude Include="..\murmur3.h" />
     <ClInclude Include="..\parse.h" />
     <ClInclude Include="..\scan.h" />
   </ItemGroup>

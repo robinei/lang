@@ -30,12 +30,21 @@
     <ClCompile Include="..\parse.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\murmur3.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\scan.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\parse.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\hashtable.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\murmur3.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
