@@ -32,6 +32,9 @@
     X(RPAREN) \
     X(LBRACKET) \
     X(RBRACKET) \
+    X(LBRACE) \
+    X(RBRACE) \
+    X(KW_END) \
     X(KW_MODULE) \
     X(KW_IMPORT) \
     X(KW_STRUCT) \
@@ -44,6 +47,10 @@
     X(KW_CASE) \
     X(KW_OF) \
     X(KW_WHILE) \
+    X(KW_MUT) \
+    X(KW_STATIC) \
+    X(KW_PURE) \
+    X(KW_TYPE) \
     X(KW_INT) \
     X(KW_BOOL) \
     X(KW_TRUE) \
@@ -60,7 +67,7 @@ enum {
 };
 #undef DECL_TOK_ENUM
 
-const char *token_strings[];
+extern const char *token_strings[];
 
 struct scan_ctx {
     char *cursor;

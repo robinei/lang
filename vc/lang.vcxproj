@@ -19,18 +19,30 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\expr.c" />
     <ClCompile Include="..\murmur3.c" />
     <ClCompile Include="..\parse.c" />
     <ClCompile Include="..\scan.c" />
     <ClCompile Include="..\main.c" />
+    <ClCompile Include="..\slice.c" />
     <ClCompile Include="..\strtod.c" />
     <ClCompile Include="..\strtoll.c" />
+    <ClCompile Include="..\type.c" />
+    <ClCompile Include="..\typeinf.c" />
+    <ClCompile Include="..\value.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\defs.h" />
+    <ClInclude Include="..\expr.h" />
     <ClInclude Include="..\hashtable.h" />
+    <ClInclude Include="..\hashtable_impl.h" />
     <ClInclude Include="..\murmur3.h" />
     <ClInclude Include="..\parse.h" />
     <ClInclude Include="..\scan.h" />
+    <ClInclude Include="..\slice.h" />
+    <ClInclude Include="..\type.h" />
+    <ClInclude Include="..\typeinf.h" />
+    <ClInclude Include="..\value.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>

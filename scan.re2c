@@ -65,6 +65,9 @@ next_token_start:;
     ")"     { TOK(RPAREN); }
     "["     { TOK(LBRACKET); }
     "]"     { TOK(RBRACKET); }
+    "{"     { TOK(LBRACE); }
+    "}"     { TOK(RBRACE); }
+    "end"    { TOK(KW_END); }
     "module"    { TOK(KW_MODULE); }
     "import"    { TOK(KW_IMPORT); }
     "struct"    { TOK(KW_STRUCT); }
@@ -77,6 +80,10 @@ next_token_start:;
     "case"  { TOK(KW_CASE); }
     "of"    { TOK(KW_OF); }
     "while" { TOK(KW_WHILE); }
+    "mut"   { TOK(KW_MUT); }
+    "static" { TOK(KW_STATIC); }
+    "pure"  { TOK(KW_PURE); }
+    "type"  { TOK(KW_TYPE); }
     "int"   { TOK(KW_INT); }
     "bool"  { TOK(KW_BOOL); }
     "true"  { TOK(KW_TRUE); }
