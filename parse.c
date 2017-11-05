@@ -8,6 +8,12 @@
 long long int my_strtoll(const char *nptr, const char **endptr, int base);
 double my_strtod(const char *string, const char **endPtr);
 
+static struct expr *expr_create(struct parse_ctx *ctx, uint expr_type) {
+    struct expr *e = calloc(1, sizeof(struct expr));
+    e->expr = expr_type;
+    return e;
+}
+
 static void parse_error(struct parse_ctx *ctx, const char *format, ...) {
     va_list args;
     int used = 0;
@@ -526,9 +532,9 @@ static struct expr *parse_call(struct parse_ctx *ctx, struct expr *fn_expr) {
 }
 
 static struct expr *parse_int(struct parse_ctx *ctx, int offset, int base) {
-    int val = (int)my_strtoll(ctx->token_text.ptr + offset, NULL, base);
     struct expr *result = expr_create(ctx, EXPR_CONST);
-    result->u._const.value = value_new_int(val);
+    result->u._const.type = &type_int;
+    result->u._const.u._int = (int)my_strtoll(ctx->token_text.ptr + offset, NULL, base);
     NEXT_TOKEN();
     return result;
 }
@@ -614,6 +620,8 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
         }
         NEXT_TOKEN();
         break;
+    case TOK_KW_TYPE:
+    case TOK_KW_BOOL:
     case TOK_KW_INT:
     case TOK_IDENT:
         result = expr_create(ctx, EXPR_SYM);
@@ -624,6 +632,8 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
     case TOK_MINUS: return parse_unary(ctx, PRIM_NEGATE);
     case TOK_NOT: return parse_unary(ctx, PRIM_LOGI_NOT);
     case TOK_NOT_BW: return parse_unary(ctx, PRIM_BITWISE_NOT);
+    case TOK_KW_TRUE: NEXT_TOKEN(); return &expr_true;
+    case TOK_KW_FALSE: NEXT_TOKEN(); return &expr_false;
     case TOK_BIN: return parse_int(ctx, 2, 2);
     case TOK_OCT: return parse_int(ctx, 0, 8);
     case TOK_DEC: return parse_int(ctx, 0, 10);

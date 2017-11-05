@@ -2,7 +2,6 @@
 #define EXPR_H
 
 #include "type.h"
-#include "value.h"
 
 #define FOR_ALL_PRIMS(X) \
     X(PLUS) \
@@ -58,7 +57,12 @@ extern const char *expr_names[];
 
 
 struct expr_const {
-    struct value *value;
+    struct type *type;
+    union {
+        int _bool;
+        int _int;
+        struct type *type;
+    } u;
 };
 
 struct expr_sym {
@@ -140,7 +144,9 @@ struct expr {
     } u;
 };
 
-struct expr *expr_create(struct parse_ctx *ctx, uint expr_type);
 void print_expr(struct expr *e, int indent);
+
+extern struct expr expr_true;
+extern struct expr expr_false;
 
 #endif

@@ -13,12 +13,8 @@ const char *expr_names[] = {
 };
 
 
-struct expr *expr_create(struct parse_ctx *ctx, uint expr_type) {
-    struct expr *e = calloc(1, sizeof(struct expr));
-    e->expr = expr_type;
-    return e;
-}
-
+struct expr expr_true = { EXPR_CONST, { { &type_bool, { 1 } } } };
+struct expr expr_false = { EXPR_CONST, { { &type_bool, { 0 } } } };
 
 static void print_indent(int indent) {
     int i;
@@ -35,12 +31,12 @@ void print_expr(struct expr *e, int indent) {
     print_indent(indent); printf("expr %s: ", expr_names[e->expr]);
     switch (e->expr) {
     case EXPR_CONST:
-        switch (e->u._const.value->type->type) {
+        switch (e->u._const.type->type) {
         case TYPE_INT:
-            printf("type = %s, value = %d\n", type_names[e->u._const.value->type->type], e->u._const.value->u._int);
+            printf("type = %s, value = %d\n", type_names[e->u._const.type->type], e->u._const.u._int);
             break;
         default:
-            printf("type = %s, value = ?\n", type_names[e->u._const.value->type->type]);
+            printf("type = %s, value = ?\n", type_names[e->u._const.type->type]);
             break;
         }
         break;

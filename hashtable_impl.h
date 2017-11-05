@@ -61,7 +61,7 @@ static uint32_t hashutil_dist_to_start(uint32_t table_size, uint32_t hash, uint3
         uint32_t hash = key_hasher(key);                                \
         return hash ? hash : 1;                                         \
     }                                                                   \
-    static int name##_find(struct name *table, key_type key, uint32_t *index_out) { \
+    int name##_find(struct name *table, key_type key, uint32_t *index_out) { \
         if (table->used == 0) {                                         \
             return 0;                                                   \
         }                                                               \

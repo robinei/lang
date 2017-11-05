@@ -45,7 +45,7 @@
     <ClCompile Include="..\type.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\value.c">
+    <ClCompile Include="..\peval.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -80,7 +80,7 @@
     <ClInclude Include="..\typeinf.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\value.h">
+    <ClInclude Include="..\peval.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

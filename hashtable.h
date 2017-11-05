@@ -15,6 +15,7 @@
     };                                                          \
     void name##_clear(struct name *table);                      \
     int name##_remove(struct name *table, key_type key);        \
+    int name##_find(struct name *table, key_type key, uint32_t *index_out); \
     int name##_get(struct name *table, key_type key, value_type *value_out); \
     void name##_put(struct name *table, key_type key, value_type value); \
     void name##_init(struct name *table, uint32_t initial_size); \
