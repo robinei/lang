@@ -184,18 +184,17 @@ static struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
         struct expr e_new = *e;
         int changed = 0;
         uint const_count = 0;
-        struct expr_prim_arg *a, *a_new, **slot;
 
-        slot = &e_new.u.prim.args;
-        for (a = *slot; a; a = a->next) {
-            *slot = a_new = calloc(1, sizeof(struct expr_prim_arg));
-            *a_new = *a;
-            a_new->expr = peval(ctx, a->expr);
-            changed = changed || a_new->expr != a->expr;
-            if (a_new->expr->expr == EXPR_CONST) {
-                ++const_count;
-            }
-            slot = &a_new->next;
+        e_new.u.prim.arg_expr0 = peval(ctx, e->u.prim.arg_expr0);
+        if (e_new.u.prim.arg_expr0) {
+            changed = changed || e_new.u.prim.arg_expr0 != e->u.prim.arg_expr0;
+            if (e_new.u.prim.arg_expr0->expr == EXPR_CONST) { ++const_count; }
+        }
+
+        e_new.u.prim.arg_expr1 = peval(ctx, e->u.prim.arg_expr1);
+        if (e_new.u.prim.arg_expr1) {
+            changed = changed || e_new.u.prim.arg_expr1 != e->u.prim.arg_expr1;
+            if (e_new.u.prim.arg_expr1->expr == EXPR_CONST) { ++const_count; }
         }
 
         if (const_count == e->u.prim.arg_count) {
@@ -341,13 +340,10 @@ static void peval_type_exprs(struct peval_ctx *ctx, struct expr *e) {
         peval_type_exprs(ctx, e->u.let.body_expr);
         break;
     }
-    case EXPR_PRIM: {
-        struct expr_prim_arg *a;
-        for (a = e->u.prim.args; a; a = a->next) {
-            peval_type_exprs(ctx, a->expr);
-        }
+    case EXPR_PRIM:
+        peval_type_exprs(ctx, e->u.prim.arg_expr0);
+        peval_type_exprs(ctx, e->u.prim.arg_expr1);
         break;
-    }
     case EXPR_CALL: {
         struct expr_call_arg *a;
         for (a = e->u.call.args; a; a = a->next) {
@@ -435,10 +431,10 @@ static int const_eq(struct peval_ctx *ctx, struct expr *a, struct expr *b) {
     }
 }
 
-#define EQUALS() const_eq(ctx, e->u.prim.args->expr, e->u.prim.args->next->expr)
+#define EQUALS() const_eq(ctx, e->u.prim.arg_expr0, e->u.prim.arg_expr1)
 
 #define BINOP(op, value_getter) \
-    value_getter(ctx, e->u.prim.args->expr) op value_getter(ctx, e->u.prim.args->next->expr)
+    value_getter(ctx, e->u.prim.arg_expr0) op value_getter(ctx, e->u.prim.arg_expr1)
 
 #define RETURN_CONST(type_ptr, value_field, value_expression) \
     { \

@@ -94,12 +94,14 @@ void print_expr(struct expr *e, int indent) {
         break;
     }
     case EXPR_PRIM: {
-        struct expr_prim_arg *arg;
-        int i;
         printf("type = %s\n", prim_names[e->u.prim.prim]);
-        for (arg = e->u.prim.args, i = 0; arg; arg = arg->next, ++i) {
-            print_indent(indent + 1); printf("arg %d:\n", i);
-            print_expr(arg->expr, indent + 2);
+        if (e->u.prim.arg_count > 0) {
+            print_indent(indent + 1); printf("arg 0:\n");
+            print_expr(e->u.prim.arg_expr0, indent + 2);
+        }
+        if (e->u.prim.arg_count > 1) {
+            print_indent(indent + 1); printf("arg 1:\n");
+            print_expr(e->u.prim.arg_expr1, indent + 2);
         }
         break;
     }

@@ -113,11 +113,8 @@ struct expr_if {
 struct expr_prim {
     uint prim;
     uint arg_count;
-    struct expr_prim_arg *args;
-};
-struct expr_prim_arg {
-    struct expr *expr;
-    struct expr_prim_arg *next;
+    struct expr *arg_expr0;
+    struct expr *arg_expr1;
 };
 
 struct expr_call {

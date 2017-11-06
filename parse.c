@@ -481,8 +481,7 @@ static struct expr *parse_unary(struct parse_ctx *ctx, int prim) {
     result = expr_create(ctx, EXPR_PRIM);
     result->u.prim.prim = prim;
     result->u.prim.arg_count = 1;
-    result->u.prim.args = calloc(1, sizeof(struct expr_prim_arg));
-    result->u.prim.args->expr = e;
+    result->u.prim.arg_expr0 = e;
     return result;
 }
 
@@ -594,10 +593,8 @@ static struct expr *parse_infix(struct parse_ctx *ctx, int min_precedence) {
         temp = expr_create(ctx, EXPR_PRIM);
         temp->u.prim.prim = prim;
         temp->u.prim.arg_count = 2;
-        temp->u.prim.args = calloc(1, sizeof(struct expr_prim_arg));
-        temp->u.prim.args->next = calloc(1, sizeof(struct expr_prim_arg));
-        temp->u.prim.args->expr = lhs;
-        temp->u.prim.args->next->expr = rhs;
+        temp->u.prim.arg_expr0 = lhs;
+        temp->u.prim.arg_expr1 = rhs;
         lhs = temp;
     }
 
@@ -683,10 +680,8 @@ static struct expr *parse_expr(struct parse_ctx *ctx) {
     e = expr_create(ctx, EXPR_PRIM);
     e->u.prim.prim = PRIM_SEQ;
     e->u.prim.arg_count = 2;
-    e->u.prim.args = calloc(1, sizeof(struct expr_prim_arg));
-    e->u.prim.args->next = calloc(1, sizeof(struct expr_prim_arg));
-    e->u.prim.args->expr = first;
-    e->u.prim.args->next->expr = second;
+    e->u.prim.arg_expr0 = first;
+    e->u.prim.arg_expr1 = second;
 
     return e;
 }
