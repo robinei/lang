@@ -26,10 +26,26 @@ static struct expr *dup_expr(struct peval_ctx *ctx, struct expr *e) {
     return e_copy;
 }
 
+static struct expr_call_arg *dup_arg(struct peval_ctx *ctx, struct expr_call_arg *a) {
+    struct expr_call_arg *copy = malloc(sizeof(struct expr_call_arg));
+    *copy = *a;
+    return copy;
+}
+
+static struct expr_fn_param *dup_param(struct peval_ctx *ctx, struct expr_fn_param *p) {
+    struct expr_fn_param *copy = malloc(sizeof(struct expr_fn_param));
+    *copy = *p;
+    return copy;
+}
+
 
 static void peval_error(struct peval_ctx *ctx, const char *error) {
     printf("error during partial eval: %s\n", error);
     longjmp(ctx->error_jmp_buf, 1);
+}
+
+static void bind(struct peval_ctx *ctx, slice_t name, struct expr *e) {
+    slice_table_put(&ctx->symbols, name, e);
 }
 
 static struct expr *lookup(struct peval_ctx *ctx, slice_t name) {
@@ -49,7 +65,7 @@ static void push_binding(struct peval_ctx *ctx, slice_t name, struct expr *e) {
     if (!slice_table_get(&ctx->symbols, name, &b->expr)) {
         b->expr = &missing;
     }
-    slice_table_put(&ctx->symbols, name, e);
+    bind(ctx, name, e);
 }
 
 static void pop_bindings(struct peval_ctx *ctx, uint count) {
@@ -58,7 +74,7 @@ static void pop_bindings(struct peval_ctx *ctx, uint count) {
     for (i = 0; i < count; ++i) {
         struct peval_binding *b = &ctx->bindings[ctx->binding_count - i - 1];
         if (b->expr != &missing) {
-            slice_table_put(&ctx->symbols, b->name, b->expr);
+            bind(ctx, b->name, b->expr);
         }
         else {
             slice_table_remove(&ctx->symbols, b->name);
@@ -71,7 +87,7 @@ static struct expr *rebind_peval(struct peval_ctx *ctx, slice_t name, struct exp
     if (e) {
         struct expr *e_new = peval(ctx, e);
         if (e_new != e) {
-            slice_table_put(&ctx->symbols, name, e_new);
+            bind(ctx, name, e_new);
         }
         return e_new;
     }
@@ -86,6 +102,153 @@ static void check_type(struct peval_ctx *ctx, struct expr *e, struct expr *e_typ
     if (e_type->u._const.u.type != e->u._const.type) {
         peval_error(ctx, "type mismatch");
     }
+}
+
+static struct expr_call_arg *peval_args(struct peval_ctx *ctx, struct expr_call_arg *a, int *const_count) {
+    if (a) {
+        struct expr_call_arg a_new = *a;
+        a_new.expr = peval(ctx, a->expr);
+        a_new.next = peval_args(ctx, a->next, const_count);
+        if (a_new.expr->expr == EXPR_CONST) {
+            ++*const_count;
+        }
+        if (a_new.expr != a->expr || a_new.next != a->next) {
+            return dup_arg(ctx, &a_new);
+        }
+    }
+    return a;
+}
+
+static struct expr_call_arg *strip_const_args(struct peval_ctx *ctx, struct expr_call_arg *a) {
+    if (a) {
+        if (a->expr->expr == EXPR_CONST) {
+            return strip_const_args(ctx, a->next);
+        }
+        else {
+            struct expr_call_arg a_new = *a;
+            a_new.next = strip_const_args(ctx, a->next);
+            if (a_new.next != a->next) {
+                return dup_arg(ctx, &a_new);
+            }
+        }
+    }
+    return a;
+}
+
+static struct expr_fn_param *strip_const_params(struct peval_ctx *ctx, struct expr_fn_param *p, struct expr_call_arg *a) {
+    assert(a && p || !a && !p);
+    if (p) {
+        if (a->expr->expr == EXPR_CONST) {
+            return strip_const_params(ctx, p->next, a->next);
+        }
+        else {
+            struct expr_fn_param p_new = *p;
+            p_new.next = strip_const_params(ctx, p->next, a->next);
+            if (p_new.next != p->next) {
+                return dup_param(ctx, &p_new);
+            }
+        }
+    }
+    return p;
+}
+
+#define FNV_PRIME 0x01000193
+#define FNV_SEED 0x811C9DC5
+
+static uint fnv1a(unsigned char *ptr, uint len, uint hash) {
+    while (len--) {
+        hash = (*ptr++ ^ hash) * FNV_PRIME;
+    }
+    return hash;
+}
+
+static uint hash_const_args(struct expr_fn_param *p, struct expr_call_arg *a, uint hash) {
+    if (a) {
+        if (a->expr->expr == EXPR_CONST) {
+            hash = fnv1a(p->name.ptr, p->name.len, hash);
+            switch (a->expr->u._const.type->type) {
+            case TYPE_TYPE: hash = fnv1a((unsigned char *)&a->expr->u._const.type, sizeof(struct type *), hash); break;
+            case TYPE_BOOL: hash = fnv1a((unsigned char *)&a->expr->u._const.u._bool, sizeof(a->expr->u._const.u._bool), hash); break;
+            case TYPE_INT: hash = fnv1a((unsigned char *)&a->expr->u._const.u._int, sizeof(a->expr->u._const.u._int), hash); break;
+            default: assert(0); break;
+            }
+        }
+        hash = hash_const_args(p->next, a->next, hash);
+    }
+    return hash;
+}
+
+static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
+    struct expr e_new = *e;
+    int changed = 0;
+    uint const_count = 0;
+    struct expr *fn;
+    slice_t fn_name = { "", 0 };
+
+    assert(e->expr == EXPR_CALL);
+
+    fn = e_new.u.call.fn_expr = peval(ctx, e->u.call.fn_expr);
+    changed = changed || fn != e->u.call.fn_expr;
+    if (fn && fn->expr == EXPR_SYM) {
+        fn_name = fn->u.sym.name;
+        fn = lookup(ctx, fn->u.sym.name);
+    }
+
+    e_new.u.call.args = peval_args(ctx, e->u.call.args, &const_count);
+    changed = changed || e_new.u.call.args != e->u.call.args;
+
+    if (fn && fn->expr == EXPR_FN && (const_count > 0 || const_count == fn->u.fn.param_count)) {
+        struct expr_call_arg *a = e_new.u.call.args;
+        struct expr_fn_param *p = fn->u.fn.params;
+        for (; a; a = a->next, p = p->next) {
+            if (a->expr->expr == EXPR_CONST) {
+                check_type(ctx, a->expr, p->type_expr);
+                push_binding(ctx, p->name, a->expr);
+            }
+            else {
+                push_binding(ctx, p->name, NULL);
+            }
+        }
+
+        if (const_count == fn->u.fn.param_count) {
+            e_new = *peval(ctx, fn->u.fn.body_expr);
+            check_type(ctx, &e_new, fn->u.fn.return_type_expr);
+            changed = 1;
+        }
+        else {
+            uint hash = hash_const_args(fn->u.fn.params, e_new.u.call.args, FNV_SEED);
+            slice_t fn_name_new;
+            struct expr *fn_new;
+
+            fn_name_new.len = fn_name.len + 8;
+            fn_name_new.ptr = malloc(fn_name_new.len + 1);
+            memcpy(fn_name_new.ptr, fn_name.ptr, fn_name.len);
+            snprintf(fn_name_new.ptr + fn_name.len, 8, "%lu", hash);
+
+            fn_new = lookup(ctx, fn_name_new);
+            if (!fn_new) {
+                fn_new = malloc(sizeof(struct expr));
+                *fn_new = *fn;
+                fn_new->u.fn.param_count -= const_count;
+                fn_new->u.fn.params = strip_const_params(ctx, fn_new->u.fn.params, e_new.u.call.args);
+                fn_new->u.fn.body_expr = peval(ctx, fn_new->u.fn.body_expr);
+                bind(ctx, fn_name_new, fn_new);
+            }
+
+            e_new.u.call.fn_expr = expr_create(ctx, EXPR_SYM);
+            e_new.u.call.fn_expr->u.sym.name = fn_name_new;
+            e_new.u.call.arg_count -= const_count;
+            e_new.u.call.args = strip_const_args(ctx, e_new.u.call.args);
+            changed = 1;
+        }
+
+        pop_bindings(ctx, fn->u.fn.param_count);
+    }
+
+    if (changed) {
+        return dup_expr(ctx, &e_new);
+    }
+    return e;
 }
 
 static struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
@@ -103,12 +266,10 @@ static struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
     case EXPR_STRUCT: {
         struct expr e_new = *e;
         int changed = 0;
-        uint pushed = 0;
         struct expr_struct_field *f, *f_new, **slot;
 
         for (f = e->u._struct.fields; f; f = f->next) {
             push_binding(ctx, f->name, f->value_expr);
-            ++pushed;
         }
 
         slot = &e_new.u._struct.fields;
@@ -121,7 +282,6 @@ static struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
             slot = &f_new->next;
         }
 
-        assert(pushed == e->u._struct.field_count);
         pop_bindings(ctx, e->u._struct.field_count);
 
         if (changed) {
@@ -141,13 +301,11 @@ static struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
     case EXPR_LET: {
         struct expr e_new = *e;
         int changed = 0;
-        uint pushed = 0;
         uint const_count = 0;
         struct expr_let_binding *b, *b_new, **slot;
 
         for (b = e->u.let.bindings; b; b = b->next) {
             push_binding(ctx, b->name, b->value_expr);
-            ++pushed;
         }
         
         slot = &e_new.u.let.bindings;
@@ -172,7 +330,6 @@ static struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
             changed = changed || e_new.u.let.body_expr != e->u.let.body_expr;
         }
 
-        assert(pushed == e->u.let.binding_count);
         pop_bindings(ctx, e->u.let.binding_count);
 
         if (changed) {
@@ -205,60 +362,8 @@ static struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
         }
         break;
     }
-    case EXPR_CALL: {
-        struct expr e_new = *e;
-        int changed = 0;
-        uint pushed = 0;
-        uint const_count = 0;
-        struct expr_call_arg *a, *a_new, **slot;
-        struct expr *fn;
-
-        fn = e_new.u.call.fn_expr = peval(ctx, e->u.call.fn_expr);
-        changed = changed || fn != e->u.call.fn_expr;
-        if (fn && fn->expr == EXPR_SYM) {
-            fn = lookup(ctx, fn->u.sym.name);
-        }
-
-        slot = &e_new.u.call.args;
-        for (a = *slot; a; a = a->next) {
-            *slot = a_new = calloc(1, sizeof(struct expr_call_arg));
-            *a_new = *a;
-            a_new->expr = peval(ctx, a->expr);
-            changed = changed || a_new->expr != a->expr;
-            if (a_new->expr->expr == EXPR_CONST) {
-                ++const_count;
-            }
-            slot = &a_new->next;
-        }
-
-        if (fn && fn->expr == EXPR_FN && (const_count > 0 || const_count == fn->u.fn.param_count)) {
-            struct expr_fn_param *p = fn->u.fn.params;
-            for (a = e_new.u.call.args; a; a = a->next, p = p->next) {
-                if (a->expr->expr == EXPR_CONST) {
-                    check_type(ctx, a->expr, p->type_expr);
-                    push_binding(ctx, p->name, a->expr);
-                    ++pushed;
-                }
-            }
-
-            if (const_count == fn->u.fn.param_count) {
-                e_new = *peval(ctx, fn->u.fn.body_expr);
-                check_type(ctx, &e_new, fn->u.fn.return_type_expr);
-                changed = 1;
-            }
-            else {
-                peval_error(ctx, "unimplemented partial eval of call");
-            }
-
-            assert(pushed == const_count);
-            pop_bindings(ctx, const_count);
-        }
-
-        if (changed) {
-            return dup_expr(ctx, &e_new);
-        }
-        break;
-    }
+    case EXPR_CALL:
+        return peval_call(ctx, e);
     case EXPR_IF: {
         struct expr e_new = *e;
         int changed = 0;
@@ -374,6 +479,7 @@ static void bind_type(struct peval_ctx *ctx, char *name_str, struct type *type) 
 struct expr *partial_eval_module(struct peval_ctx *ctx, struct expr *e) {
     struct expr *e_new;
     struct expr_struct_field *f;
+    uint i;
 
     assert(e->expr == EXPR_STRUCT);
 
@@ -382,7 +488,6 @@ struct expr *partial_eval_module(struct peval_ctx *ctx, struct expr *e) {
     }
 
     slice_table_init(&ctx->symbols, 16);
-    slice_table_init(&ctx->functions, 16);
 
     bind_type(ctx, "type", &type_type);
     bind_type(ctx, "bool", &type_bool);
@@ -400,6 +505,13 @@ struct expr *partial_eval_module(struct peval_ctx *ctx, struct expr *e) {
             break;
         }
         e = e_new;
+    }
+
+    for (i = 0; i < ctx->symbols.size; ++i) {
+        if (ctx->symbols.entries[i].hash) {
+            printf("%.*s = ", ctx->symbols.entries[i].key.len, ctx->symbols.entries[i].key.ptr);
+            print_expr(ctx->symbols.entries[i].value, 0);
+        }
     }
 
     return e_new;

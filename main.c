@@ -16,9 +16,11 @@ int main(int argc, char *argv[]) {
         "IfTest2 = if 1 == 2: 3 end 1;\n"
         "CallTest = Baz(1, 2, 3)();\n"
         "LeftAssoc = 1 * 2 * 3;\n"*/
-        "getInt = fn() type: int;"
-        "exp = fn(x, n: int) getInt(): if n == 0: 1 else x * exp(x, n - 1);"
-        "main = let x = exp(2, 3) in x + 100;"
+        //"exp = fn(x, n: int) int: if n == 0: 1 else x * exp(x, n - 1);"
+        //"main = let x = exp(2, 3) in x + 100;"
+        "even = fn(n: int) bool: if n == 0: true else odd(n - 1);"
+        "odd = fn(n: int) bool: if n == 0: false else even(n - 1);"
+        "main = even(4);"
         ;
 
     struct expr *e;

@@ -7,7 +7,6 @@
 
 struct peval_ctx {
     struct slice_table symbols;
-    struct slice_table functions;
 
     uint binding_count;
     uint binding_capacity;

@@ -32,6 +32,9 @@ void print_expr(struct expr *e, int indent) {
     switch (e->expr) {
     case EXPR_CONST:
         switch (e->u._const.type->type) {
+        case TYPE_BOOL:
+            printf("type = %s, value = %s\n", type_names[e->u._const.type->type], e->u._const.u._bool ? "true" : "false");
+            break;
         case TYPE_INT:
             printf("type = %s, value = %d\n", type_names[e->u._const.type->type], e->u._const.u._int);
             break;
