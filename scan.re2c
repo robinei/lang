@@ -80,12 +80,9 @@ next_token_start:;
     "case"  { TOK(KW_CASE); }
     "of"    { TOK(KW_OF); }
     "while" { TOK(KW_WHILE); }
-    "mut"   { TOK(KW_MUT); }
+    "var"   { TOK(KW_MUT); }
     "static" { TOK(KW_STATIC); }
     "pure"  { TOK(KW_PURE); }
-    "type"  { TOK(KW_TYPE); }
-    "int"   { TOK(KW_INT); }
-    "bool"  { TOK(KW_BOOL); }
     "true"  { TOK(KW_TRUE); }
     "false" { TOK(KW_FALSE); }
     

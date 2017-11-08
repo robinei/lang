@@ -73,8 +73,8 @@ static void parse_error(struct parse_ctx *ctx, const char *format, ...) {
     do { \
         ctx->token = scan_next_token(&ctx->scan, &ctx->token_text.ptr); \
         ctx->token_text.len = (int)(ctx->scan.cursor - ctx->token_text.ptr); \
-        printf("%s: '%.*s'\n", token_strings[ctx->token], (int)(ctx->scan.cursor - ctx->token_text.ptr), ctx->token_text.ptr); \
     } while (0)
+//printf("%s: '%.*s'\n", token_strings[ctx->token], (int)(ctx->scan.cursor - ctx->token_text.ptr), ctx->token_text.ptr); \
 
 
 static int token_ends_expr(int tok) {
@@ -630,9 +630,6 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
         }
         NEXT_TOKEN();
         break;
-    case TOK_KW_TYPE:
-    case TOK_KW_BOOL:
-    case TOK_KW_INT:
     case TOK_IDENT:
         result = expr_create(ctx, EXPR_SYM);
         result->u.sym.name = ctx->token_text;

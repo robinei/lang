@@ -50,9 +50,6 @@
     X(KW_MUT) \
     X(KW_STATIC) \
     X(KW_PURE) \
-    X(KW_TYPE) \
-    X(KW_INT) \
-    X(KW_BOOL) \
     X(KW_TRUE) \
     X(KW_FALSE) \
     X(IDENT) \

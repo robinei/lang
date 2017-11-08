@@ -143,7 +143,7 @@ struct expr {
     } u;
 };
 
-void print_expr(struct expr *e, int indent);
+void print_expr(struct print_ctx *ctx, struct expr *e);
 
 extern struct expr expr_true;
 extern struct expr expr_false;

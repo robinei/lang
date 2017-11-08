@@ -128,7 +128,7 @@ static void pop_bindings(struct peval_ctx *ctx, uint count) {
 }
 
 static void check_type(struct peval_ctx *ctx, struct expr *e, struct expr *e_type) {
-    if (!e_type || e->expr != EXPR_CONST || e_type->expr != EXPR_CONST) {
+    if (!e || !e_type || e->expr != EXPR_CONST || e_type->expr != EXPR_CONST) {
         return;
     }
     assert(e_type->u._const.type->type == TYPE_TYPE);
@@ -454,10 +454,8 @@ static struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
         return peval_call(ctx, e);
     case EXPR_IF: {
         struct expr e_new = *e;
-        int changed = 0;
 
         e_new.u._if.cond_expr = peval(ctx, e->u._if.cond_expr);
-        changed = changed || e_new.u._if.cond_expr != e->u._if.cond_expr;
 
         if (e_new.u._if.cond_expr->expr == EXPR_CONST) {
             struct expr_const *_const = &e_new.u._if.cond_expr->u._const;
@@ -465,20 +463,20 @@ static struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
                 peval_error(ctx, "if conditional must be boolean");
             }
             e_new = *peval(ctx, _const->u._bool ? e->u._if.then_expr : e->u._if.else_expr);
-            changed = 1;
-        }
-        else {
-            e_new.u._if.then_expr = peval(ctx, e->u._if.then_expr);
-            e_new.u._if.else_expr = peval(ctx, e->u._if.else_expr);
-            if (e_new.u._if.then_expr->expr == EXPR_CONST && e_new.u._if.else_expr->expr == EXPR_CONST &&
-                (e_new.u._if.then_expr->u._const.type != e_new.u._if.else_expr->u._const.type)) {
-                peval_error(ctx, "mismatching types in if arms");
-            }
-            changed = changed || e_new.u._if.then_expr != e->u._if.then_expr;
-            changed = changed || e_new.u._if.else_expr != e->u._if.else_expr;
+            return dup_expr(ctx, &e_new);
         }
 
-        if (changed) {
+        e_new.u._if.then_expr = peval(ctx, e->u._if.then_expr);
+        e_new.u._if.else_expr = peval(ctx, e->u._if.else_expr);
+
+        if (e_new.u._if.then_expr->expr == EXPR_CONST && e_new.u._if.else_expr->expr == EXPR_CONST &&
+            (e_new.u._if.then_expr->u._const.type != e_new.u._if.else_expr->u._const.type)) {
+            peval_error(ctx, "mismatching types in if arms");
+        }
+
+        if (e_new.u._if.cond_expr != e->u._if.cond_expr ||
+            e_new.u._if.then_expr != e->u._if.then_expr ||
+            e_new.u._if.else_expr != e->u._if.else_expr) {
             return dup_expr(ctx, &e_new);
         }
         break;
@@ -514,9 +512,9 @@ struct module *partial_eval_module(struct peval_ctx *ctx, struct expr *e) {
     slice_table_init(&ctx->symbols, 16);
     slice_table_init(&mod->functions, 16);
 
-    bind_type(ctx, "type", &type_type);
-    bind_type(ctx, "bool", &type_bool);
-    bind_type(ctx, "int", &type_int);
+    bind_type(ctx, "Type", &type_type);
+    bind_type(ctx, "Bool", &type_bool);
+    bind_type(ctx, "Int", &type_int);
 
     mod->struct_expr = peval(ctx, e);
     return mod;

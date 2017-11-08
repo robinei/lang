@@ -1,6 +1,7 @@
 #include "expr.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 
 #define DECL_PRIM_NAME(name) #name,
 const char *prim_names[] = {
@@ -16,112 +17,162 @@ const char *expr_names[] = {
 struct expr expr_true = { EXPR_CONST, { { &type_bool, { 1 } } } };
 struct expr expr_false = { EXPR_CONST, { { &type_bool, { 0 } } } };
 
-static void print_indent(int indent) {
-    int i;
-    for (i = 0; i < indent * 2; ++i) {
+struct print_ctx {
+    uint indent;
+};
+
+static void print(struct print_ctx *ctx, const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+    vprintf(format, args);
+    va_end(args);
+}
+
+static void print_indent(struct print_ctx *ctx) {
+    uint i;
+    for (i = 0; i < ctx->indent * 4; ++i) {
         putchar(' ');
     }
 }
 
-void print_expr(struct expr *e, int indent) {
+static void print_binop(struct print_ctx *ctx, const char *op, struct expr *e) {
+    print_expr(ctx, e->u.prim.arg_expr0);
+    print(ctx, "%s", op);
+    print_expr(ctx, e->u.prim.arg_expr1);
+}
+
+void print_expr(struct print_ctx *ctx, struct expr *e) {
+    struct print_ctx ctx_storage;
+    if (!ctx) {
+        ctx = &ctx_storage;
+        ctx->indent = 0;
+    }
     if (!e) {
-        print_indent(indent); printf("NULL\n");
         return;
     }
-    print_indent(indent); printf("expr %s: ", expr_names[e->expr]);
     switch (e->expr) {
     case EXPR_CONST:
         switch (e->u._const.type->type) {
+        case TYPE_TYPE:
+            switch (e->u._const.u.type->type) {
+            case TYPE_TYPE: print(ctx, "Type"); break;
+            case TYPE_BOOL: print(ctx, "Bool"); break;
+            case TYPE_INT: print(ctx, "Int"); break;
+            default:
+                print(ctx, "type:%s", type_names[e->u._const.u.type->type]); break;
+            }
+            break;
         case TYPE_BOOL:
-            printf("type = %s, value = %s\n", type_names[e->u._const.type->type], e->u._const.u._bool ? "true" : "false");
+            print(ctx, "%s", e->u._const.u._bool ? "true" : "false");
             break;
         case TYPE_INT:
-            printf("type = %s, value = %d\n", type_names[e->u._const.type->type], e->u._const.u._int);
+            print(ctx, "%d", e->u._const.u._int);
             break;
-        case TYPE_FN: {
-            printf("type = %s, name = %.*s\n", type_names[e->u._const.type->type], e->u._const.u.fn_name.len, e->u._const.u.fn_name.ptr);
+        case TYPE_FN:
+            print(ctx, "<%.*s>", e->u._const.u.fn_name.len, e->u._const.u.fn_name.ptr);
             break;
-        }
         default:
-            printf("type = %s, value = ?\n", type_names[e->u._const.type->type]);
+            print(ctx, "const:%s", type_names[e->u._const.type->type]);
             break;
         }
         break;
     case EXPR_SYM:
-        printf("name = '%.*s'\n", e->u.sym.name.len, e->u.sym.name.ptr);
+        print(ctx, "%.*s", e->u.sym.name.len, e->u.sym.name.ptr);
         break;
     case EXPR_FN: {
         struct expr_fn_param *p;
-        printf("\n");
+        print(ctx, "fn(");
         for (p = e->u.fn.params; p; p = p->next) {
-            print_indent(indent + 1); printf("param '%.*s' type:\n", p->name.len, p->name.ptr);
-            print_expr(p->type_expr, indent + 2);
+            print(ctx, "%.*s", p->name.len, p->name.ptr);
+            if (p->type_expr) {
+                print(ctx, ": ");
+                print_expr(ctx, p->type_expr);
+            }
+            if (p->next) {
+                print(ctx, "; ");
+            }
         }
-        print_indent(indent + 1); printf("return_type:\n");
-        print_expr(e->u.fn.return_type_expr, indent + 2);
-        print_indent(indent + 1); printf("body:\n");
-        print_expr(e->u.fn.body_expr, indent + 2);
-        printf("\n");
+        print(ctx, ")");
+        if (e->u.fn.return_type_expr) {
+            print(ctx, " ");
+            print_expr(ctx, e->u.fn.return_type_expr);
+        }
+        print(ctx, ": ");
+        print_expr(ctx, e->u.fn.body_expr);
         break;
     }
     case EXPR_LET: {
         struct expr_let_binding *b;
-        printf("\n");
+        print(ctx, "let ");
         for (b = e->u.let.bindings; b; b = b->next) {
-            print_indent(indent + 1); printf("binding '%.*s'\n", b->name.len, b->name.ptr);
-            print_indent(indent + 2); printf("type:\n");
-            print_expr(b->type_expr, indent + 2);
-            print_indent(indent + 2); printf("value:\n");
-            print_expr(b->value_expr, indent + 3);
+            print(ctx, "%.*s", b->name.len, b->name.ptr);
+            if (b->type_expr) {
+                print(ctx, ": ");
+                print_expr(ctx, b->type_expr);
+            }
+            print(ctx, " = ");
+            print_expr(ctx, b->value_expr);
+            if (b->next) {
+                print(ctx, "; ");
+            }
         }
-        printf("\n");
         break;
     }
     case EXPR_STRUCT: {
         struct expr_struct_field *f;
-        printf("\n");
+        print(ctx, "struct\n");
+        ++ctx->indent;
         for (f = e->u._struct.fields; f; f = f->next) {
-            print_indent(indent + 1); printf("field '%.*s'\n", f->name.len, f->name.ptr);
-            print_indent(indent + 2); printf("type:\n");
-            print_expr(f->type_expr, indent + 3);
-            print_indent(indent + 2); printf("value:\n");
-            print_expr(f->value_expr, indent + 3);
+            print_indent(ctx);
+            print(ctx, "%.*s", f->name.len, f->name.ptr);
+            if (f->type_expr) {
+                print(ctx, ": ");
+                print_expr(ctx, f->type_expr);
+            }
+            if (f->value_expr) {
+                print(ctx, " = ");
+                print_expr(ctx, f->value_expr);
+            }
+            print(ctx, ";");
+            if (f->next) {
+                print(ctx, "\n");
+            }
         }
-        printf("\n");
+        --ctx->indent;
         break;
     }
     case EXPR_IF: {
-        printf("\n");
-        print_indent(indent + 1); printf("cond:\n");
-        print_expr(e->u._if.cond_expr, indent + 2);
-        print_indent(indent + 1); printf("then:\n");
-        print_expr(e->u._if.then_expr, indent + 2);
-        print_indent(indent + 1); printf("else:\n");
-        print_expr(e->u._if.else_expr, indent + 2);
+        print(ctx, "if ");
+        print_expr(ctx, e->u._if.cond_expr);
+        print(ctx, ": ");
+        print_expr(ctx, e->u._if.then_expr);
+        print(ctx, " else ");
+        print_expr(ctx, e->u._if.else_expr);
         break;
     }
     case EXPR_PRIM: {
-        printf("type = %s\n", prim_names[e->u.prim.prim]);
-        if (e->u.prim.arg_count > 0) {
-            print_indent(indent + 1); printf("arg 0:\n");
-            print_expr(e->u.prim.arg_expr0, indent + 2);
-        }
-        if (e->u.prim.arg_count > 1) {
-            print_indent(indent + 1); printf("arg 1:\n");
-            print_expr(e->u.prim.arg_expr1, indent + 2);
+        switch (e->u.prim.prim) {
+        case PRIM_SEQ: print_binop(ctx, " ", e); break;
+        case PRIM_EQ: print_binop(ctx, " = ", e); break;
+        case PRIM_NEQ: print_binop(ctx, " != ", e); break;
+        case PRIM_ADD: print_binop(ctx, " + ", e); break;
+        case PRIM_SUB: print_binop(ctx, " - ", e); break;
+        case PRIM_MUL: print_binop(ctx, " * ", e); break;
+        case PRIM_DIV: print_binop(ctx, " / ", e); break;
         }
         break;
     }
     case EXPR_CALL: {
         struct expr_call_arg *arg;
-        int i;
-        printf("\n");
-        print_indent(indent + 1); printf("fn\n");
-        print_expr(e->u.call.fn_expr, indent + 2);
-        for (arg = e->u.call.args, i = 0; arg; arg = arg->next, ++i) {
-            print_indent(indent + 1); printf("arg %d:\n", i);
-            print_expr(arg->expr, indent + 2);
+        print_expr(ctx, e->u.call.fn_expr);
+        print(ctx, "(");
+        for (arg = e->u.call.args; arg; arg = arg->next) {
+            print_expr(ctx, arg->expr);
+            if (arg->next) {
+                print(ctx, ", ");
+            }
         }
+        print(ctx, ")");
         break;
     }
     }
