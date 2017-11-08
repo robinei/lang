@@ -16,27 +16,39 @@ int main(int argc, char *argv[]) {
         "IfTest2 = if 1 == 2: 3 end 1;\n"
         "CallTest = Baz(1, 2, 3)();\n"
         "LeftAssoc = 1 * 2 * 3;\n"*/
-        //"exp = fn(x, n: int) int: if n == 0: 1 else x * exp(x, n - 1);"
-        //"main = let x = exp(2, 3) in x + 100;"
-        "even = fn(n: int) bool: if n == 0: true else odd(n - 1);"
-        "odd = fn(n: int) bool: if n == 0: false else even(n - 1);"
-        "main = even(4);"
+        /*"exp = fn(x, n: int) int: if n == 0: 1 else x * exp(x, n - 1);"
+        "main = let x = exp(2, 3) in x + 100;"
+        "main2 = let\n"
+        "   even = fn(n: int) bool: if n == 0: true else odd(n - 1);\n"
+        "   odd = fn(n: int) bool: if n == 0: false else even(n - 1)\n"
+        "in even(5);"*/
+        "fib_help = fn(a, b, n: int) int: print(n) if n == 0: a else fib_help(b, a+b, n-1);\n"
+        "fib = fn(n: int) int: fib_help(0, 1, n);\n"
+        "main = fib(6);\n"
         ;
 
-    struct expr *e;
+    struct expr *mod_struct;
 
     struct parse_ctx ctx = {0,};
     ctx.scan.cursor = text;
     ctx.text = text;
 
-    if ((e = parse_module(&ctx))) {
-        print_expr(e, 0);
+    if ((mod_struct = parse_module(&ctx))) {
+        //print_expr(e, 0);
         printf("PARSE OK\n");
         {
             struct peval_ctx peval = { 0, };
-            struct expr *e_new = partial_eval_module(&peval, e);
-            if (e_new) {
-                print_expr(e_new, 0);
+            struct module *mod = partial_eval_module(&peval, mod_struct);
+            if (mod) {
+                uint i;
+                struct slice_table *funcs = &mod->functions;
+                for (i = 0; i < funcs->size; ++i) {
+                    if (funcs->entries[i].hash) {
+                        printf("%.*s: ", funcs->entries[i].key.len, funcs->entries[i].key.ptr);
+                        //print_expr(funcs->entries[i].value, 0);
+                    }
+                }
+                print_expr(mod->struct_expr, 0);
                 printf("PARTIAL EVAL OK\n");
             }
             else {

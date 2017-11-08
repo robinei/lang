@@ -340,6 +340,19 @@ static struct expr *parse_fn(struct parse_ctx *ctx) {
         NEXT_TOKEN();
     }
 
+    if (!body) {
+        for (p = first_param; p; p = p->next) {
+            if (!p->type_expr) {
+                parse_error(ctx, "incomplete parameter types in preceding function type definition");
+                return NULL;
+            }
+        }
+        if (!return_type) {
+            parse_error(ctx, "missing return type in preceding function type definition");
+            return NULL;
+        }
+    }
+
     result = expr_create(ctx, EXPR_FN);
     result->u.fn.param_count = param_count;
     result->u.fn.params = first_param;

@@ -38,6 +38,10 @@ void print_expr(struct expr *e, int indent) {
         case TYPE_INT:
             printf("type = %s, value = %d\n", type_names[e->u._const.type->type], e->u._const.u._int);
             break;
+        case TYPE_FN: {
+            printf("type = %s, name = %.*s\n", type_names[e->u._const.type->type], e->u._const.u.fn_name.len, e->u._const.u.fn_name.ptr);
+            break;
+        }
         default:
             printf("type = %s, value = ?\n", type_names[e->u._const.type->type]);
             break;

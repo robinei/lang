@@ -2,6 +2,7 @@
 #define EXPR_H
 
 #include "type.h"
+#include "slice.h"
 
 #define FOR_ALL_PRIMS(X) \
     X(PLUS) \
@@ -62,6 +63,7 @@ struct expr_const {
         int _bool;
         int _int;
         struct type *type;
+        slice_t fn_name;
     } u;
 };
 

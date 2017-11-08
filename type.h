@@ -51,5 +51,6 @@ struct type {
 extern struct type type_type;
 extern struct type type_bool;
 extern struct type type_int;
+extern struct type type_fn; /* TODO: replace with fn types actually having structure, and which are different */
 
 #endif
