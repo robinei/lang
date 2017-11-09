@@ -16,6 +16,10 @@ struct peval_ctx {
     uint binding_capacity;
     struct peval_binding *bindings;
 
+    struct expr **pending_fns;
+    uint pending_fn_count;
+    uint pending_fn_capacity;
+
     slice_t closest_name;
     slice_t name_stack[NAME_STACK_SIZE];
     uint name_stack_count;

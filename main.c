@@ -5,20 +5,21 @@
 
 int main(int argc, char *argv[]) {
     char *text =
-        "exp = fn(x, n: Int) Int: if n == 0: 1 else x * exp(x, n - 1);"
-        "exped = let x = exp(2, 3) in x + 100;"
+        "exp = fn(x, n: Int) Int: if n == 0: 1 else x * exp(x, n - 1);\n"
+        "exped = let x = exp(2, 3) in x + 100;\n"
         "mutual = let\n"
         "   even = fn(n: Int) Bool: if n == 0: true else odd(n - 1);\n"
         "   odd = fn(n: Int) Bool: if n == 0: false else even(n - 1)\n"
-        "in even(5);"
+        "in even(5);\n"
         "getType = fn(i: Int) Type: if i == 0: Bool else Int;\n"
         "test = fn(): let x: getType(1) = 123 in x;\n"
-        "fibHelp = fn(a, b, n: Int) Int: print(n) if n == 0: a else fibHelp(b, a+b, n-1);\n"
+        "fibHelp = fn(a, b, n: Int) Int: print(n) if n == 1-1: a else fibHelp(b, a+b, n-1);\n"
         "fib = fn(n: Int) Int: fibHelp(0, 1, n);\n"
         "main = fib(6);\n"
         "order = let x = add3(2); add3 = fn(n): n + 3 in x;\n"
         "foo = mul3(4);\n"
         "mul3 = fn(x): x * 3;\n"
+        "dropUnusedConst = 1 2 3;\n"
         ;
 
     struct expr *mod_struct;
@@ -38,7 +39,7 @@ int main(int argc, char *argv[]) {
                 printf("\n");
                 for (i = 0; i < funcs->size; ++i) {
                     if (funcs->entries[i].hash) {
-                        printf("%.*s = ", funcs->entries[i].key.len, funcs->entries[i].key.ptr);
+                        printf("<%.*s> = ", funcs->entries[i].key.len, funcs->entries[i].key.ptr);
                         print_expr(NULL, funcs->entries[i].value);
                         printf(";\n");
                     }

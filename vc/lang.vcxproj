@@ -34,6 +34,7 @@
   <ItemGroup>
     <ClInclude Include="..\defs.h" />
     <ClInclude Include="..\expr.h" />
+    <ClInclude Include="..\fnv.h" />
     <ClInclude Include="..\hashtable.h" />
     <ClInclude Include="..\hashtable_impl.h" />
     <ClInclude Include="..\murmur3.h" />
