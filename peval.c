@@ -363,13 +363,19 @@ static struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
     }
     case EXPR_STRUCT: {
         struct expr e_new = *e;
-        struct expr_struct_field *f;
+        struct expr_struct_field *f, *new_fields;
 
         for (f = e->u._struct.fields; f; f = f->next) {
             push_binding(ctx, f->name, f->value_expr);
         }
 
-        e_new.u._struct.fields = peval_fields(ctx, e->u._struct.fields);
+        while (1) {
+            new_fields = peval_fields(ctx, e_new.u._struct.fields);
+            if (new_fields == e_new.u._struct.fields) {
+                break;
+            }
+            e_new.u._struct.fields = new_fields;
+        }
 
         pop_bindings(ctx, e->u._struct.field_count);
 
@@ -407,21 +413,28 @@ static struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
         struct expr e_new = *e;
         int changed = 0;
         uint const_count = 0;
-        struct expr_let_binding *b;
+        struct expr_let_binding *b, *new_bindings;
 
         for (b = e->u.let.bindings; b; b = b->next) {
             push_binding(ctx, b->name, b->value_expr);
         }
         
-        e_new.u.let.bindings = peval_bindings(ctx, e->u.let.bindings, &const_count);
-        changed = changed || e_new.u.let.bindings != e->u.let.bindings;
+        while (1) {
+            const_count = 0;
+            new_bindings = peval_bindings(ctx, e_new.u.let.bindings, &const_count);
+            if (new_bindings == e_new.u.let.bindings) {
+                break;
+            }
+            e_new.u.let.bindings = new_bindings;
+            changed = 1;
+        }
 
-        if (const_count == e_new.u.let.binding_count) {
-            e_new = *peval(ctx, e->u.let.body_expr);
+        if (const_count == e->u.let.binding_count) {
+            e_new = *peval(ctx, e_new.u.let.body_expr);
             changed = 1;
         }
         else {
-            e_new.u.let.body_expr = peval(ctx, e->u.let.body_expr);
+            e_new.u.let.body_expr = peval(ctx, e_new.u.let.body_expr);
             changed = changed || e_new.u.let.body_expr != e->u.let.body_expr;
         }
 

@@ -16,6 +16,9 @@ int main(int argc, char *argv[]) {
         "fibHelp = fn(a, b, n: Int) Int: print(n) if n == 0: a else fibHelp(b, a+b, n-1);\n"
         "fib = fn(n: Int) Int: fibHelp(0, 1, n);\n"
         "main = fib(6);\n"
+        "order = let x = add3(2); add3 = fn(n): n + 3 in x;\n"
+        "foo = mul3(4);\n"
+        "mul3 = fn(x): x * 3;\n"
         ;
 
     struct expr *mod_struct;
