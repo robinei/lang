@@ -153,7 +153,7 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
     case EXPR_PRIM: {
         switch (e->u.prim.prim) {
         case PRIM_SEQ: print_binop(ctx, " ", e); break;
-        case PRIM_EQ: print_binop(ctx, " = ", e); break;
+        case PRIM_EQ: print_binop(ctx, " == ", e); break;
         case PRIM_NEQ: print_binop(ctx, " != ", e); break;
         case PRIM_ADD: print_binop(ctx, " + ", e); break;
         case PRIM_SUB: print_binop(ctx, " - ", e); break;

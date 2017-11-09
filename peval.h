@@ -20,6 +20,9 @@ struct peval_ctx {
     slice_t name_stack[NAME_STACK_SIZE];
     uint name_stack_count;
 
+    uint force_full_expansion;
+    uint inhibit_call_expansion;
+
     jmp_buf error_jmp_buf;
 };
 

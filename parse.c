@@ -86,6 +86,7 @@ static int token_ends_expr(int tok) {
     case TOK_SEMICOLON:
     case TOK_COLON:
     case TOK_COMMA:
+    case TOK_ASSIGN:
     case TOK_KW_END:
     case TOK_KW_IN:
     case TOK_KW_OF:

@@ -142,7 +142,9 @@ static struct expr *peval_type(struct peval_ctx *ctx, struct expr *e) {
     if (!e) {
         return NULL;
     }
+    ++ctx->force_full_expansion;
     e_new = peval(ctx, e);
+    --ctx->force_full_expansion;
     if (e_new->expr != EXPR_CONST) {
         peval_error(ctx, "expected constant type expression");
     }
@@ -289,7 +291,8 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
     e_new.u.call.args = peval_args(ctx, e->u.call.args, &const_count);
     changed = changed || e_new.u.call.args != e->u.call.args;
 
-    if (fn && fn->expr == EXPR_FN && (const_count > 0 || const_count == fn->u.fn.param_count)) {
+    if (fn && fn->expr == EXPR_FN && (ctx->force_full_expansion || !ctx->inhibit_call_expansion) &&
+        (const_count > 0 || const_count == fn->u.fn.param_count)) {
         struct expr_call_arg *a = e_new.u.call.args;
         struct expr_fn_param *p = fn->u.fn.params;
         for (; a; a = a->next, p = p->next) {
@@ -388,6 +391,10 @@ static struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
             e_new->u._const.type = &type_fn;
             e_new->u._const.u.fn_name = make_fn_name(ctx);
             bind_func(ctx, e_new->u._const.u.fn_name, e);
+
+            ++ctx->inhibit_call_expansion;
+            e->u.fn.body_expr = peval(ctx, e->u.fn.body_expr);
+            --ctx->inhibit_call_expansion;
         }
         else {
             e_new->u._const.type = &type_type;

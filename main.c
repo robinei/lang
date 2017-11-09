@@ -5,27 +5,16 @@
 
 int main(int argc, char *argv[]) {
     char *text =
-        /*"StructTest = struct a, b: Int; c = 1;;\n"
-        "FnType = fn(x, y: Int) Int;\n"
-        "Foo = 1 + 2 3;\n"
-        "Bar = let x = 1; y = 2 in x;\n"
-        "Baz = fn(a, b: Int; c) Int: a + b * c;\n"
-        "Bax = fn(x): x;\n"
-        "Bax = fn(x; y: Int): x;\n"
-        "IfTest = if 1: 2 3 elif 4 5: 6 else 7;\n"
-        "IfTest2 = if 1 == 2: 3 end 1;\n"
-        "CallTest = Baz(1, 2, 3)();\n"
-        "LeftAssoc = 1 * 2 * 3;\n"*/
-        /*"exp = fn(x, n: Int) Int: if n == 0: 1 else x * exp(x, n - 1);"
-        "main = let x = exp(2, 3) in x + 100;"
-        "main2 = let\n"
+        "exp = fn(x, n: Int) Int: if n == 0: 1 else x * exp(x, n - 1);"
+        "exped = let x = exp(2, 3) in x + 100;"
+        "mutual = let\n"
         "   even = fn(n: Int) Bool: if n == 0: true else odd(n - 1);\n"
         "   odd = fn(n: Int) Bool: if n == 0: false else even(n - 1)\n"
-        "in even(5);"*/
-        "even = fn(n: Int) Bool: if n == 0: true else odd(n - 1);\n"
-        "odd = fn(n: Int) Bool: if n == 0: false else even(n - 1);\n"
-        "fib_help = fn(a, b, n: Int) Int: print(even(n)) if n == 0: a else fib_help(b, a+b, n-1);\n"
-        "fib = fn(n: Int) Int: fib_help(0, 1, n);\n"
+        "in even(5);"
+        "getType = fn(i: Int) Type: if i == 0: Bool else Int;\n"
+        "test = fn(): let x: getType(1) = 123 in x;\n"
+        "fibHelp = fn(a, b, n: Int) Int: print(n) if n == 0: a else fibHelp(b, a+b, n-1);\n"
+        "fib = fn(n: Int) Int: fibHelp(0, 1, n);\n"
         "main = fib(6);\n"
         ;
 
@@ -36,7 +25,6 @@ int main(int argc, char *argv[]) {
     ctx.text = text;
 
     if ((mod_struct = parse_module(&ctx))) {
-        //print_expr(e, 0);
         printf("PARSE OK\n");
         {
             struct peval_ctx peval = { 0, };
