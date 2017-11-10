@@ -74,7 +74,7 @@ static void parse_error(struct parse_ctx *ctx, const char *format, ...) {
         ctx->token = scan_next_token(&ctx->scan, &ctx->token_text.ptr); \
         ctx->token_text.len = (int)(ctx->scan.cursor - ctx->token_text.ptr); \
     } while (0)
-//printf("%s: '%.*s'\n", token_strings[ctx->token], (int)(ctx->scan.cursor - ctx->token_text.ptr), ctx->token_text.ptr); \
+//printf("%s: '%.*s'\n", token_strings[ctx->token], (int)(ctx->scan.cursor - ctx->token_text.ptr), ctx->token_text.ptr);
 
 
 static int token_ends_expr(int tok) {

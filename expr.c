@@ -17,9 +17,6 @@ const char *expr_names[] = {
 struct expr expr_true = { EXPR_CONST, { { &type_bool, { 1 } } } };
 struct expr expr_false = { EXPR_CONST, { { &type_bool, { 0 } } } };
 
-struct print_ctx {
-    uint indent;
-};
 
 static void print(struct print_ctx *ctx, const char *format, ...) {
     va_list args;

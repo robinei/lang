@@ -58,6 +58,7 @@ int main(int argc, char *argv[]) {
         printf("PARSE ERROR: %s\n", ctx.error);
     }
 
+    fflush(stdout);
     fgetc(stdin);
     return 0;
 }

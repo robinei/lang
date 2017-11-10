@@ -1,6 +1,7 @@
 #ifndef TYPEINF_H
 #define TYPEINF_H
 
+#include "expr.h"
 #include "type.h"
 #include "slice.h"
 

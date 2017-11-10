@@ -143,6 +143,11 @@ struct expr {
     } u;
 };
 
+
+struct print_ctx {
+    uint indent;
+};
+
 void print_expr(struct print_ctx *ctx, struct expr *e);
 
 extern struct expr expr_true;
