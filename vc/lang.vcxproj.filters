@@ -48,6 +48,9 @@
     <ClCompile Include="..\peval.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\prim.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\scan.h">
@@ -84,6 +87,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\fnv.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\prim.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

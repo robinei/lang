@@ -16,9 +16,9 @@ struct peval_ctx {
     uint binding_capacity;
     struct peval_binding *bindings;
 
-    struct expr **pending_fns;
     uint pending_fn_count;
     uint pending_fn_capacity;
+    struct expr **pending_fns;
 
     slice_t closest_name;
     slice_t name_stack[NAME_STACK_SIZE];
@@ -36,5 +36,7 @@ struct module {
 };
 
 struct module *partial_eval_module(struct peval_ctx *ctx, struct expr *e);
+
+void peval_error(struct peval_ctx *ctx, const char *error);
 
 #endif

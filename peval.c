@@ -6,7 +6,6 @@
 #include <string.h>
 
 static struct expr *peval(struct peval_ctx *ctx, struct expr *e);
-static struct expr *eval_prim(struct peval_ctx *ctx, struct expr *e);
 
 struct peval_binding {
     slice_t name;
@@ -85,7 +84,7 @@ static struct expr_fn_param *dup_param(struct peval_ctx *ctx, struct expr_fn_par
 }
 
 
-static void peval_error(struct peval_ctx *ctx, const char *error) {
+void peval_error(struct peval_ctx *ctx, const char *error) {
     printf("error during partial eval: %s\n", error);
     longjmp(ctx->error_jmp_buf, 1);
 }
@@ -538,14 +537,19 @@ static void bind_type(struct peval_ctx *ctx, char *name_str, struct type *type) 
 struct module *partial_eval_module(struct peval_ctx *ctx, struct expr *e) {
     struct module *mod = calloc(1, sizeof(struct module));
 
+    if (setjmp(ctx->error_jmp_buf)) {
+        return NULL;
+    }
+
     assert(e->expr == EXPR_STRUCT);
     ctx->mod = mod;
     ctx->closest_name.ptr = "root";
     ctx->closest_name.len = 4;
-
-    if (setjmp(ctx->error_jmp_buf)) {
-        return NULL;
-    }
+    ctx->binding_count = 0;
+    ctx->name_stack_count = 0;
+    ctx->pending_fn_count = 0;
+    ctx->force_full_expansion = 0;
+    ctx->inhibit_call_expansion = 0;
 
     slice_table_init(&ctx->symbols, 16);
     slice_table_init(&mod->functions, 16);
@@ -557,60 +561,4 @@ struct module *partial_eval_module(struct peval_ctx *ctx, struct expr *e) {
     mod->struct_expr = peval(ctx, e);
 
     return mod;
-}
-
-static int int_value(struct peval_ctx *ctx, struct expr *e) {
-    assert(e->expr == EXPR_CONST);
-    if (e->u._const.type->type != TYPE_INT) {
-        peval_error(ctx, "expected int");
-    }
-    return e->u._const.u._int;
-}
-
-static int const_eq(struct peval_ctx *ctx, struct expr *a, struct expr *b) {
-    assert(a->expr == EXPR_CONST && b->expr == EXPR_CONST);
-    if (a->u._const.type != b->u._const.type) {
-        return 0;
-    }
-    switch (a->u._const.type->type) {
-    case TYPE_TYPE:
-        return a->u._const.u.type == b->u._const.u.type;
-    case TYPE_BOOL:
-        return a->u._const.u._bool == b->u._const.u._bool;
-    case TYPE_INT:
-        return a->u._const.u._int == b->u._const.u._int;
-    default:
-        peval_error(ctx, "equality not implemented for type");
-        return 0;
-    }
-}
-
-#define EQUALS() const_eq(ctx, e->u.prim.arg_expr0, e->u.prim.arg_expr1)
-
-#define BINOP(op, value_getter) \
-    value_getter(ctx, e->u.prim.arg_expr0) op value_getter(ctx, e->u.prim.arg_expr1)
-
-#define RETURN_CONST(type_ptr, value_field, value_expression) \
-    { \
-        struct expr *e_new = expr_create(ctx, EXPR_CONST); \
-        e_new->u._const.type = type_ptr; \
-        e_new->u._const.u.value_field = value_expression; \
-        return e_new; \
-    }
-
-static struct expr *eval_prim(struct peval_ctx *ctx, struct expr *e) {
-    assert(e->expr == EXPR_PRIM);
-
-    switch (e->u.prim.prim) {
-    case PRIM_SEQ: return e->u.prim.arg_expr1;
-    case PRIM_EQ: RETURN_CONST(&type_bool, _bool, EQUALS())
-    case PRIM_NEQ: RETURN_CONST(&type_bool, _bool, !EQUALS())
-    case PRIM_ADD: RETURN_CONST(&type_int, _int, BINOP(+, int_value))
-    case PRIM_SUB: RETURN_CONST(&type_int, _int, BINOP(-, int_value))
-    case PRIM_MUL: RETURN_CONST(&type_int, _int, BINOP(*, int_value))
-    case PRIM_DIV: RETURN_CONST(&type_int, _int, BINOP(/, int_value))
-    default:
-        peval_error(ctx, "invalid primitive");
-        return NULL;
-    }
 }

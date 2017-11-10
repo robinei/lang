@@ -23,6 +23,7 @@
     <ClCompile Include="..\murmur3.c" />
     <ClCompile Include="..\parse.c" />
     <ClCompile Include="..\peval.c" />
+    <ClCompile Include="..\prim.c" />
     <ClCompile Include="..\scan.c" />
     <ClCompile Include="..\main.c" />
     <ClCompile Include="..\slice.c" />
@@ -40,6 +41,7 @@
     <ClInclude Include="..\murmur3.h" />
     <ClInclude Include="..\parse.h" />
     <ClInclude Include="..\peval.h" />
+    <ClInclude Include="..\prim.h" />
     <ClInclude Include="..\scan.h" />
     <ClInclude Include="..\slice.h" />
     <ClInclude Include="..\type.h" />
