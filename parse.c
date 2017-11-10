@@ -256,8 +256,7 @@ static struct expr *parse_fn(struct parse_ctx *ctx) {
     struct expr_fn_param *p, *temp,
         *first_param = NULL,
         *last_param = NULL,
-        *last_typed = NULL,
-        *last_valued = NULL;
+        *last_typed = NULL;
     struct expr *return_type = NULL, *body = NULL, *result, *type;
 
     assert(ctx->token == TOK_KW_FN);

@@ -31,7 +31,7 @@ static void bind_func(struct peval_ctx *ctx, slice_t name, struct expr *e) {
 }
 static struct expr *lookup_func(struct peval_ctx *ctx, slice_t name) {
     struct expr *e = NULL;
-    slice_table_get(&ctx->mod->functions, name, &e);
+    slice_table_get(&ctx->mod->functions, name, (void **)&e);
     assert(!e || e->expr == EXPR_FN);
     return e;
 }
@@ -94,7 +94,7 @@ static void bind(struct peval_ctx *ctx, slice_t name, struct expr *e) {
 }
 static struct expr *lookup(struct peval_ctx *ctx, slice_t name) {
     struct expr *e = NULL;
-    slice_table_get(&ctx->symbols, name, &e);
+    slice_table_get(&ctx->symbols, name, (void **)&e);
     return e;
 }
 
@@ -222,7 +222,7 @@ static struct expr_let_binding *peval_bindings(struct peval_ctx *ctx, struct exp
     return b;
 }
 
-static struct expr_call_arg *peval_args(struct peval_ctx *ctx, struct expr_call_arg *a, int *const_count) {
+static struct expr_call_arg *peval_args(struct peval_ctx *ctx, struct expr_call_arg *a, uint *const_count) {
     if (a) {
         struct expr_call_arg a_new = *a;
         a_new.expr = peval(ctx, a->expr);
@@ -273,7 +273,7 @@ static struct expr_fn_param *strip_const_params(struct peval_ctx *ctx, struct ex
 static uint hash_const_args(struct expr_fn_param *p, struct expr_call_arg *a, uint hash) {
     if (a) {
         if (a->expr->expr == EXPR_CONST) {
-            hash = fnv1a(p->name.ptr, p->name.len, hash);
+            hash = fnv1a((unsigned char *)p->name.ptr, p->name.len, hash);
             switch (a->expr->u._const.type->type) {
             case TYPE_TYPE: hash = fnv1a((unsigned char *)&a->expr->u._const.type, sizeof(struct type *), hash); break;
             case TYPE_BOOL: hash = fnv1a((unsigned char *)&a->expr->u._const.u._bool, sizeof(a->expr->u._const.u._bool), hash); break;
@@ -334,7 +334,7 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
 
             fn_name_new.ptr = malloc(fn_name_capacity + 1);
             memcpy(fn_name_new.ptr, fn_name.ptr, fn_name.len);
-            fn_name_new.len = fn_name.len + snprintf(fn_name_new.ptr + fn_name.len, 8, "_%lu", hash);
+            fn_name_new.len = fn_name.len + snprintf(fn_name_new.ptr + fn_name.len, 8, "_%u", hash);
 
             fn_new = lookup_func(ctx, fn_name_new);
             if (!fn_new) {

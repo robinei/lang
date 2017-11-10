@@ -135,6 +135,7 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
                 print(ctx, "\n");
             }
         }
+        print(ctx, ";");
         --ctx->indent;
         break;
     }

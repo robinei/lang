@@ -7,6 +7,7 @@ int main(int argc, char *argv[]) {
     char *text =
         "exp = fn(x, n: Int) Int: if n == 0: 1 else x * exp(x, n - 1);\n"
         "exped = let x = exp(2, 3) in x + 100;\n"
+        "pow2 = exp(2, n);\n"
         "mutual = let\n"
         "   even = fn(n: Int) Bool: if n == 0: true else odd(n - 1);\n"
         "   odd = fn(n: Int) Bool: if n == 0: false else even(n - 1)\n"
@@ -15,7 +16,7 @@ int main(int argc, char *argv[]) {
         "test = fn(): let x: getType(1) = 123 in x;\n"
         "fibHelp = fn(a, b, n: Int) Int: print(n) if n == 1-1: a else fibHelp(b, a+b, n-1);\n"
         "fib = fn(n: Int) Int: fibHelp(0, 1, n);\n"
-        "main = fib(6);\n"
+        "fib6 = fib(6);\n"
         "order = let x = add3(2); add3 = fn(n): n + 3 in x;\n"
         "foo = mul3(4);\n"
         "mul3 = fn(x): x * 3;\n"
@@ -24,7 +25,7 @@ int main(int argc, char *argv[]) {
 
     struct expr *mod_struct;
 
-    struct parse_ctx ctx = {0,};
+    struct parse_ctx ctx = {{0},};
     ctx.scan.cursor = text;
     ctx.text = text;
 
