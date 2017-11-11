@@ -3,6 +3,7 @@
 
 #include "scan.h"
 #include "expr.h"
+#include <setjmp.h>
 
 #define ERROR_MAX 512
 
@@ -13,6 +14,7 @@ struct parse_ctx {
     slice_t token_text;
 
     char error[ERROR_MAX + 1];
+    jmp_buf error_jmp_buf;
 };
 
 struct expr *parse_module(struct parse_ctx *ctx);
