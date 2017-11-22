@@ -153,89 +153,64 @@ struct expr *parse_module(struct parse_ctx *ctx) {
     return result;
 }
 
-struct expr *parse_struct(struct parse_ctx *ctx) {
-    uint field_count = 0;
-    struct expr_struct_field *f, *temp,
-        *first_field = NULL,
-        *last_field = NULL,
-        *last_valued = NULL,
-        *last_typed = NULL;
-    struct expr *result, *type, *value;
+static struct expr_struct_field *parse_struct_fields(struct parse_ctx *ctx, uint *field_count) {
+    struct expr_struct_field *f;
 
-    assert(ctx->token == TOK_KW_STRUCT);
+    if (ctx->token != TOK_IDENT) {
+        return NULL;
+    }
+
+    f = calloc(1, sizeof(struct expr_struct_field));
+    f->name = ctx->token_text;
+    ++*field_count;
+
     NEXT_TOKEN();
 
-    if (!token_ends_expr(ctx->token)) {
-        while (1) {
-            if (ctx->token != TOK_IDENT) {
-                parse_error(ctx, "expected identifier in struct definition");
-            }
-
-            f = calloc(1, sizeof(struct expr_struct_field));
-            if (last_field) { last_field->next = f; }
-            else { first_field = f; }
-            last_field = f;
-
-            f->name = ctx->token_text;
-            ++field_count;
+    if (ctx->token == TOK_COMMA) {
+        NEXT_TOKEN();
+        if (ctx->token != TOK_IDENT) {
+            parse_error(ctx, "unexpected identifier after ',' in struct definition");
+        }
+        f->next = parse_struct_fields(ctx, field_count);
+        f->type_expr = f->next->type_expr;
+        f->value_expr = f->next->value_expr;
+    }
+    else {
+        if (ctx->token == TOK_COLON) {
             NEXT_TOKEN();
+            f->type_expr = parse_expr(ctx);
+        }
 
-            if (ctx->token == TOK_COMMA) {
-                NEXT_TOKEN();
-                continue;
-            }
+        if (ctx->token == TOK_ASSIGN) {
+            NEXT_TOKEN();
+            f->value_expr = parse_expr(ctx);
+        }
 
-            if (ctx->token == TOK_COLON) {
-                NEXT_TOKEN();
-
-                type = parse_expr(ctx);
-
-                temp = last_typed ? last_typed->next : first_field;
-                for (; temp; temp = temp->next) {
-                    temp->type_expr = type;
-                    last_typed = temp;
-                }
-            }
-
-            if (ctx->token == TOK_ASSIGN) {
-                NEXT_TOKEN();
-
-                value = parse_expr(ctx);
-
-                temp = last_valued ? last_valued->next : first_field;
-                for (; temp; temp = temp->next) {
-                    temp->value_expr = value;
-                    last_valued = temp;
-                }
-            }
-            else if (!f->type_expr) {
-                parse_error(ctx, "expected type or value for preceding struct field(s)");
-            }
-
-            if (ctx->token == TOK_SEMICOLON) {
-                NEXT_TOKEN();
-                if (token_ends_expr(ctx->token)) {
-                    break;
-                }
-                continue;
-            }
-
-            if (token_ends_expr(ctx->token)) {
-                break;
-            }
-
-            parse_error(ctx, "unexpected token in struct definition");
+        if (ctx->token == TOK_SEMICOLON) {
+            NEXT_TOKEN();
+            f->next = parse_struct_fields(ctx, field_count);
         }
     }
 
+    return f;
+}
+
+struct expr *parse_struct(struct parse_ctx *ctx) {
+    struct expr *result;
+    
+    assert(ctx->token == TOK_KW_STRUCT);
+    NEXT_TOKEN();
+
+    result = expr_create(ctx, EXPR_STRUCT);
+    result->u._struct.fields = parse_struct_fields(ctx, &result->u._struct.field_count);
 
     if (ctx->token == TOK_KW_END) {
         NEXT_TOKEN();
     }
+    else if (!token_ends_expr(ctx->token)) {
+        parse_error(ctx, "unexpected token after struct definition");
+    }
 
-    result = expr_create(ctx, EXPR_STRUCT);
-    result->u._struct.field_count = field_count;
-    result->u._struct.fields = first_field;
     return result;
 }
 

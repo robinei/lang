@@ -21,6 +21,8 @@ int main(int argc, char *argv[]) {
         "foo = mul3(4);\n"
         "mul3 = fn(x): x * 3;\n"
         "dropUnusedConst = 1 2 3;\n"
+        "vec2 = struct x, y end;"
+        "vec2 = struct x, y: Int end;"
         ;
 
     struct expr *mod_struct;
