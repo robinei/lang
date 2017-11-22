@@ -118,7 +118,7 @@ static struct expr_decl *parse_decls(struct parse_ctx *ctx, uint *field_count) {
     if (ctx->token == TOK_COMMA) {
         NEXT_TOKEN();
         if (ctx->token != TOK_IDENT) {
-            parse_error(ctx, "unexpected identifier after ',' in struct definition");
+            parse_error(ctx, "unexpected identifier after ',' in declaration");
         }
         f->next = parse_decls(ctx, field_count);
         f->type_expr = f->next->type_expr;
@@ -145,8 +145,6 @@ static struct expr_decl *parse_decls(struct parse_ctx *ctx, uint *field_count) {
 }
 
 struct expr *parse_module(struct parse_ctx *ctx) {
-    uint field_count = 0;
-    struct expr_decl *first_field = NULL, *last_field = NULL, *f;
     struct expr *result;
 
     if (setjmp(ctx->error_jmp_buf)) {
@@ -155,43 +153,13 @@ struct expr *parse_module(struct parse_ctx *ctx) {
 
     NEXT_TOKEN();
 
-    while (ctx->token != TOK_END) {
-        if (ctx->token == TOK_IDENT) {
-            f = calloc(1, sizeof(struct expr_decl));
-            if (last_field) { last_field->next = f; }
-            else { first_field = f; }
-            last_field = f;
+    result = expr_create(ctx, EXPR_STRUCT);
+    result->u._struct.fields = parse_decls(ctx, &result->u._struct.field_count);
 
-            f->name = ctx->token_text;
-            ++field_count;
-            NEXT_TOKEN();
-
-            if (ctx->token == TOK_COLON) {
-                NEXT_TOKEN();
-                f->type_expr = parse_expr(ctx);
-            }
-
-            if (ctx->token != TOK_ASSIGN) {
-                parse_error(ctx, "expected '=' in top level definition");
-            }
-
-            NEXT_TOKEN();
-            f->value_expr = parse_expr(ctx);
-
-            if (ctx->token == TOK_SEMICOLON) {
-                NEXT_TOKEN();
-                continue;
-            }
-
-            parse_error(ctx, "expected ';' after top level definition");
-        }
-
-        parse_error(ctx, "unexpected token while parsing top level definitions");
+    if (ctx->token != TOK_END) {
+        parse_error(ctx, "unexpected token in module");
     }
 
-    result = expr_create(ctx, EXPR_STRUCT);
-    result->u._struct.field_count = field_count;
-    result->u._struct.fields = first_field;
     return result;
 }
 
@@ -215,15 +183,13 @@ struct expr *parse_struct(struct parse_ctx *ctx) {
 }
 
 static struct expr *parse_fn(struct parse_ctx *ctx) {
-    uint param_count = 0;
-    struct expr_decl *p, *temp,
-        *first_param = NULL,
-        *last_param = NULL,
-        *last_typed = NULL;
-    struct expr *return_type = NULL, *body = NULL, *result, *type;
+    struct expr_decl *p;
+    struct expr *result;
 
     assert(ctx->token == TOK_KW_FN);
     NEXT_TOKEN();
+
+    result = expr_create(ctx, EXPR_FN);
 
     if (ctx->token == TOK_LPAREN) {
         NEXT_TOKEN();
@@ -231,175 +197,92 @@ static struct expr *parse_fn(struct parse_ctx *ctx) {
             NEXT_TOKEN();
         }
         else {
-            while (1) {
-                if (ctx->token != TOK_IDENT) {
-                    parse_error(ctx, "expected identifier in parameter list");
-                }
-
-                p = calloc(1, sizeof(struct expr_decl));
-                if (last_param) { last_param->next = p; }
-                else { first_param = p; }
-                last_param = p;
-
-                p->name = ctx->token_text;
-                ++param_count;
-                NEXT_TOKEN();
-
-                if (ctx->token == TOK_COMMA) {
-                    NEXT_TOKEN();
-                    continue;
-                }
-
-                if (ctx->token == TOK_COLON) {
-                    NEXT_TOKEN();
-
-                    type = parse_expr(ctx);
-
-                    temp = last_typed ? last_typed->next : first_param;
-                    for (; temp; temp = temp->next) {
-                        temp->type_expr = type;
-                        last_typed = temp;
-                    }
-                }
-
-                if (ctx->token == TOK_SEMICOLON) {
-                    NEXT_TOKEN();
-                    last_typed = p;
-                    continue;
-                }
-
-                if (ctx->token == TOK_RPAREN) {
-                    NEXT_TOKEN();
-                    break;
-                }
-
-                parse_error(ctx, "unexpected token in parameter list");
+            result->u.fn.params = parse_decls(ctx, &result->u.fn.param_count);
+            if (ctx->token != TOK_RPAREN) {
+                parse_error(ctx, "expected ')' after parameter list");
             }
+            NEXT_TOKEN();
         }
     }
 
     if (ctx->token != TOK_COLON && !token_ends_expr(ctx->token)) {
-        return_type = parse_expr(ctx);
+        result->u.fn.return_type_expr = parse_expr(ctx);
     }
 
     if (ctx->token == TOK_COLON) {
         NEXT_TOKEN();
-        body = parse_expr(ctx);
+        result->u.fn.body_expr = parse_expr(ctx);
     }
 
     if (ctx->token == TOK_KW_END) {
         NEXT_TOKEN();
     }
 
-    if (!body) {
-        for (p = first_param; p; p = p->next) {
+    if (!result->u.fn.body_expr) {
+        for (p = result->u.fn.params; p; p = p->next) {
             if (!p->type_expr) {
                 parse_error(ctx, "incomplete parameter types in preceding function type definition");
             }
         }
-        if (!return_type) {
+        if (!result->u.fn.return_type_expr) {
             parse_error(ctx, "missing return type in preceding function type definition");
         }
     }
 
-    result = expr_create(ctx, EXPR_FN);
-    result->u.fn.param_count = param_count;
-    result->u.fn.params = first_param;
-    result->u.fn.return_type_expr = return_type;
-    result->u.fn.body_expr = body;
     return result;
 }
 
 static struct expr *parse_let(struct parse_ctx *ctx) {
-    uint binding_count = 0;
-    struct expr_decl *b, *first_binding = NULL, *last_binding = NULL;
-    struct expr *result, *body;
+    struct expr *result;
 
     assert(ctx->token == TOK_KW_LET);
+    NEXT_TOKEN();
 
-    while (1) {
-        NEXT_TOKEN();
-        if (ctx->token != TOK_IDENT) {
-            parse_error(ctx, "expected identifier in let expression");
-        }
+    result = expr_create(ctx, EXPR_LET);
+    result->u.let.bindings = parse_decls(ctx, &result->u.let.binding_count);
 
-        b = calloc(1, sizeof(struct expr_decl));
-        if (last_binding) { last_binding->next = b; }
-        else { first_binding = b; }
-        last_binding = b;
-
-        b->name = ctx->token_text;
-        ++binding_count;
-        NEXT_TOKEN();
-
-        if (ctx->token == TOK_COLON) {
-            NEXT_TOKEN();
-            b->type_expr = parse_expr(ctx);
-        }
-
-        if (ctx->token != TOK_ASSIGN) {
-            parse_error(ctx, "expected '=' in let expression");
-        }
-        NEXT_TOKEN();
-
-        b->value_expr = parse_expr(ctx);
-        if (!b->value_expr) {
-        }
-
-        if (ctx->token == TOK_SEMICOLON) {
-            continue;
-        }
-        if (ctx->token == TOK_KW_IN) {
-            NEXT_TOKEN();
-            break;
-        }
-        parse_error(ctx, "unexpected token while parsing 'let' form");
+    if (ctx->token != TOK_KW_IN) {
+        parse_error(ctx, "expected 'in' after 'let' declarations");
     }
+    NEXT_TOKEN();
 
-    body = parse_expr(ctx);
+    result->u.let.body_expr = parse_expr(ctx);
 
     if (ctx->token == TOK_KW_END) {
         NEXT_TOKEN();
     }
 
-    result = expr_create(ctx, EXPR_LET);
-    result->u.let.binding_count = binding_count;
-    result->u.let.bindings = first_binding;
-    result->u.let.body_expr = body;
     return result;
 }
 
 static struct expr *parse_if(struct parse_ctx *ctx, int is_elif) {
-    struct expr *result, *cond_expr, *then_expr, *else_expr = NULL;
+    struct expr *result;
 
     assert(is_elif ? ctx->token == TOK_KW_ELIF : ctx->token == TOK_KW_IF);
     NEXT_TOKEN();
 
-    cond_expr = parse_expr(ctx);
+    result = expr_create(ctx, EXPR_IF);
+    result->u._if.cond_expr = parse_expr(ctx);
 
     if (ctx->token != TOK_COLON) {
         parse_error(ctx, "expected ':' after if condition");
     }
     NEXT_TOKEN();
 
-    then_expr = parse_expr(ctx);
+    result->u._if.then_expr = parse_expr(ctx);
 
     if (ctx->token == TOK_KW_ELSE) {
         NEXT_TOKEN();
-        else_expr = parse_expr(ctx);
+        result->u._if.else_expr = parse_expr(ctx);
     }
     else if (ctx->token == TOK_KW_ELIF) {
-        else_expr = parse_if(ctx, 1);
+        result->u._if.else_expr = parse_if(ctx, 1);
     }
 
     if (!is_elif && ctx->token == TOK_KW_END) {
         NEXT_TOKEN();
     }
 
-    result = expr_create(ctx, EXPR_IF);
-    result->u._if.cond_expr = cond_expr;
-    result->u._if.then_expr = then_expr;
-    result->u._if.else_expr = else_expr;
     return result;
 }
 
@@ -410,15 +293,14 @@ static struct expr *parse_while(struct parse_ctx *ctx) {
 
 
 static struct expr *parse_unary(struct parse_ctx *ctx, int prim) {
-    struct expr *e, *result;
+    struct expr *result;
 
     NEXT_TOKEN();
-    e = parse_atom(ctx);
 
     result = expr_create(ctx, EXPR_PRIM);
     result->u.prim.prim = prim;
     result->u.prim.arg_count = 1;
-    result->u.prim.arg_expr0 = e;
+    result->u.prim.arg_expr0 = parse_atom(ctx);
     return result;
 }
 
