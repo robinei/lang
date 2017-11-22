@@ -304,44 +304,43 @@ static struct expr *parse_unary(struct parse_ctx *ctx, int prim) {
     return result;
 }
 
+static struct expr_call_arg *parse_args(struct parse_ctx *ctx, uint *arg_count) {
+    struct expr_call_arg *a;
+    
+    if (ctx->token == TOK_RPAREN) {
+        NEXT_TOKEN();
+        return NULL;
+    }
+
+    a = calloc(1, sizeof(struct expr_call_arg));
+    a->expr = parse_expr(ctx);
+    ++*arg_count;
+
+    if (ctx->token == TOK_COMMA) {
+        NEXT_TOKEN();
+        a->next = parse_args(ctx, arg_count);
+    }
+    else {
+        if (ctx->token == TOK_RPAREN) {
+            NEXT_TOKEN();
+        }
+        else {
+            parse_error(ctx, "expected ')' after argument list");
+        }
+    }
+
+    return a;
+}
+
 static struct expr *parse_call(struct parse_ctx *ctx, struct expr *fn_expr) {
-    int arg_count = 0;
-    struct expr_call_arg *a, *first_arg = NULL, *last_arg = NULL;
     struct expr *result;
 
     assert(ctx->token == TOK_LPAREN);
     NEXT_TOKEN();
 
-    if (ctx->token == TOK_RPAREN) {
-        NEXT_TOKEN();
-    }
-    else {
-        while (1) {
-            a = calloc(1, sizeof(struct expr_call_arg));
-            if (last_arg) { last_arg->next = a; }
-            else { first_arg = a; }
-            last_arg = a;
-
-            ++arg_count;
-
-            a->expr = parse_expr(ctx);
-
-            if (ctx->token == TOK_COMMA) {
-                NEXT_TOKEN();
-                continue;
-            }
-            if (ctx->token == TOK_RPAREN) {
-                NEXT_TOKEN();
-                break;
-            }
-            parse_error(ctx, "unexpected token while parsing function call argument list");
-        }
-    }
-
     result = expr_create(ctx, EXPR_CALL);
     result->u.call.fn_expr = fn_expr;
-    result->u.call.arg_count = arg_count;
-    result->u.call.args = first_arg;
+    result->u.call.args = parse_args(ctx, &result->u.call.arg_count);
     return result;
 }
 
