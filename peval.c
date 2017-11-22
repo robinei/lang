@@ -77,8 +77,8 @@ static struct expr_call_arg *dup_arg(struct peval_ctx *ctx, struct expr_call_arg
     *copy = *a;
     return copy;
 }
-static struct expr_fn_param *dup_param(struct peval_ctx *ctx, struct expr_fn_param *p) {
-    struct expr_fn_param *copy = malloc(sizeof(struct expr_fn_param));
+static struct expr_decl *dup_param(struct peval_ctx *ctx, struct expr_decl *p) {
+    struct expr_decl *copy = malloc(sizeof(struct expr_decl));
     *copy = *p;
     return copy;
 }
@@ -136,7 +136,7 @@ static void push_pending_fn(struct peval_ctx *ctx, struct expr *fn) {
 }
 
 static void peval_pending_fns(struct peval_ctx *ctx) {
-    struct expr_fn_param *p;
+    struct expr_decl *p;
     ++ctx->inhibit_call_expansion;
     while (ctx->pending_fn_count > 0) {
         struct expr *fn = ctx->pending_fns[--ctx->pending_fn_count];
@@ -253,14 +253,14 @@ static struct expr_call_arg *strip_const_args(struct peval_ctx *ctx, struct expr
     return a;
 }
 
-static struct expr_fn_param *strip_const_params(struct peval_ctx *ctx, struct expr_fn_param *p, struct expr_call_arg *a) {
+static struct expr_decl *strip_const_params(struct peval_ctx *ctx, struct expr_decl *p, struct expr_call_arg *a) {
     assert(a && p || !a && !p);
     if (p) {
         if (a->expr->expr == EXPR_CONST) {
             return strip_const_params(ctx, p->next, a->next);
         }
         else {
-            struct expr_fn_param p_new = *p;
+            struct expr_decl p_new = *p;
             p_new.next = strip_const_params(ctx, p->next, a->next);
             if (p_new.next != p->next) {
                 return dup_param(ctx, &p_new);
@@ -270,7 +270,7 @@ static struct expr_fn_param *strip_const_params(struct peval_ctx *ctx, struct ex
     return p;
 }
 
-static uint hash_const_args(struct expr_fn_param *p, struct expr_call_arg *a, uint hash) {
+static uint hash_const_args(struct expr_decl *p, struct expr_call_arg *a, uint hash) {
     if (a) {
         if (a->expr->expr == EXPR_CONST) {
             hash = fnv1a((unsigned char *)p->name.ptr, p->name.len, hash);
@@ -316,7 +316,7 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
         (const_count > 0 || const_count == fn->u.fn.param_count))
     {
         struct expr_call_arg *a = e_new.u.call.args;
-        struct expr_fn_param *p = fn->u.fn.params;
+        struct expr_decl *p = fn->u.fn.params;
         for (; a; a = a->next, p = p->next) {
             check_type(ctx, a->expr, p->type_expr);
             push_binding(ctx, p->name, a->expr);
@@ -406,7 +406,7 @@ static struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
     case EXPR_FN: {
         struct expr *e_new = expr_create(ctx, EXPR_CONST);
 
-        struct expr_fn_param *p;
+        struct expr_decl *p;
         for (p = e->u.fn.params; p; p = p->next) {
             p->type_expr = peval_type(ctx, p->type_expr);
         }

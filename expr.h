@@ -49,14 +49,9 @@ struct expr_sym {
 
 struct expr_fn {
     uint param_count;
-    struct expr_fn_param *params;
+    struct expr_decl *params;
     struct expr *return_type_expr;
     struct expr *body_expr; /* NULL for fn type declaration */
-};
-struct expr_fn_param {
-    slice_t name;
-    struct expr *type_expr;
-    struct expr_fn_param *next;
 };
 
 struct expr_let {

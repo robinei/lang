@@ -77,7 +77,7 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         print(ctx, "%.*s", e->u.sym.name.len, e->u.sym.name.ptr);
         break;
     case EXPR_FN: {
-        struct expr_fn_param *p;
+        struct expr_decl *p;
         print(ctx, "fn(");
         for (p = e->u.fn.params; p; p = p->next) {
             print(ctx, "%.*s", p->name.len, p->name.ptr);

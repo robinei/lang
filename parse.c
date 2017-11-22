@@ -216,7 +216,7 @@ struct expr *parse_struct(struct parse_ctx *ctx) {
 
 static struct expr *parse_fn(struct parse_ctx *ctx) {
     uint param_count = 0;
-    struct expr_fn_param *p, *temp,
+    struct expr_decl *p, *temp,
         *first_param = NULL,
         *last_param = NULL,
         *last_typed = NULL;
@@ -236,7 +236,7 @@ static struct expr *parse_fn(struct parse_ctx *ctx) {
                     parse_error(ctx, "expected identifier in parameter list");
                 }
 
-                p = calloc(1, sizeof(struct expr_fn_param));
+                p = calloc(1, sizeof(struct expr_decl));
                 if (last_param) { last_param->next = p; }
                 else { first_param = p; }
                 last_param = p;
