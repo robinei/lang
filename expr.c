@@ -116,7 +116,7 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         break;
     }
     case EXPR_STRUCT: {
-        struct expr_struct_field *f;
+        struct expr_decl *f;
         print(ctx, "struct\n");
         ++ctx->indent;
         for (f = e->u._struct.fields; f; f = f->next) {

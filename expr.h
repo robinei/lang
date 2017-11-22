@@ -25,6 +25,14 @@ enum {
 extern const char *expr_names[];
 
 
+
+struct expr_decl {
+    slice_t name;
+    struct expr *type_expr;
+    struct expr *value_expr;
+    struct expr_decl *next;
+};
+
 struct expr_const {
     struct type *type;
     union {
@@ -65,13 +73,7 @@ struct expr_let_binding {
 
 struct expr_struct {
     uint field_count;
-    struct expr_struct_field *fields;
-};
-struct expr_struct_field {
-    slice_t name;
-    struct expr *type_expr;
-    struct expr *value_expr;
-    struct expr_struct_field *next;
+    struct expr_decl *fields;
 };
 
 struct expr_if {

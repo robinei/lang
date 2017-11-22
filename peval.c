@@ -62,8 +62,8 @@ static struct expr *dup_expr(struct peval_ctx *ctx, struct expr *e) {
     *e_copy = *e;
     return e_copy;
 }
-static struct expr_struct_field *dup_field(struct peval_ctx *ctx, struct expr_struct_field *f) {
-    struct expr_struct_field *copy = malloc(sizeof(struct expr_struct_field));
+static struct expr_decl *dup_field(struct peval_ctx *ctx, struct expr_decl *f) {
+    struct expr_decl *copy = malloc(sizeof(struct expr_decl));
     *copy = *f;
     return copy;
 }
@@ -191,9 +191,9 @@ static struct expr *rebind_peval(struct peval_ctx *ctx, slice_t name, struct exp
     return NULL;
 }
 
-static struct expr_struct_field *peval_fields(struct peval_ctx *ctx, struct expr_struct_field *f) {
+static struct expr_decl *peval_fields(struct peval_ctx *ctx, struct expr_decl *f) {
     if (f) {
-        struct expr_struct_field f_new = *f;
+        struct expr_decl f_new = *f;
         f_new.type_expr = peval_type(ctx, f->type_expr);
         f_new.value_expr = rebind_peval(ctx, f->name, f->value_expr);
         check_type(ctx, f_new.value_expr, f_new.type_expr);
@@ -381,7 +381,7 @@ static struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
     }
     case EXPR_STRUCT: {
         struct expr e_new = *e;
-        struct expr_struct_field *f, *new_fields;
+        struct expr_decl *f, *new_fields;
 
         for (f = e->u._struct.fields; f; f = f->next) {
             push_binding(ctx, f->name, f->value_expr);

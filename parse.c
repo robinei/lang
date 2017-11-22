@@ -104,7 +104,7 @@ static struct expr *parse_atom(struct parse_ctx *ctx);
 
 struct expr *parse_module(struct parse_ctx *ctx) {
     uint field_count = 0;
-    struct expr_struct_field *first_field = NULL, *last_field = NULL, *f;
+    struct expr_decl *first_field = NULL, *last_field = NULL, *f;
     struct expr *result;
 
     if (setjmp(ctx->error_jmp_buf)) {
@@ -115,7 +115,7 @@ struct expr *parse_module(struct parse_ctx *ctx) {
 
     while (ctx->token != TOK_END) {
         if (ctx->token == TOK_IDENT) {
-            f = calloc(1, sizeof(struct expr_struct_field));
+            f = calloc(1, sizeof(struct expr_decl));
             if (last_field) { last_field->next = f; }
             else { first_field = f; }
             last_field = f;
@@ -153,14 +153,14 @@ struct expr *parse_module(struct parse_ctx *ctx) {
     return result;
 }
 
-static struct expr_struct_field *parse_struct_fields(struct parse_ctx *ctx, uint *field_count) {
-    struct expr_struct_field *f;
+static struct expr_decl *parse_struct_fields(struct parse_ctx *ctx, uint *field_count) {
+    struct expr_decl *f;
 
     if (ctx->token != TOK_IDENT) {
         return NULL;
     }
 
-    f = calloc(1, sizeof(struct expr_struct_field));
+    f = calloc(1, sizeof(struct expr_decl));
     f->name = ctx->token_text;
     ++*field_count;
 
