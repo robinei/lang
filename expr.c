@@ -99,7 +99,7 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         break;
     }
     case EXPR_LET: {
-        struct expr_let_binding *b;
+        struct expr_decl *b;
         print(ctx, "let ");
         for (b = e->u.let.bindings; b; b = b->next) {
             print(ctx, "%.*s", b->name.len, b->name.ptr);

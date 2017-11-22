@@ -67,8 +67,8 @@ static struct expr_decl *dup_field(struct peval_ctx *ctx, struct expr_decl *f) {
     *copy = *f;
     return copy;
 }
-static struct expr_let_binding *dup_binding(struct peval_ctx *ctx, struct expr_let_binding *b) {
-    struct expr_let_binding *copy = malloc(sizeof(struct expr_let_binding));
+static struct expr_decl *dup_binding(struct peval_ctx *ctx, struct expr_decl *b) {
+    struct expr_decl *copy = malloc(sizeof(struct expr_decl));
     *copy = *b;
     return copy;
 }
@@ -205,9 +205,9 @@ static struct expr_decl *peval_fields(struct peval_ctx *ctx, struct expr_decl *f
     return f;
 }
 
-static struct expr_let_binding *peval_bindings(struct peval_ctx *ctx, struct expr_let_binding *b, uint *const_count) {
+static struct expr_decl *peval_bindings(struct peval_ctx *ctx, struct expr_decl *b, uint *const_count) {
     if (b) {
-        struct expr_let_binding b_new = *b;
+        struct expr_decl b_new = *b;
         b_new.type_expr = peval_type(ctx, b->type_expr);
         b_new.value_expr = rebind_peval(ctx, b->name, b->value_expr);
         check_type(ctx, b_new.value_expr, b_new.type_expr);
@@ -429,7 +429,7 @@ static struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
         struct expr e_new = *e;
         int changed = 0;
         uint const_count = 0;
-        struct expr_let_binding *b, *new_bindings;
+        struct expr_decl *b, *new_bindings;
 
         for (b = e->u.let.bindings; b; b = b->next) {
             push_binding(ctx, b->name, b->value_expr);

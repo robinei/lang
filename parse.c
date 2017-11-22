@@ -312,7 +312,7 @@ static struct expr *parse_fn(struct parse_ctx *ctx) {
 
 static struct expr *parse_let(struct parse_ctx *ctx) {
     uint binding_count = 0;
-    struct expr_let_binding *b, *first_binding = NULL, *last_binding = NULL;
+    struct expr_decl *b, *first_binding = NULL, *last_binding = NULL;
     struct expr *result, *body;
 
     assert(ctx->token == TOK_KW_LET);
@@ -323,7 +323,7 @@ static struct expr *parse_let(struct parse_ctx *ctx) {
             parse_error(ctx, "expected identifier in let expression");
         }
 
-        b = calloc(1, sizeof(struct expr_let_binding));
+        b = calloc(1, sizeof(struct expr_decl));
         if (last_binding) { last_binding->next = b; }
         else { first_binding = b; }
         last_binding = b;

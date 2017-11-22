@@ -61,14 +61,8 @@ struct expr_fn_param {
 
 struct expr_let {
     uint binding_count;
-    struct expr_let_binding *bindings;
+    struct expr_decl *bindings;
     struct expr *body_expr;
-};
-struct expr_let_binding {
-    slice_t name;
-    struct expr *type_expr;
-    struct expr *value_expr;
-    struct expr_let_binding *next;
 };
 
 struct expr_struct {
