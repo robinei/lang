@@ -102,7 +102,7 @@ static int token_ends_expr(int tok) {
 static struct expr *parse_expr(struct parse_ctx *ctx);
 static struct expr *parse_atom(struct parse_ctx *ctx);
 
-static struct expr_decl *parse_decls(struct parse_ctx *ctx, uint *field_count) {
+static struct expr_decl *parse_decls(struct parse_ctx *ctx) {
     struct expr_decl *f;
 
     if (ctx->token != TOK_IDENT) {
@@ -111,7 +111,6 @@ static struct expr_decl *parse_decls(struct parse_ctx *ctx, uint *field_count) {
 
     f = calloc(1, sizeof(struct expr_decl));
     f->name = ctx->token_text;
-    ++*field_count;
 
     NEXT_TOKEN();
 
@@ -120,7 +119,7 @@ static struct expr_decl *parse_decls(struct parse_ctx *ctx, uint *field_count) {
         if (ctx->token != TOK_IDENT) {
             parse_error(ctx, "unexpected identifier after ',' in declaration");
         }
-        f->next = parse_decls(ctx, field_count);
+        f->next = parse_decls(ctx);
         f->type_expr = f->next->type_expr;
         f->value_expr = f->next->value_expr;
     }
@@ -137,7 +136,7 @@ static struct expr_decl *parse_decls(struct parse_ctx *ctx, uint *field_count) {
 
         if (ctx->token == TOK_SEMICOLON) {
             NEXT_TOKEN();
-            f->next = parse_decls(ctx, field_count);
+            f->next = parse_decls(ctx);
         }
     }
 
@@ -154,7 +153,7 @@ struct expr *parse_module(struct parse_ctx *ctx) {
     NEXT_TOKEN();
 
     result = expr_create(ctx, EXPR_STRUCT);
-    result->u._struct.fields = parse_decls(ctx, &result->u._struct.field_count);
+    result->u._struct.fields = parse_decls(ctx);
 
     if (ctx->token != TOK_END) {
         parse_error(ctx, "unexpected token in module");
@@ -170,7 +169,7 @@ struct expr *parse_struct(struct parse_ctx *ctx) {
     NEXT_TOKEN();
 
     result = expr_create(ctx, EXPR_STRUCT);
-    result->u._struct.fields = parse_decls(ctx, &result->u._struct.field_count);
+    result->u._struct.fields = parse_decls(ctx);
 
     if (ctx->token == TOK_KW_END) {
         NEXT_TOKEN();
@@ -197,7 +196,7 @@ static struct expr *parse_fn(struct parse_ctx *ctx) {
             NEXT_TOKEN();
         }
         else {
-            result->u.fn.params = parse_decls(ctx, &result->u.fn.param_count);
+            result->u.fn.params = parse_decls(ctx);
             if (ctx->token != TOK_RPAREN) {
                 parse_error(ctx, "expected ')' after parameter list");
             }
@@ -239,7 +238,7 @@ static struct expr *parse_let(struct parse_ctx *ctx) {
     NEXT_TOKEN();
 
     result = expr_create(ctx, EXPR_LET);
-    result->u.let.bindings = parse_decls(ctx, &result->u.let.binding_count);
+    result->u.let.bindings = parse_decls(ctx);
 
     if (ctx->token != TOK_KW_IN) {
         parse_error(ctx, "expected 'in' after 'let' declarations");
@@ -299,12 +298,11 @@ static struct expr *parse_unary(struct parse_ctx *ctx, int prim) {
 
     result = expr_create(ctx, EXPR_PRIM);
     result->u.prim.prim = prim;
-    result->u.prim.arg_count = 1;
     result->u.prim.arg_expr0 = parse_atom(ctx);
     return result;
 }
 
-static struct expr_call_arg *parse_args(struct parse_ctx *ctx, uint *arg_count) {
+static struct expr_call_arg *parse_args(struct parse_ctx *ctx) {
     struct expr_call_arg *a;
     
     if (ctx->token == TOK_RPAREN) {
@@ -314,11 +312,10 @@ static struct expr_call_arg *parse_args(struct parse_ctx *ctx, uint *arg_count) 
 
     a = calloc(1, sizeof(struct expr_call_arg));
     a->expr = parse_expr(ctx);
-    ++*arg_count;
 
     if (ctx->token == TOK_COMMA) {
         NEXT_TOKEN();
-        a->next = parse_args(ctx, arg_count);
+        a->next = parse_args(ctx);
     }
     else {
         if (ctx->token == TOK_RPAREN) {
@@ -340,7 +337,7 @@ static struct expr *parse_call(struct parse_ctx *ctx, struct expr *fn_expr) {
 
     result = expr_create(ctx, EXPR_CALL);
     result->u.call.fn_expr = fn_expr;
-    result->u.call.args = parse_args(ctx, &result->u.call.arg_count);
+    result->u.call.args = parse_args(ctx);
     return result;
 }
 
@@ -400,7 +397,6 @@ static struct expr *parse_infix(struct parse_ctx *ctx, int min_precedence) {
 
         temp = expr_create(ctx, EXPR_PRIM);
         temp->u.prim.prim = prim;
-        temp->u.prim.arg_count = 2;
         temp->u.prim.arg_expr0 = lhs;
         temp->u.prim.arg_expr1 = rhs;
         lhs = temp;
@@ -470,7 +466,6 @@ static struct expr *parse_expr(struct parse_ctx *ctx) {
 
     e = expr_create(ctx, EXPR_PRIM);
     e->u.prim.prim = PRIM_SEQ;
-    e->u.prim.arg_count = 2;
     e->u.prim.arg_expr0 = first;
     e->u.prim.arg_expr1 = second;
 

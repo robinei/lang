@@ -25,7 +25,6 @@ enum {
 extern const char *expr_names[];
 
 
-
 struct expr_decl {
     slice_t name;
     struct expr *type_expr;
@@ -48,20 +47,17 @@ struct expr_sym {
 };
 
 struct expr_fn {
-    uint param_count;
     struct expr_decl *params;
     struct expr *return_type_expr;
     struct expr *body_expr; /* NULL for fn type declaration */
 };
 
 struct expr_let {
-    uint binding_count;
     struct expr_decl *bindings;
     struct expr *body_expr;
 };
 
 struct expr_struct {
-    uint field_count;
     struct expr_decl *fields;
 };
 
@@ -73,14 +69,12 @@ struct expr_if {
 
 struct expr_prim {
     uint prim;
-    uint arg_count;
     struct expr *arg_expr0;
     struct expr *arg_expr1;
 };
 
 struct expr_call {
     struct expr *fn_expr;
-    uint arg_count;
     struct expr_call_arg *args;
 };
 struct expr_call_arg {
@@ -111,5 +105,14 @@ void print_expr(struct print_ctx *ctx, struct expr *e);
 
 extern struct expr expr_true;
 extern struct expr expr_false;
+
+static uint decl_count(struct expr_decl *decl) {
+    uint count = 0;
+    while (decl) {
+        ++count;
+        decl = decl->next;
+    }
+    return count;
+}
 
 #endif

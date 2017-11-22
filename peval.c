@@ -126,18 +126,26 @@ static void push_pending_fn(struct peval_ctx *ctx, struct expr *fn) {
 }
 
 static void peval_pending_fns(struct peval_ctx *ctx) {
-    struct expr_decl *p;
     ++ctx->inhibit_call_expansion;
+
     while (ctx->pending_fn_count > 0) {
         struct expr *fn = ctx->pending_fns[--ctx->pending_fn_count];
+        uint push_count = 0;
+        struct expr_decl *p;
+
         assert(fn->expr == EXPR_FN);
         assert(fn->u.fn.body_expr);
+
         for (p = fn->u.fn.params; p; p = p->next) {
             push_binding(ctx, p->name, NULL);
+            ++push_count;
         }
+
         fn->u.fn.body_expr = peval(ctx, fn->u.fn.body_expr);
-        pop_bindings(ctx, fn->u.fn.param_count);
+        
+        pop_bindings(ctx, push_count);
     }
+
     --ctx->inhibit_call_expansion;
 }
 
@@ -279,7 +287,7 @@ static uint hash_const_args(struct expr_decl *p, struct expr_call_arg *a, uint h
 static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
     struct expr e_new = *e;
     int changed = 0;
-    uint const_count = 0;
+    uint const_count = 0, param_count = 0;
     struct expr *fn = NULL, *fn_name_expr;
     slice_t fn_name;
 
@@ -297,13 +305,14 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
             peval_error(ctx, "function not found");
         }
         assert(fn->expr == EXPR_FN);
+        param_count = decl_count(fn->u.fn.params);
     }
 
     e_new.u.call.args = peval_args(ctx, e->u.call.args, &const_count);
     changed = changed || e_new.u.call.args != e->u.call.args;
 
     if (fn && (ctx->force_full_expansion || !ctx->inhibit_call_expansion) &&
-        (const_count > 0 || const_count == fn->u.fn.param_count))
+        (const_count > 0 || const_count == param_count))
     {
         struct expr_call_arg *a = e_new.u.call.args;
         struct expr_decl *p = fn->u.fn.params;
@@ -312,7 +321,7 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
             push_binding(ctx, p->name, a->expr);
         }
 
-        if (const_count == fn->u.fn.param_count) {
+        if (const_count == param_count) {
             e_new = *peval(ctx, fn->u.fn.body_expr);
             check_type(ctx, &e_new, fn->u.fn.return_type_expr);
         }
@@ -330,7 +339,6 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
             if (!fn_new) {
                 fn_new = malloc(sizeof(struct expr));
                 *fn_new = *fn;
-                fn_new->u.fn.param_count -= const_count;
                 fn_new->u.fn.params = strip_const_params(ctx, fn_new->u.fn.params, e_new.u.call.args);
                 bind_func(ctx, fn_name_new, fn_new);
                 fn_new->u.fn.body_expr = peval(ctx, fn_new->u.fn.body_expr);
@@ -341,12 +349,11 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
             fn_name_expr->u._const.u.fn_name = fn_name_new;
 
             e_new.u.call.fn_expr = fn_name_expr;
-            e_new.u.call.arg_count -= const_count;
             e_new.u.call.args = strip_const_args(ctx, e_new.u.call.args);
         }
 
         peval_pending_fns(ctx);
-        pop_bindings(ctx, fn->u.fn.param_count);
+        pop_bindings(ctx, param_count);
         changed = 1;
     }
 
@@ -372,9 +379,11 @@ static struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
     case EXPR_STRUCT: {
         struct expr e_new = *e;
         struct expr_decl *f, *new_fields;
+        uint push_count = 0;
 
         for (f = e->u._struct.fields; f; f = f->next) {
             push_binding(ctx, f->name, f->value_expr);
+            ++push_count;
         }
 
         while (1) {
@@ -386,7 +395,7 @@ static struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
         }
 
         peval_pending_fns(ctx);
-        pop_bindings(ctx, e->u._struct.field_count);
+        pop_bindings(ctx, push_count);
 
         if (e_new.u._struct.fields != e->u._struct.fields) {
             return dup_expr(ctx, &e_new);
@@ -418,11 +427,12 @@ static struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
     case EXPR_LET: {
         struct expr e_new = *e;
         int changed = 0;
-        uint const_count = 0;
+        uint const_count = 0, push_count = 0;
         struct expr_decl *b, *new_bindings;
 
         for (b = e->u.let.bindings; b; b = b->next) {
             push_binding(ctx, b->name, b->value_expr);
+            ++push_count;
         }
         
         while (1) {
@@ -435,7 +445,7 @@ static struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
             changed = 1;
         }
 
-        if (const_count == e->u.let.binding_count) {
+        if (const_count == push_count) {
             e_new = *peval(ctx, e_new.u.let.body_expr);
             changed = 1;
         }
@@ -445,7 +455,7 @@ static struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
         }
 
         peval_pending_fns(ctx);
-        pop_bindings(ctx, e->u.let.binding_count);
+        pop_bindings(ctx, push_count);
 
         if (changed) {
             return dup_expr(ctx, &e_new);
@@ -455,21 +465,21 @@ static struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
     case EXPR_PRIM: {
         struct expr e_new = *e;
         int changed = 0;
-        uint const_count = 0;
+        int all_const = 1;
 
         if (e_new.u.prim.arg_expr0) {
             e_new.u.prim.arg_expr0 = peval(ctx, e->u.prim.arg_expr0);
             changed = changed || e_new.u.prim.arg_expr0 != e->u.prim.arg_expr0;
-            if (e_new.u.prim.arg_expr0->expr == EXPR_CONST) { ++const_count; }
+            all_const = all_const && e_new.u.prim.arg_expr0->expr == EXPR_CONST;
         }
 
         if (e_new.u.prim.arg_expr1) {
             e_new.u.prim.arg_expr1 = peval(ctx, e->u.prim.arg_expr1);
             changed = changed || e_new.u.prim.arg_expr1 != e->u.prim.arg_expr1;
-            if (e_new.u.prim.arg_expr1->expr == EXPR_CONST) { ++const_count; }
+            all_const = all_const && e_new.u.prim.arg_expr1->expr == EXPR_CONST;
         }
 
-        if (const_count == e->u.prim.arg_count) {
+        if (all_const) {
             return eval_prim(ctx, &e_new);
         }
         if (changed) {
