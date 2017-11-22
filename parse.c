@@ -102,6 +102,48 @@ static int token_ends_expr(int tok) {
 static struct expr *parse_expr(struct parse_ctx *ctx);
 static struct expr *parse_atom(struct parse_ctx *ctx);
 
+static struct expr_decl *parse_decls(struct parse_ctx *ctx, uint *field_count) {
+    struct expr_decl *f;
+
+    if (ctx->token != TOK_IDENT) {
+        return NULL;
+    }
+
+    f = calloc(1, sizeof(struct expr_decl));
+    f->name = ctx->token_text;
+    ++*field_count;
+
+    NEXT_TOKEN();
+
+    if (ctx->token == TOK_COMMA) {
+        NEXT_TOKEN();
+        if (ctx->token != TOK_IDENT) {
+            parse_error(ctx, "unexpected identifier after ',' in struct definition");
+        }
+        f->next = parse_decls(ctx, field_count);
+        f->type_expr = f->next->type_expr;
+        f->value_expr = f->next->value_expr;
+    }
+    else {
+        if (ctx->token == TOK_COLON) {
+            NEXT_TOKEN();
+            f->type_expr = parse_expr(ctx);
+        }
+
+        if (ctx->token == TOK_ASSIGN) {
+            NEXT_TOKEN();
+            f->value_expr = parse_expr(ctx);
+        }
+
+        if (ctx->token == TOK_SEMICOLON) {
+            NEXT_TOKEN();
+            f->next = parse_decls(ctx, field_count);
+        }
+    }
+
+    return f;
+}
+
 struct expr *parse_module(struct parse_ctx *ctx) {
     uint field_count = 0;
     struct expr_decl *first_field = NULL, *last_field = NULL, *f;
@@ -153,48 +195,6 @@ struct expr *parse_module(struct parse_ctx *ctx) {
     return result;
 }
 
-static struct expr_decl *parse_struct_fields(struct parse_ctx *ctx, uint *field_count) {
-    struct expr_decl *f;
-
-    if (ctx->token != TOK_IDENT) {
-        return NULL;
-    }
-
-    f = calloc(1, sizeof(struct expr_decl));
-    f->name = ctx->token_text;
-    ++*field_count;
-
-    NEXT_TOKEN();
-
-    if (ctx->token == TOK_COMMA) {
-        NEXT_TOKEN();
-        if (ctx->token != TOK_IDENT) {
-            parse_error(ctx, "unexpected identifier after ',' in struct definition");
-        }
-        f->next = parse_struct_fields(ctx, field_count);
-        f->type_expr = f->next->type_expr;
-        f->value_expr = f->next->value_expr;
-    }
-    else {
-        if (ctx->token == TOK_COLON) {
-            NEXT_TOKEN();
-            f->type_expr = parse_expr(ctx);
-        }
-
-        if (ctx->token == TOK_ASSIGN) {
-            NEXT_TOKEN();
-            f->value_expr = parse_expr(ctx);
-        }
-
-        if (ctx->token == TOK_SEMICOLON) {
-            NEXT_TOKEN();
-            f->next = parse_struct_fields(ctx, field_count);
-        }
-    }
-
-    return f;
-}
-
 struct expr *parse_struct(struct parse_ctx *ctx) {
     struct expr *result;
     
@@ -202,7 +202,7 @@ struct expr *parse_struct(struct parse_ctx *ctx) {
     NEXT_TOKEN();
 
     result = expr_create(ctx, EXPR_STRUCT);
-    result->u._struct.fields = parse_struct_fields(ctx, &result->u._struct.field_count);
+    result->u._struct.fields = parse_decls(ctx, &result->u._struct.field_count);
 
     if (ctx->token == TOK_KW_END) {
         NEXT_TOKEN();

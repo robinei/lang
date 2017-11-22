@@ -62,24 +62,14 @@ static struct expr *dup_expr(struct peval_ctx *ctx, struct expr *e) {
     *e_copy = *e;
     return e_copy;
 }
-static struct expr_decl *dup_field(struct peval_ctx *ctx, struct expr_decl *f) {
+static struct expr_decl *dup_decl(struct peval_ctx *ctx, struct expr_decl *f) {
     struct expr_decl *copy = malloc(sizeof(struct expr_decl));
     *copy = *f;
-    return copy;
-}
-static struct expr_decl *dup_binding(struct peval_ctx *ctx, struct expr_decl *b) {
-    struct expr_decl *copy = malloc(sizeof(struct expr_decl));
-    *copy = *b;
     return copy;
 }
 static struct expr_call_arg *dup_arg(struct peval_ctx *ctx, struct expr_call_arg *a) {
     struct expr_call_arg *copy = malloc(sizeof(struct expr_call_arg));
     *copy = *a;
-    return copy;
-}
-static struct expr_decl *dup_param(struct peval_ctx *ctx, struct expr_decl *p) {
-    struct expr_decl *copy = malloc(sizeof(struct expr_decl));
-    *copy = *p;
     return copy;
 }
 
@@ -199,7 +189,7 @@ static struct expr_decl *peval_fields(struct peval_ctx *ctx, struct expr_decl *f
         check_type(ctx, f_new.value_expr, f_new.type_expr);
         f_new.next = peval_fields(ctx, f->next);
         if (f_new.type_expr != f->type_expr || f_new.value_expr != f->value_expr || f_new.next != f->next) {
-            return dup_field(ctx, &f_new);
+            return dup_decl(ctx, &f_new);
         }
     }
     return f;
@@ -216,7 +206,7 @@ static struct expr_decl *peval_bindings(struct peval_ctx *ctx, struct expr_decl 
         }
         b_new.next = peval_bindings(ctx, b->next, const_count);
         if (b_new.type_expr != b->type_expr || b_new.value_expr != b->value_expr || b_new.next != b->next) {
-            return dup_binding(ctx, &b_new);
+            return dup_decl(ctx, &b_new);
         }
     }
     return b;
@@ -263,7 +253,7 @@ static struct expr_decl *strip_const_params(struct peval_ctx *ctx, struct expr_d
             struct expr_decl p_new = *p;
             p_new.next = strip_const_params(ctx, p->next, a->next);
             if (p_new.next != p->next) {
-                return dup_param(ctx, &p_new);
+                return dup_decl(ctx, &p_new);
             }
         }
     }
