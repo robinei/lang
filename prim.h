@@ -37,6 +37,6 @@ extern const char *prim_names[];
 struct expr;
 struct peval_ctx;
 
-struct expr *eval_prim(struct peval_ctx *ctx, struct expr *e);
+struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e);
 
 #endif

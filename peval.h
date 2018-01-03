@@ -35,6 +35,8 @@ struct module {
     struct expr *struct_expr;
 };
 
+struct expr *peval(struct peval_ctx *ctx, struct expr *e);
+
 struct module *partial_eval_module(struct peval_ctx *ctx, struct expr *e);
 
 void peval_error(struct peval_ctx *ctx, const char *error);

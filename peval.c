@@ -5,8 +5,6 @@
 #include <stdio.h>
 #include <string.h>
 
-static struct expr *peval(struct peval_ctx *ctx, struct expr *e);
-
 struct peval_binding {
     slice_t name;
     struct expr *expr;
@@ -363,7 +361,7 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
     return e;
 }
 
-static struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
+struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
     if (!e) {
         return NULL;
     }
@@ -462,31 +460,8 @@ static struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
         }
         break;
     }
-    case EXPR_PRIM: {
-        struct expr e_new = *e;
-        int changed = 0;
-        int all_const = 1;
-
-        if (e_new.u.prim.arg_expr0) {
-            e_new.u.prim.arg_expr0 = peval(ctx, e->u.prim.arg_expr0);
-            changed = changed || e_new.u.prim.arg_expr0 != e->u.prim.arg_expr0;
-            all_const = all_const && e_new.u.prim.arg_expr0->expr == EXPR_CONST;
-        }
-
-        if (e_new.u.prim.arg_expr1) {
-            e_new.u.prim.arg_expr1 = peval(ctx, e->u.prim.arg_expr1);
-            changed = changed || e_new.u.prim.arg_expr1 != e->u.prim.arg_expr1;
-            all_const = all_const && e_new.u.prim.arg_expr1->expr == EXPR_CONST;
-        }
-
-        if (all_const) {
-            return eval_prim(ctx, &e_new);
-        }
-        if (changed) {
-            return dup_expr(ctx, &e_new);
-        }
-        break;
-    }
+    case EXPR_PRIM:
+        return peval_prim(ctx, e);
     case EXPR_CALL:
         return peval_call(ctx, e);
     case EXPR_IF: {

@@ -23,6 +23,11 @@ int main(int argc, char *argv[]) {
         "dropUnusedConst = 1 2 3;\n"
         "vec2 = struct x, y end;"
         "vec2 = struct x, y: Int end;"
+        "falseAnd = false && print(1);"
+        "trueAnd = true && print(1);"
+        "falseOr = false || print(1);"
+        "trueOr = true || print(1);"
+        "misc = false || true && false || 11 % 2 < 2;"
         ;
 
     struct expr *mod_struct;

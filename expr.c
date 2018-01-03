@@ -32,10 +32,15 @@ static void print_indent(struct print_ctx *ctx) {
     }
 }
 
-static void print_binop(struct print_ctx *ctx, const char *op, struct expr *e) {
-    print_expr(ctx, e->u.prim.arg_expr0);
+static void print_unop(struct print_ctx *ctx, const char *op, struct expr *e) {
     print(ctx, "%s", op);
-    print_expr(ctx, e->u.prim.arg_expr1);
+    print_expr(ctx, e->u.prim.arg_exprs[0]);
+}
+
+static void print_binop(struct print_ctx *ctx, const char *op, struct expr *e) {
+    print_expr(ctx, e->u.prim.arg_exprs[0]);
+    print(ctx, "%s", op);
+    print_expr(ctx, e->u.prim.arg_exprs[1]);
 }
 
 void print_expr(struct print_ctx *ctx, struct expr *e) {
@@ -150,13 +155,29 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
     }
     case EXPR_PRIM: {
         switch (e->u.prim.prim) {
+        case PRIM_PLUS: print_unop(ctx, "+", e); break;
+        case PRIM_NEGATE: print_unop(ctx, "-", e); break;
+        case PRIM_LOGI_NOT: print_unop(ctx, "!", e); break;
+        case PRIM_BITWISE_NOT: print_unop(ctx, "~", e); break;
         case PRIM_SEQ: print_binop(ctx, " ", e); break;
+        case PRIM_LOGI_OR: print_binop(ctx, " || ", e); break;
+        case PRIM_LOGI_AND: print_binop(ctx, " && ", e); break;
+        case PRIM_BITWISE_OR: print_binop(ctx, " | ", e); break;
+        case PRIM_BITWISE_XOR: print_binop(ctx, " ^ ", e); break;
+        case PRIM_BITWISE_AND: print_binop(ctx, " & ", e); break;
         case PRIM_EQ: print_binop(ctx, " == ", e); break;
         case PRIM_NEQ: print_binop(ctx, " != ", e); break;
+        case PRIM_LT: print_binop(ctx, " < ", e); break;
+        case PRIM_GT: print_binop(ctx, " > ", e); break;
+        case PRIM_LTEQ: print_binop(ctx, " <= ", e); break;
+        case PRIM_GTEQ: print_binop(ctx, " >= ", e); break;
+        case PRIM_BITWISE_LSH: print_binop(ctx, " << ", e); break;
+        case PRIM_BITWISE_RSH: print_binop(ctx, " >> ", e); break;
         case PRIM_ADD: print_binop(ctx, " + ", e); break;
         case PRIM_SUB: print_binop(ctx, " - ", e); break;
         case PRIM_MUL: print_binop(ctx, " * ", e); break;
         case PRIM_DIV: print_binop(ctx, " / ", e); break;
+        case PRIM_MOD: print_binop(ctx, " % ", e); break;
         }
         break;
     }

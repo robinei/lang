@@ -298,7 +298,7 @@ static struct expr *parse_unary(struct parse_ctx *ctx, int prim) {
 
     result = expr_create(ctx, EXPR_PRIM);
     result->u.prim.prim = prim;
-    result->u.prim.arg_expr0 = parse_atom(ctx);
+    result->u.prim.arg_exprs[0] = parse_atom(ctx);
     return result;
 }
 
@@ -397,8 +397,8 @@ static struct expr *parse_infix(struct parse_ctx *ctx, int min_precedence) {
 
         temp = expr_create(ctx, EXPR_PRIM);
         temp->u.prim.prim = prim;
-        temp->u.prim.arg_expr0 = lhs;
-        temp->u.prim.arg_expr1 = rhs;
+        temp->u.prim.arg_exprs[0] = lhs;
+        temp->u.prim.arg_exprs[1] = rhs;
         lhs = temp;
     }
 
@@ -466,8 +466,8 @@ static struct expr *parse_expr(struct parse_ctx *ctx) {
 
     e = expr_create(ctx, EXPR_PRIM);
     e->u.prim.prim = PRIM_SEQ;
-    e->u.prim.arg_expr0 = first;
-    e->u.prim.arg_expr1 = second;
+    e->u.prim.arg_exprs[0] = first;
+    e->u.prim.arg_exprs[1] = second;
 
     return e;
 }

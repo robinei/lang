@@ -69,8 +69,7 @@ struct expr_if {
 
 struct expr_prim {
     uint prim;
-    struct expr *arg_expr0;
-    struct expr *arg_expr1;
+    struct expr *arg_exprs[2];
 };
 
 struct expr_call {
