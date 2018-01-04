@@ -411,6 +411,10 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
     switch (ctx->token) {
     case TOK_LPAREN:
         NEXT_TOKEN();
+        if (ctx->token == TOK_RPAREN) {
+            NEXT_TOKEN();
+            return &expr_unit;
+        }
         result = parse_expr(ctx);
         if (ctx->token != TOK_RPAREN) {
             parse_error(ctx, "expected ')'");
@@ -441,13 +445,8 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
         parse_error(ctx, "unexpected token in expression");
     }
 
-    while (1) {
-        if (ctx->token == TOK_LPAREN) {
-            result = parse_call(ctx, result);
-        }
-        else {
-            break;
-        }
+    while (ctx->token == TOK_LPAREN) {
+        result = parse_call(ctx, result);
     }
 
     return result;

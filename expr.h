@@ -102,6 +102,7 @@ struct print_ctx {
 
 void print_expr(struct print_ctx *ctx, struct expr *e);
 
+extern struct expr expr_unit;
 extern struct expr expr_true;
 extern struct expr expr_false;
 

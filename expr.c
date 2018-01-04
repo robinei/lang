@@ -14,6 +14,7 @@ const char *expr_names[] = {
 };
 
 
+struct expr expr_unit = { EXPR_CONST, { { &type_unit } } };
 struct expr expr_true = { EXPR_CONST, { { &type_bool, { 1 } } } };
 struct expr expr_false = { EXPR_CONST, { { &type_bool, { 0 } } } };
 
@@ -58,6 +59,7 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         case TYPE_TYPE:
             switch (e->u._const.u.type->type) {
             case TYPE_TYPE: print(ctx, "Type"); break;
+            case TYPE_UNIT: print(ctx, "Unit"); break;
             case TYPE_BOOL: print(ctx, "Bool"); break;
             case TYPE_INT: print(ctx, "Int"); break;
             default:
@@ -66,6 +68,9 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
             break;
         case TYPE_BOOL:
             print(ctx, "%s", e->u._const.u._bool ? "true" : "false");
+            break;
+        case TYPE_UNIT:
+            print(ctx, "()");
             break;
         case TYPE_INT:
             print(ctx, "%d", e->u._const.u._int);

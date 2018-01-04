@@ -28,6 +28,7 @@ int main(int argc, char *argv[]) {
         "falseOr = false || print(1);"
         "trueOr = true || print(1);"
         "misc = false || true && false || 11 % 2 < 2;"
+        "unit: Unit = ();"
         ;
 
     struct expr *mod_struct;

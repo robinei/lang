@@ -530,6 +530,7 @@ struct module *partial_eval_module(struct peval_ctx *ctx, struct expr *e) {
     slice_table_init(&mod->functions, 16);
 
     bind_type(ctx, "Type", &type_type);
+    bind_type(ctx, "Unit", &type_unit);
     bind_type(ctx, "Bool", &type_bool);
     bind_type(ctx, "Int", &type_int);
 
