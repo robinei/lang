@@ -115,4 +115,13 @@ static uint decl_count(struct expr_decl *decl) {
     return count;
 }
 
+static uint calc_arg_count(struct expr_call_arg *arg) {
+    uint count = 0;
+    while (arg) {
+        ++count;
+        arg = arg->next;
+    }
+    return count;
+}
+
 #endif

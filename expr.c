@@ -44,6 +44,18 @@ static void print_binop(struct print_ctx *ctx, const char *op, struct expr *e) {
     print_expr(ctx, e->u.prim.arg_exprs[1]);
 }
 
+static void print_primcall(struct print_ctx *ctx, const char *name, struct expr *e) {
+    print(ctx, "%s(", name);
+    if (e->u.prim.arg_exprs[0]) {
+        print_expr(ctx, e->u.prim.arg_exprs[0]);
+    }
+    if (e->u.prim.arg_exprs[1]) {
+        print(ctx, ", ");
+        print_expr(ctx, e->u.prim.arg_exprs[1]);
+    }
+    print(ctx, ")");
+}
+
 void print_expr(struct print_ctx *ctx, struct expr *e) {
     struct print_ctx ctx_storage;
     if (!ctx) {
@@ -183,6 +195,7 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         case PRIM_MUL: print_binop(ctx, " * ", e); break;
         case PRIM_DIV: print_binop(ctx, " / ", e); break;
         case PRIM_MOD: print_binop(ctx, " % ", e); break;
+        case PRIM_ASSERT: print_primcall(ctx, "assert", e); break;
         }
         break;
     }

@@ -24,7 +24,8 @@
     X(SUB) \
     X(MUL) \
     X(DIV) \
-    X(MOD)
+    X(MOD) \
+    X(ASSERT)
 
 #define DECL_PRIM_ENUM(name) PRIM_##name,
 enum {

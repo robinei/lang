@@ -29,6 +29,9 @@ int main(int argc, char *argv[]) {
         "trueOr = true || print(1);"
         "misc = false || true && false || 11 % 2 < 2;"
         "unit: Unit = ();"
+        "assertX = assert(x);"
+        "assertTrue = assert(true);"
+        //"assertFalse = assert(false);"
         ;
 
     struct expr *mod_struct;

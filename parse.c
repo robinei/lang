@@ -341,6 +341,32 @@ static struct expr *parse_call(struct parse_ctx *ctx, struct expr *fn_expr) {
     return result;
 }
 
+static struct expr *parse_prim_call(struct parse_ctx *ctx, int prim, uint arg_count) {
+    struct expr *result;
+    struct expr_call_arg *args;
+    slice_t name = ctx->token_text;
+    uint i;
+
+    NEXT_TOKEN();
+    if (ctx->token != TOK_LPAREN) {
+        parse_error(ctx, "expected '(' after '%.*s'", name.len, name.ptr);
+    }
+    NEXT_TOKEN();
+
+    args = parse_args(ctx);
+    if (calc_arg_count(args) != arg_count) {
+        parse_error(ctx, "expected %d arguments for '%.*s'", arg_count, name.len, name.ptr);
+    }
+
+    result = expr_create(ctx, EXPR_PRIM);
+    result->u.prim.prim = prim;
+    for (i = 0; i < arg_count; ++i, args = args->next) {
+        result->u.prim.arg_exprs[i] = args->expr;
+    }
+
+    return result;
+}
+
 static struct expr *parse_int(struct parse_ctx *ctx, int offset, int base) {
     struct expr *result = expr_create(ctx, EXPR_CONST);
     result->u._const.type = &type_int;
@@ -422,6 +448,9 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
         NEXT_TOKEN();
         break;
     case TOK_IDENT:
+        if (!slice_str_cmp(ctx->token_text, "assert")) {
+            return parse_prim_call(ctx, PRIM_ASSERT, 1);
+        }
         result = expr_create(ctx, EXPR_SYM);
         result->u.sym.name = ctx->token_text;
         NEXT_TOKEN();
