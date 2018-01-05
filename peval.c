@@ -512,11 +512,8 @@ static void bind_type(struct peval_ctx *ctx, char *name_str, struct type *type) 
 struct module *partial_eval_module(struct peval_ctx *ctx, struct expr *e) {
     struct module *mod = calloc(1, sizeof(struct module));
 
-    if (setjmp(ctx->error_jmp_buf)) {
-        return NULL;
-    }
-
     assert(e->expr == EXPR_STRUCT);
+
     ctx->mod = mod;
     ctx->closest_name.ptr = "root";
     ctx->closest_name.len = 4;
@@ -525,6 +522,7 @@ struct module *partial_eval_module(struct peval_ctx *ctx, struct expr *e) {
     ctx->pending_fn_count = 0;
     ctx->force_full_expansion = 0;
     ctx->inhibit_call_expansion = 0;
+    ctx->allow_side_effects = 0;
 
     slice_table_init(&ctx->symbols, 16);
     slice_table_init(&mod->functions, 16);
@@ -534,6 +532,9 @@ struct module *partial_eval_module(struct peval_ctx *ctx, struct expr *e) {
     bind_type(ctx, "Bool", &type_bool);
     bind_type(ctx, "Int", &type_int);
 
+    if (setjmp(ctx->error_jmp_buf)) {
+        return NULL;
+    }
     mod->struct_expr = peval(ctx, e);
 
     return mod;

@@ -125,15 +125,15 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
     case PRIM_DIV: HANDLE_BINOP(&type_int, _int, BINOP(/ , int_value))
     case PRIM_MOD: HANDLE_BINOP(&type_int, _int, BINOP(% , int_value))
 
-    case PRIM_ASSERT: {
-        if (ARG_CONST(0)) {
+    case PRIM_ASSERT:
+        if (ARG_CONST(0) && ctx->allow_side_effects) {
+            ++ctx->assert_count;
             if (!bool_value(ctx, ARG(0))) {
                 peval_error(ctx, "assertion failure!");
             }
             return &expr_unit;
         }
         break;
-    }
 
     default:
         peval_error(ctx, "invalid primitive");

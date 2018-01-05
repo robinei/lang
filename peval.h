@@ -26,6 +26,9 @@ struct peval_ctx {
 
     uint force_full_expansion;
     uint inhibit_call_expansion;
+    uint allow_side_effects;
+
+    uint assert_count;
 
     jmp_buf error_jmp_buf;
 };
