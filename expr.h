@@ -84,6 +84,8 @@ struct expr_call_arg {
 struct expr {
     uint expr;
     slice_t source_text;
+    struct expr *antecedent;
+
     union {
         struct expr_const _const;
         struct expr_sym sym;

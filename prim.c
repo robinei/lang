@@ -2,19 +2,20 @@
 #include <assert.h>
 #include <stdlib.h>
 
-static struct expr *expr_create(struct peval_ctx *ctx, uint expr_type) {
+static struct expr *expr_create(struct peval_ctx *ctx, uint expr_type, struct expr *antecedent) {
     struct expr *e = calloc(1, sizeof(struct expr));
     e->expr = expr_type;
+    e->antecedent = antecedent;
     return e;
 }
 static struct expr *dup_expr(struct peval_ctx *ctx, struct expr *e) {
     struct expr *e_copy = calloc(1, sizeof(struct expr));
     *e_copy = *e;
+    e_copy->antecedent = e;
     return e_copy;
 }
-
-static struct expr *unit_create(struct peval_ctx *ctx) {
-    struct expr *e = expr_create(ctx, EXPR_CONST);
+static struct expr *unit_create(struct peval_ctx *ctx, struct expr *antecedent) {
+    struct expr *e = expr_create(ctx, EXPR_CONST, antecedent);
     e->u._const.type = &type_unit;
     return e;
 }
@@ -63,7 +64,7 @@ static int const_eq(struct peval_ctx *ctx, struct expr *a, struct expr *b) {
 
 #define HANDLE_UNOP(type_ptr, value_field, value_expression) \
     if (ARG_CONST(0)) { \
-        struct expr *res = expr_create(ctx, EXPR_CONST); \
+        struct expr *res = expr_create(ctx, EXPR_CONST, e); \
         res->u._const.type = type_ptr; \
         res->u._const.u.value_field = value_expression; \
         return res; \
@@ -73,7 +74,7 @@ static int const_eq(struct peval_ctx *ctx, struct expr *a, struct expr *b) {
 #define HANDLE_BINOP(type_ptr, value_field, value_expression) \
     PEVAL_ARG(1); \
     if (ARG_CONST(0) && ARG_CONST(1)) { \
-        struct expr *res = expr_create(ctx, EXPR_CONST); \
+        struct expr *res = expr_create(ctx, EXPR_CONST, e); \
         res->u._const.type = type_ptr; \
         res->u._const.u.value_field = value_expression; \
         return res; \
@@ -137,7 +138,7 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
             if (!bool_value(ctx, ARG(0))) {
                 peval_error(ctx, "assertion failure!");
             }
-            return unit_create(ctx);
+            return unit_create(ctx, e);
         }
         break;
 
