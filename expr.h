@@ -83,6 +83,7 @@ struct expr_call_arg {
 
 struct expr {
     uint expr;
+    slice_t source_text;
     union {
         struct expr_const _const;
         struct expr_sym sym;
@@ -102,9 +103,6 @@ struct print_ctx {
 
 void print_expr(struct print_ctx *ctx, struct expr *e);
 
-extern struct expr expr_unit;
-extern struct expr expr_true;
-extern struct expr expr_false;
 
 static uint decl_count(struct expr_decl *decl) {
     uint count = 0;

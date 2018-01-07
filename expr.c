@@ -14,11 +14,6 @@ const char *expr_names[] = {
 };
 
 
-struct expr expr_unit = { EXPR_CONST, { { &type_unit } } };
-struct expr expr_true = { EXPR_CONST, { { &type_bool, { 1 } } } };
-struct expr expr_false = { EXPR_CONST, { { &type_bool, { 0 } } } };
-
-
 static void print(struct print_ctx *ctx, const char *format, ...) {
     va_list args;
     va_start(args, format);

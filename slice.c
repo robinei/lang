@@ -15,6 +15,17 @@ int slice_str_cmp(slice_t a, char *b_str) {
     return slice_cmp(a, b);
 }
 
+slice_t slice_span(slice_t a, slice_t b) {
+    slice_t c;
+    c.ptr = a.ptr <= b.ptr ?
+        a.ptr :
+        b.ptr;
+    c.len = a.ptr + a.len >= b.ptr + b.len ?
+        (a.ptr + a.len) - c.ptr :
+        (b.ptr + b.len) - c.ptr;
+    return c;
+}
+
 static uint slice_hash(slice_t s) {
     uint hash;
     MurmurHash3_x86_32(s.ptr, s.len, 0, &hash);

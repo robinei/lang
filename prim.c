@@ -13,6 +13,12 @@ static struct expr *dup_expr(struct peval_ctx *ctx, struct expr *e) {
     return e_copy;
 }
 
+static struct expr *unit_create(struct peval_ctx *ctx) {
+    struct expr *e = expr_create(ctx, EXPR_CONST);
+    e->u._const.type = &type_unit;
+    return e;
+}
+
 static int bool_value(struct peval_ctx *ctx, struct expr *e) {
     assert(e->expr == EXPR_CONST);
     if (e->u._const.type->type != TYPE_BOOL) {
@@ -131,7 +137,7 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
             if (!bool_value(ctx, ARG(0))) {
                 peval_error(ctx, "assertion failure!");
             }
-            return &expr_unit;
+            return unit_create(ctx);
         }
         break;
 

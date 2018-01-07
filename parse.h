@@ -12,6 +12,7 @@ struct parse_ctx {
     char *text;
     int token;
     slice_t token_text;
+    slice_t prev_token_text;
 
     char error[ERROR_MAX + 1];
     jmp_buf error_jmp_buf;
