@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <string.h>
 
+struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e);
+
 struct peval_binding {
     slice_t name;
     struct expr *expr;

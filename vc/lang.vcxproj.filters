@@ -48,10 +48,10 @@
     <ClCompile Include="..\peval.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\prim.c">
+    <ClCompile Include="..\error.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\error.c">
+    <ClCompile Include="..\peval_prim.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -90,9 +90,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\fnv.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\prim.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\mod.h">
