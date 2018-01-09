@@ -13,7 +13,7 @@ static void print_errors(struct error_ctx *ctx) {
 }
 
 static void old_test() {
-    char *text =
+    char *source_text =
         "exp = fn(x, n: Int) Int: if n == 0: 1 else x * exp(x, n - 1);\n"
         "exped = let x = exp(2, 3) in x + 100;\n"
         "pow2 = exp(2, n);\n"
@@ -39,7 +39,7 @@ static void old_test() {
         "misc = false || true && false || 11 % 2 < 2;\n"
         "unit: Unit = ();\n"
         "assertTrue = assert(true);\n"
-        //"badIf = if 1: 2 else 3;\n"
+        //"badIf = if 1+1: 2 else 3;\n"
         //"assertFalse = assert(false);\n"
         ;
 
@@ -47,11 +47,10 @@ static void old_test() {
     struct error_ctx err_ctx = { 0, };
     struct parse_ctx ctx = { { 0 }, };
 
-    ctx.scan.cursor = text;
-    ctx.text = text;
+    ctx.scan_ctx.cursor = source_text;
     ctx.err_ctx = &err_ctx;
 
-    err_ctx.source_buf = slice_from_str(text);
+    err_ctx.source_buf = slice_from_str(source_text);
     strcpy(err_ctx.filename, "test.ml");
 
     if ((mod_struct = parse_module(&ctx))) {
@@ -113,17 +112,18 @@ static void run_tests(const char *filename) {
     struct module *mod;
     struct expr_decl *decls;
 
-    parse_ctx.text = read_file(filename);
-    parse_ctx.scan.cursor = parse_ctx.text;
-    parse_ctx.err_ctx = &err_ctx;
-
-    err_ctx.source_buf = slice_from_str(parse_ctx.text);
-    strncpy(err_ctx.filename, filename, ERROR_FILENAME_BUF_SIZE - 1);
-    err_ctx.filename[ERROR_FILENAME_BUF_SIZE - 1] = '\0';
-    if (!parse_ctx.text) {
+    char *source_text = read_file(filename);
+    if (!source_text) {
         printf("error reading file: %s\n", filename);
         return;
     }
+
+    err_ctx.source_buf = slice_from_str(source_text);
+    strncpy(err_ctx.filename, filename, ERROR_FILENAME_BUF_SIZE - 1);
+    err_ctx.filename[ERROR_FILENAME_BUF_SIZE - 1] = '\0';
+
+    parse_ctx.scan_ctx.cursor = source_text;
+    parse_ctx.err_ctx = &err_ctx;
 
     mod_struct = parse_module(&parse_ctx);
     if (!mod_struct) {

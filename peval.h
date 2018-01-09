@@ -8,6 +8,7 @@
 #define NAME_STACK_SIZE 16
 
 struct peval_ctx {
+    struct error_ctx *err_ctx;
     struct module *mod;
 
     struct slice_table symbols;
@@ -29,9 +30,7 @@ struct peval_ctx {
     uint allow_side_effects;
 
     uint assert_count;
-
     jmp_buf error_jmp_buf;
-    struct error_ctx *err_ctx;
 };
 
 struct module {

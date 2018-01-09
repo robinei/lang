@@ -12,7 +12,6 @@ static struct expr *parse_atom(struct parse_ctx *ctx);
 
 #define PARSE_ERR(...) \
     do { \
-        ++ctx->error_count; \
         ctx->sync_after_error = 1; \
         error_emit(ctx->err_ctx, ERROR_CATEGORY_ERROR, ctx->token_text, __VA_ARGS__); \
         longjmp(ctx->error_jmp_buf, 1); \
@@ -21,8 +20,8 @@ static struct expr *parse_atom(struct parse_ctx *ctx);
 #define NEXT_TOKEN() \
     do { \
         ctx->prev_token_text = ctx->token_text; \
-        ctx->token = scan_next_token(&ctx->scan, &ctx->token_text.ptr); \
-        ctx->token_text.len = (int)(ctx->scan.cursor - ctx->token_text.ptr); \
+        ctx->token = scan_next_token(&ctx->scan_ctx, &ctx->token_text.ptr); \
+        ctx->token_text.len = (int)(ctx->scan_ctx.cursor - ctx->token_text.ptr); \
     } while (0)
 
 
