@@ -31,6 +31,7 @@ struct peval_ctx {
     uint assert_count;
 
     jmp_buf error_jmp_buf;
+    struct error_ctx *err_ctx;
 };
 
 struct module {
@@ -41,7 +42,5 @@ struct module {
 struct expr *peval(struct peval_ctx *ctx, struct expr *e);
 
 struct module *partial_eval_module(struct peval_ctx *ctx, struct expr *e);
-
-void peval_error(struct peval_ctx *ctx, const char *error);
 
 #endif

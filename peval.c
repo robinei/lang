@@ -1,7 +1,6 @@
 #include "peval.h"
+#include "peval_internal.h"
 #include "fnv.h"
-#include <assert.h>
-#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -49,35 +48,6 @@ static slice_t make_fn_name(struct peval_ctx *ctx) {
     return fn_name;
 }
 
-static struct expr *expr_create(struct peval_ctx *ctx, uint expr_type, struct expr *antecedent) {
-    struct expr *e = calloc(1, sizeof(struct expr));
-    e->expr = expr_type;
-    e->antecedent = antecedent;
-    return e;
-}
-
-static struct expr *dup_expr(struct peval_ctx *ctx, struct expr *e) {
-    struct expr *e_copy = calloc(1, sizeof(struct expr));
-    *e_copy = *e;
-    e_copy->antecedent = e;
-    return e_copy;
-}
-static struct expr_decl *dup_decl(struct peval_ctx *ctx, struct expr_decl *f) {
-    struct expr_decl *copy = malloc(sizeof(struct expr_decl));
-    *copy = *f;
-    return copy;
-}
-static struct expr_call_arg *dup_arg(struct peval_ctx *ctx, struct expr_call_arg *a) {
-    struct expr_call_arg *copy = malloc(sizeof(struct expr_call_arg));
-    *copy = *a;
-    return copy;
-}
-
-
-void peval_error(struct peval_ctx *ctx, const char *error) {
-    printf("error during partial eval: %s\n", error);
-    longjmp(ctx->error_jmp_buf, 1);
-}
 
 static void bind(struct peval_ctx *ctx, slice_t name, struct expr *e) {
     slice_table_put(&ctx->symbols, name, e);
@@ -155,7 +125,7 @@ static void check_type(struct peval_ctx *ctx, struct expr *e, struct expr *e_typ
     }
     assert(e_type->u._const.type->type == TYPE_TYPE);
     if (e_type->u._const.u.type != e->u._const.type) {
-        peval_error(ctx, "type mismatch");
+        PEVAL_ERR(e, "type mismatch");
     }
 }
 
@@ -168,10 +138,10 @@ static struct expr *peval_type(struct peval_ctx *ctx, struct expr *e) {
     e_new = peval(ctx, e);
     --ctx->force_full_expansion;
     if (e_new->expr != EXPR_CONST) {
-        peval_error(ctx, "expected constant type expression");
+        PEVAL_ERR(e_new, "expected constant type expression");
     }
     if (e_new->u._const.type->type != TYPE_TYPE) {
-        peval_error(ctx, "expected type expression");
+        PEVAL_ERR(e_new, "expected type expression");
     }
     return e_new;
 }
@@ -297,12 +267,12 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
     changed = changed || fn_name_expr != e->u.call.fn_expr;
     if (fn_name_expr->expr == EXPR_CONST) {
         if (fn_name_expr->u._const.type->type != TYPE_FN) {
-            peval_error(ctx, "expected a function");
+            PEVAL_ERR(fn_name_expr, "expected a function");
         }
         fn_name = fn_name_expr->u._const.u.fn_name;
         fn = lookup_func(ctx, fn_name);
         if (!fn) {
-            peval_error(ctx, "function not found");
+            PEVAL_ERR(fn_name_expr, "function not found");
         }
         assert(fn->expr == EXPR_FN);
         param_count = decl_count(fn->u.fn.params);
@@ -337,7 +307,7 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
 
             fn_new = lookup_func(ctx, fn_name_new);
             if (!fn_new) {
-                fn_new = dup_expr(ctx, fn);
+                fn_new = dup_expr(ctx, fn, fn);
                 fn_new->u.fn.params = strip_const_params(ctx, fn_new->u.fn.params, e_new.u.call.args);
                 bind_func(ctx, fn_name_new, fn_new);
                 fn_new->u.fn.body_expr = peval(ctx, fn_new->u.fn.body_expr);
@@ -357,7 +327,7 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
     }
 
     if (changed) {
-        return dup_expr(ctx, &e_new);
+        return dup_expr(ctx, &e_new, e);
     }
     return e;
 }
@@ -370,7 +340,7 @@ struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
     case EXPR_SYM: {
         struct expr *e_env = lookup(ctx, e->u.sym.name);
         if (e_env) {
-            struct expr *e_new = dup_expr(ctx, e_env);
+            struct expr *e_new = dup_expr(ctx, e_env, e_env);
             assert(e_new->expr == EXPR_CONST);
             /* antecedent should be the symbol from the source code, not the copied constant expression */
             e_new->antecedent = e;
@@ -400,7 +370,7 @@ struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
         pop_bindings(ctx, push_count);
 
         if (e_new.u._struct.fields != e->u._struct.fields) {
-            return dup_expr(ctx, &e_new);
+            return dup_expr(ctx, &e_new, e);
         }
         break;
     }
@@ -460,7 +430,7 @@ struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
         pop_bindings(ctx, push_count);
 
         if (changed) {
-            return dup_expr(ctx, &e_new);
+            return dup_expr(ctx, &e_new, e);
         }
         break;
     }
@@ -476,10 +446,10 @@ struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
         if (e_new.u._if.cond_expr->expr == EXPR_CONST) {
             struct expr_const *_const = &e_new.u._if.cond_expr->u._const;
             if (_const->type->type != TYPE_BOOL) {
-                peval_error(ctx, "if conditional must be boolean");
+                PEVAL_ERR(e_new.u._if.cond_expr, "if conditional must be boolean");
             }
             e_new = *peval(ctx, _const->u._bool ? e->u._if.then_expr : e->u._if.else_expr);
-            return dup_expr(ctx, &e_new);
+            return dup_expr(ctx, &e_new, e);
         }
 
         e_new.u._if.then_expr = peval(ctx, e->u._if.then_expr);
@@ -487,13 +457,13 @@ struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
 
         if (e_new.u._if.then_expr->expr == EXPR_CONST && e_new.u._if.else_expr->expr == EXPR_CONST &&
             (e_new.u._if.then_expr->u._const.type != e_new.u._if.else_expr->u._const.type)) {
-            peval_error(ctx, "mismatching types in if arms");
+            PEVAL_ERR(&e_new, "mismatching types in if arms");
         }
 
         if (e_new.u._if.cond_expr != e->u._if.cond_expr ||
             e_new.u._if.then_expr != e->u._if.then_expr ||
             e_new.u._if.else_expr != e->u._if.else_expr) {
-            return dup_expr(ctx, &e_new);
+            return dup_expr(ctx, &e_new, e);
         }
         break;
     }

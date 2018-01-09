@@ -19,6 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\error.c" />
     <ClCompile Include="..\expr.c" />
     <ClCompile Include="..\murmur3.c" />
     <ClCompile Include="..\parse.c" />
@@ -34,13 +35,16 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\defs.h" />
+    <ClInclude Include="..\error.h" />
     <ClInclude Include="..\expr.h" />
     <ClInclude Include="..\fnv.h" />
     <ClInclude Include="..\hashtable.h" />
     <ClInclude Include="..\hashtable_impl.h" />
+    <ClInclude Include="..\mod.h" />
     <ClInclude Include="..\murmur3.h" />
     <ClInclude Include="..\parse.h" />
     <ClInclude Include="..\peval.h" />
+    <ClInclude Include="..\peval_internal.h" />
     <ClInclude Include="..\prim.h" />
     <ClInclude Include="..\scan.h" />
     <ClInclude Include="..\slice.h" />

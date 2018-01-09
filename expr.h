@@ -124,4 +124,15 @@ static uint calc_arg_count(struct expr_call_arg *arg) {
     return count;
 }
 
+static slice_t expr_source_text(struct expr *e) {
+    slice_t empty = { "", 0 };
+    do {
+        if (e->source_text.ptr) {
+            return e->source_text;
+        }
+        e = e->antecedent;
+    } while (e);
+    return empty;
+}
+
 #endif

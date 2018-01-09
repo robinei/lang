@@ -3,6 +3,14 @@
 #include <string.h>
 #include "parse.h"
 #include "peval.h"
+#include "error.h"
+
+static void print_errors(struct error_ctx *ctx) {
+    struct error_entry *entry;
+    for (entry = ctx->first_error; entry; entry = entry->next) {
+        error_fprint(ctx, entry, stdout);
+    }
+}
 
 static void old_test() {
     char *text =
@@ -22,28 +30,35 @@ static void old_test() {
         "foo = mul3(4);\n"
         "mul3 = fn(x): x * 3;\n"
         "dropUnusedConst = 1 2 3;\n"
-        "vec2 = struct x, y end;"
-        "vec2 = struct x, y: Int end;"
-        "falseAnd = false && print(1);"
-        "trueAnd = true && print(1);"
-        "falseOr = false || print(1);"
-        "trueOr = true || print(1);"
-        "misc = false || true && false || 11 % 2 < 2;"
-        "unit: Unit = ();"
-        "assertTrue = assert(true);"
-        //"assertFalse = assert(false);"
+        "vec2 = struct x, y end;\n"
+        "vec2 = struct x, y: Int end;\n"
+        "falseAnd = false && print(1);\n"
+        "trueAnd = true && print(1);\n"
+        "falseOr = false || print(1);\n"
+        "trueOr = true || print(1);\n"
+        "misc = false || true && false || 11 % 2 < 2;\n"
+        "unit: Unit = ();\n"
+        "assertTrue = assert(true);\n"
+        //"badIf = if 1: 2 else 3;\n"
+        //"assertFalse = assert(false);\n"
         ;
 
     struct expr *mod_struct;
-
+    struct error_ctx err_ctx = { 0, };
     struct parse_ctx ctx = { { 0 }, };
+
     ctx.scan.cursor = text;
     ctx.text = text;
+    ctx.err_ctx = &err_ctx;
+
+    err_ctx.source_buf = slice_from_str(text);
+    strcpy(err_ctx.filename, "test.ml");
 
     if ((mod_struct = parse_module(&ctx))) {
         printf("PARSE OK\n");
         {
             struct peval_ctx peval = { 0, };
+            peval.err_ctx = &err_ctx;
             struct module *mod = partial_eval_module(&peval, mod_struct);
             if (mod) {
                 uint i;
@@ -62,12 +77,12 @@ static void old_test() {
                 printf("PARTIAL EVAL OK\n");
             }
             else {
-                printf("PARTIAL EVAL ERROR\n");
+                print_errors(&err_ctx);
             }
         }
     }
     else {
-        printf("PARSE ERROR: %s\n", ctx.error);
+        print_errors(&err_ctx);
     }
 }
 
@@ -91,6 +106,7 @@ static char *read_file(const char *filename) {
 }
 
 static void run_tests(const char *filename) {
+    struct error_ctx err_ctx = { 0, };
     struct parse_ctx parse_ctx = { { 0 }, };
     struct peval_ctx peval_ctx = { 0, };
     struct expr *mod_struct;
@@ -99,6 +115,11 @@ static void run_tests(const char *filename) {
 
     parse_ctx.text = read_file(filename);
     parse_ctx.scan.cursor = parse_ctx.text;
+    parse_ctx.err_ctx = &err_ctx;
+
+    err_ctx.source_buf = slice_from_str(parse_ctx.text);
+    strncpy(err_ctx.filename, filename, ERROR_FILENAME_BUF_SIZE - 1);
+    err_ctx.filename[ERROR_FILENAME_BUF_SIZE - 1] = '\0';
     if (!parse_ctx.text) {
         printf("error reading file: %s\n", filename);
         return;
@@ -106,13 +127,14 @@ static void run_tests(const char *filename) {
 
     mod_struct = parse_module(&parse_ctx);
     if (!mod_struct) {
-        printf("error parsing test module: %s\n", parse_ctx.error);
+        print_errors(&err_ctx);
         return;
     }
 
     mod = partial_eval_module(&peval_ctx, mod_struct);
     if (!mod) {
         printf("error partially evaluating test module\n");
+        print_errors(&err_ctx);
         return;
     }
 
@@ -121,6 +143,7 @@ static void run_tests(const char *filename) {
 
     peval_ctx.allow_side_effects = 1;
     peval_ctx.assert_count = 0;
+    peval_ctx.err_ctx = &err_ctx;
 
     decls = mod->struct_expr->u._struct.fields;
     for (; decls; decls = decls->next) {

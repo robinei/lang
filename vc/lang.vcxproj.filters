@@ -51,6 +51,9 @@
     <ClCompile Include="..\prim.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\error.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\scan.h">
@@ -90,6 +93,15 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\prim.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\mod.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\error.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\peval_internal.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

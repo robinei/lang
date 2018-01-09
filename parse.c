@@ -1,97 +1,22 @@
 #include "parse.h"
-#include <stdio.h>
-#include <stdlib.h>
 #include <stdarg.h>
-#include <string.h>
+#include <stdlib.h>
 #include <assert.h>
 
 long long int my_strtoll(const char *nptr, const char **endptr, int base);
 double my_strtod(const char *string, const char **endPtr);
 
-static struct expr *expr_create(struct parse_ctx *ctx, uint expr_type, slice_t source_text) {
-    struct expr *e = calloc(1, sizeof(struct expr));
-    e->expr = expr_type;
-    e->source_text = source_text;
-    return e;
-}
+static struct expr *parse_expr(struct parse_ctx *ctx);
+static struct expr *parse_atom(struct parse_ctx *ctx);
 
-static struct expr *bool_create(struct parse_ctx *ctx, uint bool_value, slice_t source_text) {
-    struct expr *e = expr_create(ctx, EXPR_CONST, source_text);
-    e->u._const.type = &type_bool;
-    e->u._const.u._bool = bool_value;
-    return e;
-}
 
-static struct expr *unit_create(struct parse_ctx *ctx, slice_t source_text) {
-    struct expr *e = expr_create(ctx, EXPR_CONST, source_text);
-    e->u._const.type = &type_unit;
-    return e;
-}
-
-static struct expr *prim_create_bin(struct parse_ctx *ctx, int prim, struct expr *arg0, struct expr *arg1) {
-    struct expr *e = expr_create(ctx, EXPR_PRIM, slice_span(arg0->source_text, arg1->source_text));
-    e->u.prim.prim = prim;
-    e->u.prim.arg_exprs[0] = arg0;
-    e->u.prim.arg_exprs[1] = arg1;
-    return e;
-}
-
-static void parse_error(struct parse_ctx *ctx, const char *format, ...) {
-    va_list args;
-    int used = 0;
-    char *line;
-    int line_len;
-    int err_line_offset;
-    int err_len;
-    int i;
-
-    used += snprintf(ctx->error + used, ERROR_MAX - used, "(line %d) parse error: ", ctx->scan.line + 1);
-    if (used > ERROR_MAX) {
-        used = ERROR_MAX;
-    }
-
-    va_start(args, format);
-    used += vsnprintf(ctx->error + used, ERROR_MAX - used, format, args);
-    va_end(args);
-    if (used > ERROR_MAX) {
-        used = ERROR_MAX;
-    }
-
-    line = ctx->token_text.ptr;
-    while (line > ctx->text && line[-1] != '\n') {
-        --line;
-    }
-
-    line_len = 0;
-    while (line[line_len] && line[line_len] != '\n') {
-        ++line_len;
-    }
-
-    if (used < ERROR_MAX) {
-        ctx->error[used++] = '\n';
-    }
-
-    err_line_offset = (int)(ctx->token_text.ptr - line);
-    for (i = 0; i < err_line_offset && used < ERROR_MAX; ++i) {
-        ctx->error[used++] = ' ';
-    }
-    err_len = ctx->token_text.len;
-    if (err_len <= 0) {
-        err_len = 1;
-    }
-    for (i = 0; i < err_len && used < ERROR_MAX; ++i) {
-        ctx->error[used++] = 'v';
-    }
-
-    used += snprintf(ctx->error + used, ERROR_MAX - used, "\n%.*s", line_len, line);
-    if (used > ERROR_MAX) {
-        used = ERROR_MAX;
-    }
-
-    ctx->error[used] = '\0';
-
-    longjmp(ctx->error_jmp_buf, 1);
-}
+#define PARSE_ERR(...) \
+    do { \
+        ++ctx->error_count; \
+        ctx->sync_after_error = 1; \
+        error_emit(ctx->err_ctx, ERROR_CATEGORY_ERROR, ctx->token_text, __VA_ARGS__); \
+        longjmp(ctx->error_jmp_buf, 1); \
+    } while(0)
 
 #define NEXT_TOKEN() \
     do { \
@@ -99,7 +24,32 @@ static void parse_error(struct parse_ctx *ctx, const char *format, ...) {
         ctx->token = scan_next_token(&ctx->scan, &ctx->token_text.ptr); \
         ctx->token_text.len = (int)(ctx->scan.cursor - ctx->token_text.ptr); \
     } while (0)
-//printf("%s: '%.*s'\n", token_strings[ctx->token], (int)(ctx->scan.cursor - ctx->token_text.ptr), ctx->token_text.ptr);
+
+
+static struct expr *expr_create(struct parse_ctx *ctx, uint expr_type, slice_t source_text) {
+    struct expr *e = calloc(1, sizeof(struct expr));
+    e->expr = expr_type;
+    e->source_text = source_text;
+    return e;
+}
+static struct expr *bool_create(struct parse_ctx *ctx, uint bool_value, slice_t source_text) {
+    struct expr *e = expr_create(ctx, EXPR_CONST, source_text);
+    e->u._const.type = &type_bool;
+    e->u._const.u._bool = bool_value;
+    return e;
+}
+static struct expr *unit_create(struct parse_ctx *ctx, slice_t source_text) {
+    struct expr *e = expr_create(ctx, EXPR_CONST, source_text);
+    e->u._const.type = &type_unit;
+    return e;
+}
+static struct expr *prim_create_bin(struct parse_ctx *ctx, int prim, struct expr *arg0, struct expr *arg1) {
+    struct expr *e = expr_create(ctx, EXPR_PRIM, slice_span(arg0->source_text, arg1->source_text));
+    e->u.prim.prim = prim;
+    e->u.prim.arg_exprs[0] = arg0;
+    e->u.prim.arg_exprs[1] = arg1;
+    return e;
+}
 
 
 static int token_ends_expr(int tok) {
@@ -122,9 +72,6 @@ static int token_ends_expr(int tok) {
     return 0;
 }
 
-static struct expr *parse_expr(struct parse_ctx *ctx);
-static struct expr *parse_atom(struct parse_ctx *ctx);
-
 static struct expr_decl *parse_decls(struct parse_ctx *ctx) {
     struct expr_decl *f;
 
@@ -140,7 +87,7 @@ static struct expr_decl *parse_decls(struct parse_ctx *ctx) {
     if (ctx->token == TOK_COMMA) {
         NEXT_TOKEN();
         if (ctx->token != TOK_IDENT) {
-            parse_error(ctx, "unexpected identifier after ',' in declaration");
+            PARSE_ERR("unexpected identifier after ',' in declaration");
         }
         f->next = parse_decls(ctx);
         f->type_expr = f->next->type_expr;
@@ -180,7 +127,7 @@ struct expr *parse_module(struct parse_ctx *ctx) {
     fields = parse_decls(ctx);
 
     if (ctx->token != TOK_END) {
-        parse_error(ctx, "unexpected token in module");
+        PARSE_ERR("unexpected token in module");
     }
 
     result = expr_create(ctx, EXPR_STRUCT, slice_span(first_token, ctx->prev_token_text));
@@ -202,7 +149,7 @@ struct expr *parse_struct(struct parse_ctx *ctx) {
         NEXT_TOKEN();
     }
     else if (!token_ends_expr(ctx->token)) {
-        parse_error(ctx, "unexpected token after struct definition");
+        PARSE_ERR("unexpected token after struct definition");
     }
 
     result = expr_create(ctx, EXPR_STRUCT, slice_span(first_token, ctx->prev_token_text));
@@ -226,7 +173,7 @@ static struct expr *parse_fn(struct parse_ctx *ctx) {
         else {
             params = parse_decls(ctx);
             if (ctx->token != TOK_RPAREN) {
-                parse_error(ctx, "expected ')' after parameter list");
+                PARSE_ERR("expected ')' after parameter list");
             }
             NEXT_TOKEN();
         }
@@ -248,11 +195,11 @@ static struct expr *parse_fn(struct parse_ctx *ctx) {
     if (!body_expr) {
         for (p = params; p; p = p->next) {
             if (!p->type_expr) {
-                parse_error(ctx, "incomplete parameter types in preceding function type definition");
+                PARSE_ERR("incomplete parameter types in preceding function type definition");
             }
         }
         if (!return_type_expr) {
-            parse_error(ctx, "missing return type in preceding function type definition");
+            PARSE_ERR("missing return type in preceding function type definition");
         }
     }
 
@@ -274,7 +221,7 @@ static struct expr *parse_let(struct parse_ctx *ctx) {
     bindings = parse_decls(ctx);
 
     if (ctx->token != TOK_KW_IN) {
-        parse_error(ctx, "expected 'in' after 'let' declarations");
+        PARSE_ERR("expected 'in' after 'let' declarations");
     }
     NEXT_TOKEN();
 
@@ -300,7 +247,7 @@ static struct expr *parse_if(struct parse_ctx *ctx, int is_elif) {
     cond_expr = parse_expr(ctx);
 
     if (ctx->token != TOK_COLON) {
-        parse_error(ctx, "expected ':' after if condition");
+        PARSE_ERR("expected ':' after if condition");
     }
     NEXT_TOKEN();
 
@@ -372,7 +319,7 @@ static struct expr_call_arg *parse_args(struct parse_ctx *ctx) {
             NEXT_TOKEN();
         }
         else {
-            parse_error(ctx, "expected ')' after argument list");
+            PARSE_ERR("expected ')' after argument list");
         }
     }
 
@@ -402,13 +349,13 @@ static struct expr *parse_prim_call(struct parse_ctx *ctx, int prim, uint arg_co
 
     NEXT_TOKEN();
     if (ctx->token != TOK_LPAREN) {
-        parse_error(ctx, "expected '(' after '%.*s'", name.len, name.ptr);
+        PARSE_ERR("expected '(' after '%.*s'", name.len, name.ptr);
     }
     NEXT_TOKEN();
 
     args = parse_args(ctx);
     if (calc_arg_count(args) != arg_count) {
-        parse_error(ctx, "expected %d arguments for '%.*s'", arg_count, name.len, name.ptr);
+        PARSE_ERR("expected %d arguments for '%.*s'", arg_count, name.len, name.ptr);
     }
 
     result = expr_create(ctx, EXPR_PRIM, slice_span(name, ctx->prev_token_text));
@@ -493,7 +440,7 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
         else {
             result = parse_expr(ctx);
             if (ctx->token != TOK_RPAREN) {
-                parse_error(ctx, "expected ')'");
+                PARSE_ERR("expected ')'");
             }
         }
         NEXT_TOKEN();
@@ -522,7 +469,7 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
     case TOK_KW_IF: return parse_if(ctx, 0);
     case TOK_KW_WHILE: return parse_while(ctx);
     default:
-        parse_error(ctx, "unexpected token in expression");
+        PARSE_ERR("unexpected token in expression");
     }
 
     while (ctx->token == TOK_LPAREN) {

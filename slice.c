@@ -3,6 +3,12 @@
 #include "hashtable_impl.h"
 #include <stdlib.h>
 
+slice_t slice_from_str(char *str) {
+    slice_t result;
+    result.ptr = str;
+    result.len = strlen(str);
+    return result;
+}
 
 int slice_cmp(slice_t a, slice_t b) {
     uint min_len = a.len <= b.len ? a.len : b.len;

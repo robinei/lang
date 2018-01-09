@@ -1,29 +1,10 @@
 #include "peval.h"
-#include <assert.h>
-#include <stdlib.h>
-
-static struct expr *expr_create(struct peval_ctx *ctx, uint expr_type, struct expr *antecedent) {
-    struct expr *e = calloc(1, sizeof(struct expr));
-    e->expr = expr_type;
-    e->antecedent = antecedent;
-    return e;
-}
-static struct expr *dup_expr(struct peval_ctx *ctx, struct expr *e) {
-    struct expr *e_copy = calloc(1, sizeof(struct expr));
-    *e_copy = *e;
-    e_copy->antecedent = e;
-    return e_copy;
-}
-static struct expr *unit_create(struct peval_ctx *ctx, struct expr *antecedent) {
-    struct expr *e = expr_create(ctx, EXPR_CONST, antecedent);
-    e->u._const.type = &type_unit;
-    return e;
-}
+#include "peval_internal.h"
 
 static int bool_value(struct peval_ctx *ctx, struct expr *e) {
     assert(e->expr == EXPR_CONST);
     if (e->u._const.type->type != TYPE_BOOL) {
-        peval_error(ctx, "expected bool");
+        PEVAL_ERR(e, "expected bool");
     }
     return e->u._const.u._bool;
 }
@@ -31,7 +12,7 @@ static int bool_value(struct peval_ctx *ctx, struct expr *e) {
 static int int_value(struct peval_ctx *ctx, struct expr *e) {
     assert(e->expr == EXPR_CONST);
     if (e->u._const.type->type != TYPE_INT) {
-        peval_error(ctx, "expected int");
+        PEVAL_ERR(e, "expected int");
     }
     return e->u._const.u._int;
 }
@@ -49,7 +30,7 @@ static int const_eq(struct peval_ctx *ctx, struct expr *a, struct expr *b) {
     case TYPE_INT:
         return a->u._const.u._int == b->u._const.u._int;
     default:
-        peval_error(ctx, "equality not implemented for type");
+        PEVAL_ERR(a, "equality not implemented for type");
         return 0;
     }
 }
@@ -136,19 +117,19 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
         if (ARG_CONST(0) && ctx->allow_side_effects) {
             ++ctx->assert_count;
             if (!bool_value(ctx, ARG(0))) {
-                peval_error(ctx, "assertion failure!");
+                PEVAL_ERR(ARG(0), "assertion failure!");
             }
             return unit_create(ctx, e);
         }
         break;
 
     default:
-        peval_error(ctx, "invalid primitive");
+        PEVAL_ERR(e, "invalid primitive");
         return NULL;
     }
 
     if (ARG(0) != e->u.prim.arg_exprs[0] || ARG(1) != e->u.prim.arg_exprs[1]) {
-        return dup_expr(ctx, &e_new);
+        return dup_expr(ctx, &e_new, e);
     }
 
     return e;
