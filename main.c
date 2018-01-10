@@ -12,79 +12,6 @@ static void print_errors(struct error_ctx *ctx) {
     }
 }
 
-static void old_test() {
-    char *source_text =
-        "exp = fn(x, n: Int) Int: if n == 0: 1 else x * exp(x, n - 1);\n"
-        "exped = let x = exp(2, 3) in x + 100;\n"
-        "pow2 = exp(2, n);\n"
-        "mutual = let\n"
-        "   even = fn(n: Int) Bool: if n == 0: true else odd(n - 1);\n"
-        "   odd = fn(n: Int) Bool: if n == 0: false else even(n - 1)\n"
-        "in even(5);\n"
-        "getType = fn(i: Int) Type: if i == 0: Bool else Int;\n"
-        "test = fn(): let x: getType(1) = 123 in x;\n"
-        "fibHelp = fn(a, b, n: Int) Int: print(n) if n == 1-1: a else fibHelp(b, a+b, n-1);\n"
-        "fib = fn(n: Int) Int: fibHelp(0, 1, n);\n"
-        "fib6 = fib(6);\n"
-        "order = let x = add3(2); add3 = fn(n): n + 3 in x;\n"
-        "foo = mul3(4);\n"
-        "mul3 = fn(x): x * 3;\n"
-        "dropUnusedConst = 1 2 3;\n"
-        "vec2 = struct x, y end;\n"
-        "vec2 = struct x, y: Int end;\n"
-        "falseAnd = false && print(1);\n"
-        "trueAnd = true && print(1);\n"
-        "falseOr = false || print(1);\n"
-        "trueOr = true || print(1);\n"
-        "misc = false || true && false || 11 % 2 < 2;\n"
-        "unit: Unit = ();\n"
-        "assertTrue = assert(true);\n"
-        //"badIf = if 1+1: 2 else 3;\n"
-        //"assertFalse = assert(false);\n"
-        ;
-
-    struct expr *mod_struct;
-    struct error_ctx err_ctx = { 0, };
-    struct parse_ctx ctx = { { 0 }, };
-
-    ctx.scan_ctx.cursor = source_text;
-    ctx.err_ctx = &err_ctx;
-
-    err_ctx.source_buf = slice_from_str(source_text);
-    strcpy(err_ctx.filename, "test.ml");
-
-    if ((mod_struct = parse_module(&ctx))) {
-        printf("PARSE OK\n");
-        {
-            struct peval_ctx peval = { 0, };
-            peval.err_ctx = &err_ctx;
-            struct module *mod = partial_eval_module(&peval, mod_struct);
-            if (mod) {
-                uint i;
-                struct slice_table *funcs = &mod->functions;
-                printf("\n");
-                for (i = 0; i < funcs->size; ++i) {
-                    if (funcs->entries[i].hash) {
-                        printf("<%.*s> = ", funcs->entries[i].key.len, funcs->entries[i].key.ptr);
-                        print_expr(NULL, funcs->entries[i].value);
-                        printf(";\n");
-                    }
-                }
-                printf("\n");
-                print_expr(NULL, mod->struct_expr);
-                printf("\n\n");
-                printf("PARTIAL EVAL OK\n");
-            }
-            else {
-                print_errors(&err_ctx);
-            }
-        }
-    }
-    else {
-        print_errors(&err_ctx);
-    }
-}
-
 static char *read_file(const char *filename) {
     char *str;
     uint len;
@@ -104,12 +31,11 @@ static char *read_file(const char *filename) {
     return str;
 }
 
-static void run_tests(const char *filename) {
-    struct error_ctx err_ctx = { 0, };
-    struct parse_ctx parse_ctx = { { 0 }, };
-    struct peval_ctx peval_ctx = { 0, };
+static void run_tests(char *filename) {
+    struct error_ctx err_ctx;
+    struct module_ctx mod_ctx;
+    struct peval_ctx peval_ctx;
     struct expr *mod_struct;
-    struct module *mod;
     struct expr_decl *decls;
 
     char *source_text = read_file(filename);
@@ -118,37 +44,34 @@ static void run_tests(const char *filename) {
         return;
     }
 
-    err_ctx.source_buf = slice_from_str(source_text);
-    strncpy(err_ctx.filename, filename, ERROR_FILENAME_BUF_SIZE - 1);
-    err_ctx.filename[ERROR_FILENAME_BUF_SIZE - 1] = '\0';
+    error_ctx_init(&err_ctx, filename, source_text);
 
-    parse_ctx.scan_ctx.cursor = source_text;
-    parse_ctx.err_ctx = &err_ctx;
-
-    mod_struct = parse_module(&parse_ctx);
+    mod_struct = parse_module(source_text, &err_ctx);
     if (!mod_struct) {
+        printf("error parsing test module\n");
         print_errors(&err_ctx);
         return;
     }
 
-    mod = partial_eval_module(&peval_ctx, mod_struct);
-    if (!mod) {
+    module_ctx_init(&mod_ctx, mod_struct);
+
+    peval_ctx_init(&peval_ctx, &mod_ctx, &err_ctx);
+
+    if (setjmp(peval_ctx.error_jmp_buf)) {
         printf("error partially evaluating test module\n");
         print_errors(&err_ctx);
         return;
     }
+    mod_ctx.struct_expr = peval(&peval_ctx, mod_ctx.struct_expr);
 
     printf("running tests...\n");
-    fflush(stdout);
 
-    peval_ctx.allow_side_effects = 1;
-    peval_ctx.assert_count = 0;
-    peval_ctx.err_ctx = &err_ctx;
-
-    decls = mod->struct_expr->u._struct.fields;
+    peval_ctx.force_full_expansion = 1;
+    decls = mod_ctx.struct_expr->u._struct.fields;
     for (; decls; decls = decls->next) {
         struct expr *e = decls->value_expr;
         struct expr *fn_expr;
+        slice_t fn_name;
         struct expr call_expr = { EXPR_CALL };
 
         if (e->expr != EXPR_CONST) {
@@ -157,18 +80,27 @@ static void run_tests(const char *filename) {
         if (e->u._const.type->type != TYPE_FN) {
             continue;
         }
-        if (!slice_table_get(&mod->functions, e->u._const.u.fn_name, (void **)&fn_expr)) {
+        fn_name = e->u._const.u.fn_name;
+        if (fn_name.len < 4 || memcmp(fn_name.ptr, "test", 4)) {
+            continue;
+        }
+        if (!slice_table_get(&mod_ctx.functions, fn_name, (void **)&fn_expr)) {
             continue;
         }
         if (fn_expr->u.fn.params) {
             continue;
         }
         call_expr.u.call.fn_expr = e;
-        printf("running test function: %.*s\n", e->u._const.u.fn_name.len, e->u._const.u.fn_name.ptr);
+        printf("running test function: %.*s\n", fn_name.len, fn_name.ptr);
         fflush(stdout);
+
+        if (setjmp(peval_ctx.error_jmp_buf)) {
+            break;
+        }
         peval(&peval_ctx, &call_expr);
     }
-    printf("done.\n");
+    printf("%u/%u asserts passed\n", peval_ctx.assert_count - peval_ctx.assert_fails, peval_ctx.assert_count);
+    print_errors(&err_ctx);
 }
 
 int main(int argc, char *argv[]) {
@@ -176,7 +108,7 @@ int main(int argc, char *argv[]) {
         run_tests(argv[2]);
     }
     else {
-        old_test();
+        printf("usage: lang test <source_file1>+\n");
     }
     fflush(stdout);
     fgetc(stdin);

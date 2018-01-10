@@ -25,6 +25,8 @@ static int const_eq(struct peval_ctx *ctx, struct expr *a, struct expr *b) {
     switch (a->u._const.type->type) {
     case TYPE_TYPE:
         return a->u._const.u.type == b->u._const.u.type;
+    case TYPE_UNIT:
+        return 1;
     case TYPE_BOOL:
         return a->u._const.u._bool == b->u._const.u._bool;
     case TYPE_INT:
@@ -114,10 +116,11 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
     case PRIM_MOD: HANDLE_BINOP(&type_int, _int, BINOP(% , int_value))
 
     case PRIM_ASSERT:
-        if (ARG_CONST(0) && ctx->allow_side_effects) {
+        if (ARG_CONST(0) && ctx->force_full_expansion) {
             ++ctx->assert_count;
             if (!bool_value(ctx, ARG(0))) {
-                PEVAL_ERR(ARG(0), "assertion failure!");
+                ++ctx->assert_fails;
+                PEVAL_ERR(e, "assertion failure!");
             }
             return unit_create(ctx, e);
         }

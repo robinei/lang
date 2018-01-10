@@ -54,6 +54,9 @@
     <ClCompile Include="..\peval_prim.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\mod.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\scan.h">

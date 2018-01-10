@@ -18,6 +18,7 @@ struct parse_ctx {
     jmp_buf error_jmp_buf;
 };
 
-struct expr *parse_module(struct parse_ctx *ctx);
+struct expr *parse_module(char *source_text, struct error_ctx *err_ctx);
+struct expr *do_parse_module(struct parse_ctx *ctx);
 
 #endif

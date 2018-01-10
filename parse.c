@@ -112,7 +112,14 @@ static struct expr_decl *parse_decls(struct parse_ctx *ctx) {
     return f;
 }
 
-struct expr *parse_module(struct parse_ctx *ctx) {
+struct expr *parse_module(char *source_text, struct error_ctx *err_ctx) {
+    struct parse_ctx parse_ctx = { { 0 }, };
+    parse_ctx.scan_ctx.cursor = source_text;
+    parse_ctx.err_ctx = err_ctx;
+    return do_parse_module(&parse_ctx);
+}
+
+struct expr *do_parse_module(struct parse_ctx *ctx) {
     struct expr *result;
     struct expr_decl *fields;
     slice_t first_token = ctx->token_text;

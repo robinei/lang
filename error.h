@@ -28,6 +28,7 @@ struct error_ctx {
     char msg_buf[ERROR_MSG_BUF_SIZE];
 };
 
+void error_ctx_init(struct error_ctx *ctx, char *filename, char *source_text);
 void error_entries_free(struct error_ctx *ctx);
 
 void error_emit(struct error_ctx *ctx, enum error_category category, slice_t location, const char *format, ...);

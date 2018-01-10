@@ -26,11 +26,11 @@ static void pop_name(struct peval_ctx *ctx) {
 
 static void bind_func(struct peval_ctx *ctx, slice_t name, struct expr *e) {
     assert(e->expr == EXPR_FN);
-    slice_table_put(&ctx->mod->functions, name, e);
+    slice_table_put(&ctx->mod_ctx->functions, name, e);
 }
 static struct expr *lookup_func(struct peval_ctx *ctx, slice_t name) {
     struct expr *e = NULL;
-    slice_table_get(&ctx->mod->functions, name, (void **)&e);
+    slice_table_get(&ctx->mod_ctx->functions, name, (void **)&e);
     assert(!e || e->expr == EXPR_FN);
     return e;
 }
@@ -52,6 +52,7 @@ static slice_t make_fn_name(struct peval_ctx *ctx) {
 
 
 static void bind(struct peval_ctx *ctx, slice_t name, struct expr *e) {
+    assert(!e || e->expr == EXPR_CONST);
     slice_table_put(&ctx->symbols, name, e);
 }
 static struct expr *lookup(struct peval_ctx *ctx, slice_t name) {
@@ -92,7 +93,7 @@ static void pop_bindings(struct peval_ctx *ctx, uint count) {
 static void push_pending_fn(struct peval_ctx *ctx, struct expr *fn) {
     if (ctx->pending_fn_count == ctx->pending_fn_capacity) {
         ctx->pending_fn_capacity = ctx->pending_fn_capacity ? ctx->pending_fn_capacity * 2 : 16;
-        ctx->pending_fns = realloc(ctx->pending_fns, ctx->pending_fn_capacity);
+        ctx->pending_fns = realloc(ctx->pending_fns, sizeof(struct expr *) * ctx->pending_fn_capacity);
     }
     ctx->pending_fns[ctx->pending_fn_count++] = fn;
 }
@@ -153,7 +154,7 @@ static struct expr *rebind_peval(struct peval_ctx *ctx, slice_t name, struct exp
         push_name(ctx, name);
         struct expr *e_new = peval(ctx, e);
         pop_name(ctx);
-        if (e_new != e) {
+        if (e_new != e && e_new->expr == EXPR_CONST) {
             bind(ctx, name, e_new);
         }
         return e_new;
@@ -485,33 +486,18 @@ static void bind_type(struct peval_ctx *ctx, char *name_str, struct type *type) 
     bind(ctx, name, e_type);
 }
 
-struct module *partial_eval_module(struct peval_ctx *ctx, struct expr *e) {
-    struct module *mod = calloc(1, sizeof(struct module));
+void peval_ctx_init(struct peval_ctx *ctx, struct module_ctx *mod_ctx, struct error_ctx *err_ctx) {
+    memset(ctx, 0, sizeof(*ctx));
 
-    assert(e->expr == EXPR_STRUCT);
-
-    ctx->mod = mod;
+    ctx->err_ctx = err_ctx;
+    ctx->mod_ctx = mod_ctx;
     ctx->closest_name.ptr = "root";
     ctx->closest_name.len = 4;
-    ctx->binding_count = 0;
-    ctx->name_stack_count = 0;
-    ctx->pending_fn_count = 0;
-    ctx->force_full_expansion = 0;
-    ctx->inhibit_call_expansion = 0;
-    ctx->allow_side_effects = 0;
 
     slice_table_init(&ctx->symbols, 16);
-    slice_table_init(&mod->functions, 16);
-
+    
     bind_type(ctx, "Type", &type_type);
     bind_type(ctx, "Unit", &type_unit);
     bind_type(ctx, "Bool", &type_bool);
     bind_type(ctx, "Int", &type_int);
-
-    if (setjmp(ctx->error_jmp_buf)) {
-        return NULL;
-    }
-    mod->struct_expr = peval(ctx, e);
-
-    return mod;
 }

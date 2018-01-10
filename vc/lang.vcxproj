@@ -21,6 +21,7 @@
   <ItemGroup>
     <ClCompile Include="..\error.c" />
     <ClCompile Include="..\expr.c" />
+    <ClCompile Include="..\mod.c" />
     <ClCompile Include="..\murmur3.c" />
     <ClCompile Include="..\parse.c" />
     <ClCompile Include="..\peval.c" />

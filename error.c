@@ -3,6 +3,13 @@
 #include <string.h>
 #include <stdarg.h>
 
+void error_ctx_init(struct error_ctx *ctx, char *filename, char *source_text) {
+    memset(ctx, 0, sizeof(*ctx));
+    ctx->source_buf = slice_from_str(source_text);
+    strncpy(ctx->filename, filename, ERROR_FILENAME_BUF_SIZE - 1);
+    ctx->filename[ERROR_FILENAME_BUF_SIZE - 1] = '\0';
+}
+
 void error_entries_free(struct error_ctx *ctx) {
     ctx->last_error = NULL;
     while (ctx->first_error) {
@@ -93,10 +100,15 @@ static void print_repeated(FILE *fp, int ch, uint times) {
 }
 
 void error_fprint(struct error_ctx *ctx, struct error_entry *entry, FILE *fp) {
-    uint line = error_line_num(ctx, entry);
-    uint col = error_col_num(ctx, entry);
+    uint line_num = error_line_num(ctx, entry);
+    uint col_num = error_col_num(ctx, entry);
+    slice_t line = error_line_text(ctx, entry);
+    uint err_len = line.len - col_num;
+    if (entry->location.len < err_len) {
+        err_len = entry->location.len;
+    }
 
-    fprintf(fp, "(%s:%u:%u) ", ctx->filename, line + 1, col + 1);
+    fprintf(fp, "(%s:%u:%u) ", ctx->filename, line_num + 1, col_num + 1);
     switch (entry->category) {
     case ERROR_CATEGORY_MESSAGE:
         fprintf(fp, "MESSAGE: ");
@@ -110,9 +122,9 @@ void error_fprint(struct error_ctx *ctx, struct error_entry *entry, FILE *fp) {
     }
     fprintf(fp, "%s\n", entry->message);
 
-    print_slice(fp, error_line_text(ctx, entry));
+    print_slice(fp, line);
     fputc('\n', fp);
-    print_repeated(fp, ' ', col);
-    print_repeated(fp, '^', entry->location.len);
+    print_repeated(fp, ' ', col_num);
+    print_repeated(fp, '^', err_len);
     fputc('\n', fp);
 }
