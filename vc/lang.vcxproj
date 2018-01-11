@@ -32,7 +32,6 @@
     <ClCompile Include="..\strtod.c" />
     <ClCompile Include="..\strtoll.c" />
     <ClCompile Include="..\type.c" />
-    <ClCompile Include="..\typeinf.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\defs.h" />
@@ -49,7 +48,6 @@
     <ClInclude Include="..\scan.h" />
     <ClInclude Include="..\slice.h" />
     <ClInclude Include="..\type.h" />
-    <ClInclude Include="..\typeinf.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
