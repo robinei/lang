@@ -1,5 +1,6 @@
 #include "type.h"
 
+struct type type_expr = { TYPE_EXPR };
 struct type type_type = { TYPE_TYPE };
 struct type type_unit = { TYPE_UNIT };
 struct type type_bool = { TYPE_BOOL };

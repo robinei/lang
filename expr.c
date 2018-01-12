@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <string.h>
+#include <assert.h>
 
 #define DECL_PRIM_NAME(name) #name,
 const char *prim_names[] = {
@@ -12,6 +14,96 @@ const char *prim_names[] = {
 const char *expr_names[] = {
     FOR_ALL_EXPRS(DECL_EXPR_NAME)
 };
+
+
+
+struct expr *expr_visit(struct expr_visit_ctx *ctx, struct expr *e) {
+    struct expr e_new;
+    if (!e) {
+        return NULL;
+    }
+    e_new = *e;
+    ctx->visitor(ctx, &e_new);
+    if (memcmp(e, &e_new, sizeof(e_new))) {
+        // TODO: don't duplicate this (from dup_expr)
+        struct expr *e_copy = malloc(sizeof(struct expr));
+        *e_copy = e_new;
+        e_copy->antecedent = e;
+        e_copy->source_text.ptr = NULL;
+        e_copy->source_text.len = 0;
+        return e_copy;
+    }
+    return e;
+}
+
+static struct expr_decl *expr_decl_visit(struct expr_visit_ctx *ctx, struct expr_decl *decl) {
+    struct expr_decl decl_new;
+    if (!decl) {
+        return NULL;
+    }
+    decl_new = *decl;
+    decl_new.next = expr_decl_visit(ctx, decl_new.next);
+    decl_new.type_expr = expr_visit(ctx, decl_new.type_expr);
+    decl_new.value_expr = expr_visit(ctx, decl_new.value_expr);
+    if (memcmp(&decl_new, decl, sizeof(decl_new))) {
+        struct expr_decl *decl_copy = malloc(sizeof(struct expr_decl));
+        *decl_copy = decl_new;
+        return decl_copy;
+    }
+    return decl;
+}
+
+static struct expr_call_arg *expr_call_arg_visit(struct expr_visit_ctx *ctx, struct expr_call_arg *arg) {
+    struct expr_call_arg arg_new;
+    if (!arg) {
+        return NULL;
+    }
+    arg_new = *arg;
+    arg_new.next = expr_call_arg_visit(ctx, arg_new.next);
+    arg_new.expr = expr_visit(ctx, arg_new.expr);
+    if (memcmp(&arg_new, arg, sizeof(arg_new))) {
+        struct expr_call_arg *arg_copy = malloc(sizeof(struct expr_call_arg));
+        *arg_copy = arg_new;
+        return arg_copy;
+    }
+    return arg;
+}
+
+void expr_visit_children(struct expr_visit_ctx *ctx, struct expr *e) {
+    switch (e->expr) {
+    case EXPR_CONST:
+    case EXPR_SYM:
+        break;
+    case EXPR_FN:
+        e->u.fn.params = expr_decl_visit(ctx, e->u.fn.params);
+        e->u.fn.return_type_expr = expr_visit(ctx, e->u.fn.return_type_expr);
+        e->u.fn.body_expr = expr_visit(ctx, e->u.fn.body_expr);
+        break;
+    case EXPR_LET:
+        e->u.let.bindings = expr_decl_visit(ctx, e->u.let.bindings);
+        e->u.let.body_expr = expr_visit(ctx, e->u.let.body_expr);
+        break;
+    case EXPR_STRUCT:
+        e->u._struct.fields = expr_decl_visit(ctx, e->u._struct.fields);
+        break;
+    case EXPR_IF:
+        e->u._if.cond_expr = expr_visit(ctx, e->u._if.cond_expr);
+        e->u._if.then_expr = expr_visit(ctx, e->u._if.then_expr);
+        e->u._if.else_expr = expr_visit(ctx, e->u._if.else_expr);
+        break;
+    case EXPR_PRIM:
+        e->u.prim.arg_exprs[0] = expr_visit(ctx, e->u.prim.arg_exprs[0]);
+        e->u.prim.arg_exprs[1] = expr_visit(ctx, e->u.prim.arg_exprs[1]);
+        break;
+    case EXPR_CALL:
+        e->u.call.fn_expr = expr_visit(ctx, e->u.call.fn_expr);
+        e->u.call.args = expr_call_arg_visit(ctx, e->u.call.args);
+        break;
+    default:
+        assert(NULL && "unexpected expr type");
+        break;
+    }
+}
 
 
 static void print(struct print_ctx *ctx, const char *format, ...) {
@@ -63,8 +155,14 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
     switch (e->expr) {
     case EXPR_CONST:
         switch (e->u._const.type->type) {
+        case TYPE_EXPR:
+            printf("Expr[");
+            print_expr(ctx, e->u._const.u.expr);
+            printf("]");
+            break;
         case TYPE_TYPE:
             switch (e->u._const.u.type->type) {
+            case TYPE_EXPR: print(ctx, "Expr"); break;
             case TYPE_TYPE: print(ctx, "Type"); break;
             case TYPE_UNIT: print(ctx, "Unit"); break;
             case TYPE_BOOL: print(ctx, "Bool"); break;
@@ -191,6 +289,9 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         case PRIM_DIV: print_binop(ctx, " / ", e); break;
         case PRIM_MOD: print_binop(ctx, " % ", e); break;
         case PRIM_ASSERT: print_primcall(ctx, "assert", e); break;
+        case PRIM_QUOTE: print_primcall(ctx, "quote", e); break;
+        case PRIM_SPLICE: print_primcall(ctx, "splice", e); break;
+        case PRIM_PRINT: print_primcall(ctx, "print", e); break;
         }
         break;
     }

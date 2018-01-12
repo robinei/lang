@@ -98,10 +98,10 @@ static void push_pending_fn(struct peval_ctx *ctx, struct expr *fn) {
     ctx->pending_fns[ctx->pending_fn_count++] = fn;
 }
 
-static void peval_pending_fns(struct peval_ctx *ctx) {
+static void peval_pending_fns(struct peval_ctx *ctx, uint lowest_index_to_process) {
     ++ctx->inhibit_call_expansion;
 
-    while (ctx->pending_fn_count > 0) {
+    while (ctx->pending_fn_count > lowest_index_to_process) {
         struct expr *fn = ctx->pending_fns[--ctx->pending_fn_count];
         uint push_count = 0;
         struct expr_decl *p;
@@ -287,6 +287,7 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
     if (fn && (ctx->force_full_expansion || !ctx->inhibit_call_expansion) &&
         (const_count > 0 || const_count == param_count))
     {
+        uint pending_fn_count0 = ctx->pending_fn_count;
         struct expr_call_arg *a = e_new.u.call.args;
         struct expr_decl *p = fn->u.fn.params;
         for (; a; a = a->next, p = p->next) {
@@ -324,7 +325,7 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
             e_new.u.call.args = strip_const_args(ctx, e_new.u.call.args);
         }
 
-        peval_pending_fns(ctx);
+        peval_pending_fns(ctx, pending_fn_count0);
         pop_bindings(ctx, param_count);
         changed = 1;
     }
@@ -336,6 +337,7 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
 }
 
 struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
+    struct expr *result = e;
     if (!e) {
         return NULL;
     }
@@ -347,13 +349,14 @@ struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
             assert(e_new->expr == EXPR_CONST);
             /* antecedent should be the symbol from the source code, not the copied constant expression */
             e_new->antecedent = e;
-            return e_new;
+            result = e_new;
         }
         break;
     }
     case EXPR_STRUCT: {
         struct expr e_new = *e;
         struct expr_decl *f, *new_fields;
+        uint pending_fn_count0 = ctx->pending_fn_count;
         uint push_count = 0;
 
         for (f = e->u._struct.fields; f; f = f->next) {
@@ -369,11 +372,11 @@ struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
             e_new.u._struct.fields = new_fields;
         }
 
-        peval_pending_fns(ctx);
+        peval_pending_fns(ctx, pending_fn_count0);
         pop_bindings(ctx, push_count);
 
         if (e_new.u._struct.fields != e->u._struct.fields) {
-            return dup_expr(ctx, &e_new, e);
+            result = dup_expr(ctx, &e_new, e);
         }
         break;
     }
@@ -390,19 +393,21 @@ struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
             e_new->u._const.u.fn_name = make_fn_name(ctx);
             bind_func(ctx, e_new->u._const.u.fn_name, e);
             push_pending_fn(ctx, e);
-            return e_new;
+            result = e_new;
         }
         else {
             struct expr *e_new = expr_create(ctx, EXPR_CONST, e);
             e_new->u._const.type = &type_type;
             e_new->u._const.u.type = &type_fn;
-            return e_new;
+            result = e_new;
         }
+        break;
     }
     case EXPR_LET: {
         struct expr e_new = *e;
         int changed = 0;
         uint const_count = 0, push_count = 0;
+        uint pending_fn_count0 = ctx->pending_fn_count;
         struct expr_decl *b, *new_bindings;
 
         for (b = e->u.let.bindings; b; b = b->next) {
@@ -429,18 +434,20 @@ struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
             changed = changed || e_new.u.let.body_expr != e->u.let.body_expr;
         }
 
-        peval_pending_fns(ctx);
+        peval_pending_fns(ctx, pending_fn_count0);
         pop_bindings(ctx, push_count);
 
         if (changed) {
-            return dup_expr(ctx, &e_new, e);
+            result = dup_expr(ctx, &e_new, e);
         }
         break;
     }
     case EXPR_PRIM:
-        return peval_prim(ctx, e);
+        result = peval_prim(ctx, e);
+        break;
     case EXPR_CALL:
-        return peval_call(ctx, e);
+        result = peval_call(ctx, e);
+        break;
     case EXPR_IF: {
         struct expr e_new = *e;
 
@@ -466,12 +473,15 @@ struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
         if (e_new.u._if.cond_expr != e->u._if.cond_expr ||
             e_new.u._if.then_expr != e->u._if.then_expr ||
             e_new.u._if.else_expr != e->u._if.else_expr) {
-            return dup_expr(ctx, &e_new, e);
+            result = dup_expr(ctx, &e_new, e);
         }
         break;
     }
     }
-    return e;
+    if (ctx->force_full_expansion && result->expr != EXPR_CONST) {
+        PEVAL_ERR(e, "expected static expression");
+    }
+    return result;
 }
 
 static void bind_type(struct peval_ctx *ctx, char *name_str, struct type *type) {
@@ -495,7 +505,8 @@ void peval_ctx_init(struct peval_ctx *ctx, struct module_ctx *mod_ctx, struct er
     ctx->closest_name.len = 4;
 
     slice_table_init(&ctx->symbols, 16);
-    
+
+    bind_type(ctx, "Expr", &type_expr);
     bind_type(ctx, "Type", &type_type);
     bind_type(ctx, "Unit", &type_unit);
     bind_type(ctx, "Bool", &type_bool);

@@ -29,7 +29,10 @@
     X(MUL) \
     X(DIV) \
     X(MOD) \
-    X(ASSERT)
+    X(ASSERT) \
+    X(QUOTE) \
+    X(SPLICE) \
+    X(PRINT)
 
 #define DECL_PRIM_ENUM(name) PRIM_##name,
 enum {
@@ -69,9 +72,10 @@ struct expr_decl {
 struct expr_const {
     struct type *type;
     union {
+        struct expr *expr;
+        struct type *type;
         int _bool;
         int _int;
-        struct type *type;
         slice_t fn_name;
     } u;
 };
@@ -131,6 +135,17 @@ struct expr {
         struct expr_call call;
     } u;
 };
+
+
+
+typedef void (*expr_visitor_t)(struct expr_visit_ctx *ctx, struct expr *e);
+struct expr_visit_ctx {
+    expr_visitor_t visitor;
+    void *ctx;
+};
+struct expr *expr_visit(struct expr_visit_ctx *ctx, struct expr *e);
+void expr_visit_children(struct expr_visit_ctx *ctx, struct expr *e);
+
 
 
 struct print_ctx {

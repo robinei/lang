@@ -5,6 +5,7 @@
 #include "slice.h"
 
 #define FOR_ALL_TYPES(X) \
+    X(EXPR) \
     X(TYPE) \
     X(UNIT) \
     X(BOOL) \
@@ -49,6 +50,7 @@ struct type {
     } u;
 };
 
+extern struct type type_expr;
 extern struct type type_type;
 extern struct type type_unit;
 extern struct type type_bool;

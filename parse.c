@@ -373,6 +373,25 @@ static struct expr *parse_prim_call(struct parse_ctx *ctx, int prim, uint arg_co
     return result;
 }
 
+static struct expr *parse_single_arg_prim(struct parse_ctx *ctx, int prim) {
+    struct expr *result, *e;
+    slice_t first_token = ctx->token_text;
+    NEXT_TOKEN();
+    if (ctx->token != TOK_LPAREN) {
+        PARSE_ERR("expected '(' after 'expr'");
+    }
+    NEXT_TOKEN();
+    e = parse_expr(ctx);
+    if (ctx->token != TOK_RPAREN) {
+        PARSE_ERR("expected ')' after 'expr' expression");
+    }
+    NEXT_TOKEN();
+    result = expr_create(ctx, EXPR_PRIM, slice_span(first_token, ctx->prev_token_text));
+    result->u.prim.prim = prim;
+    result->u.prim.arg_exprs[0] = e;
+    return result;
+}
+
 static struct expr *parse_int(struct parse_ctx *ctx, int offset, int base) {
     struct expr *result = expr_create(ctx, EXPR_CONST, ctx->token_text);
     result->u._const.type = &type_int;
@@ -433,6 +452,26 @@ static struct expr *parse_infix(struct parse_ctx *ctx, int min_precedence) {
     return lhs;
 }
 
+static void wrap_args_in_expr(struct parse_ctx *ctx, struct expr_call_arg *arg) {
+    struct expr *e;
+    if (!arg) {
+        return;
+    }
+    e = expr_create(ctx, EXPR_PRIM, arg->expr->source_text);
+    e->u.prim.prim = PRIM_QUOTE;
+    e->u.prim.arg_exprs[0] = arg->expr;
+    arg->expr = e;
+    wrap_args_in_expr(ctx, arg->next);
+}
+
+static struct expr *macroify(struct parse_ctx *ctx, struct expr *call_expr) {
+    struct expr *e = expr_create(ctx, EXPR_PRIM, call_expr->source_text);
+    e->u.prim.prim = PRIM_SPLICE;
+    e->u.prim.arg_exprs[0] = call_expr;
+    wrap_args_in_expr(ctx, call_expr->u.call.args);
+    return e;
+}
+
 static struct expr *parse_atom(struct parse_ctx *ctx) {
     struct expr *result;
     slice_t first_token = ctx->token_text;
@@ -455,6 +494,15 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
         if (!slice_str_cmp(ctx->token_text, "assert")) {
             return parse_prim_call(ctx, PRIM_ASSERT, 1);
         }
+        if (!slice_str_cmp(ctx->token_text, "quote")) {
+            return parse_single_arg_prim(ctx, PRIM_QUOTE);
+        }
+        if (!slice_str_cmp(ctx->token_text, "splice")) {
+            return parse_single_arg_prim(ctx, PRIM_SPLICE);
+        }
+        if (!slice_str_cmp(ctx->token_text, "print")) {
+            return parse_single_arg_prim(ctx, PRIM_PRINT);
+        }
         result = expr_create(ctx, EXPR_SYM, first_token);
         result->u.sym.name = ctx->token_text;
         NEXT_TOKEN();
@@ -476,6 +524,15 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
     case TOK_KW_WHILE: return parse_while(ctx);
     default:
         PARSE_ERR("unexpected token in expression");
+    }
+
+    if (ctx->token == TOK_NOT) {
+        NEXT_TOKEN();
+        if (ctx->token != TOK_LPAREN) {
+            PARSE_ERR("expected '(' after postfix '!'");
+        }
+        result = parse_call(ctx, result);
+        result = macroify(ctx, result);
     }
 
     while (ctx->token == TOK_LPAREN) {

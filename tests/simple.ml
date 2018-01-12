@@ -35,7 +35,7 @@ testTypeExpr = fn():
     in
         assert(test() == 123);
 
-fibHelp = fn(a, b, n: Int) Int: print(n) if n == 0: a else fibHelp(b, a+b, n-1);
+fibHelp = fn(a, b, n: Int) Int: if n == 0: a else fibHelp(b, a+b, n-1);
 fib = fn(n: Int) Int: fibHelp(0, 1, n);
 testFib = fn():
     assert(fib(6) == 8);
@@ -77,3 +77,12 @@ testOps = fn():
     assert(1 << 5 == 32)
     assert(32 >> 4 == 2)
     ;
+
+
+
+when = fn(cond, body: Expr) Expr:
+    quote(if splice(cond): splice(body) else ());
+
+testWhenRaw = fn(): splice(when(quote(1 == 1), quote(assert(true))));
+
+testWhenWithSugar = fn(): when!(1 == 1, assert(true));
