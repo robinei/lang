@@ -9,6 +9,33 @@
     } while(0)
 
 
+enum scope_kind {
+    SCOPE_STATIC,
+    SCOPE_FUNCTION,
+    SCOPE_LOCAL
+};
+
+struct binding {
+    slice_t name;
+    struct expr *expr;
+    struct scope *scope;
+    uint name_hash;
+};
+
+struct scope {
+    struct scope *outer_scope;
+    enum scope_kind kind;
+    uint function_depth;
+
+    bool delay_peval_func;
+    struct function *delayed_funcs;
+
+    uint num_bindings;
+    uint max_bindings;
+    struct binding *bindings;
+};
+
+
 static struct expr *expr_create(struct peval_ctx *ctx, uint expr_type, struct expr *antecedent) {
     struct expr *e = calloc(1, sizeof(struct expr));
     e->expr = expr_type;
@@ -34,8 +61,8 @@ static struct expr_decl *dup_decl(struct peval_ctx *ctx, struct expr_decl *f) {
     *copy = *f;
     return copy;
 }
-static struct expr_call_arg *dup_arg(struct peval_ctx *ctx, struct expr_call_arg *a) {
-    struct expr_call_arg *copy = malloc(sizeof(struct expr_call_arg));
+static struct expr_link *dup_arg(struct peval_ctx *ctx, struct expr_link *a) {
+    struct expr_link *copy = malloc(sizeof(struct expr_link));
     *copy = *a;
     return copy;
 }

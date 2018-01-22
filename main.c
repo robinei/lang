@@ -70,10 +70,13 @@ static void run_tests(char *filename) {
     decls = mod_ctx.struct_expr->u._struct.fields;
     for (; decls; decls = decls->next) {
         struct expr *e = decls->value_expr;
-        struct expr *fn_expr;
+        struct function *func;
         slice_t fn_name;
         struct expr call_expr = { EXPR_CALL };
 
+        if (!e) {
+            continue;
+        }
         if (e->expr != EXPR_CONST) {
             continue;
         }
@@ -84,15 +87,19 @@ static void run_tests(char *filename) {
         if (fn_name.len < 4 || memcmp(fn_name.ptr, "test", 4)) {
             continue;
         }
-        if (!slice_table_get(&mod_ctx.functions, fn_name, (void **)&fn_expr)) {
+        if (!slice_table_get(&mod_ctx.functions, fn_name, (void **)&func)) {
             continue;
         }
-        if (fn_expr->u.fn.params) {
+        if (func->params) {
             continue;
         }
         call_expr.u.call.fn_expr = e;
         printf("running test function: %.*s\n", fn_name.len, fn_name.ptr);
         fflush(stdout);
+
+        struct print_ctx print_ctx = { 0, };
+        print_expr(&print_ctx, func->body_expr);
+        printf("\n\n");
 
         if (setjmp(peval_ctx.error_jmp_buf)) {
             break;

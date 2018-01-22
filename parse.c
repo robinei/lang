@@ -209,7 +209,7 @@ static struct expr *parse_fn(struct parse_ctx *ctx) {
         }
     }
 
-    result = expr_create(ctx, EXPR_FN, slice_span(first_token, body_expr->source_text));
+    result = expr_create(ctx, EXPR_FN, slice_span(first_token, ctx->prev_token_text));
     result->u.fn.params = params;
     result->u.fn.return_type_expr = return_type_expr;
     result->u.fn.body_expr = body_expr;
@@ -305,15 +305,15 @@ static struct expr *parse_unary(struct parse_ctx *ctx, int prim) {
     return result;
 }
 
-static struct expr_call_arg *parse_args(struct parse_ctx *ctx) {
-    struct expr_call_arg *a;
+static struct expr_link *parse_args(struct parse_ctx *ctx) {
+    struct expr_link *a;
     
     if (ctx->token == TOK_RPAREN) {
         NEXT_TOKEN();
         return NULL;
     }
 
-    a = calloc(1, sizeof(struct expr_call_arg));
+    a = calloc(1, sizeof(struct expr_link));
     a->expr = parse_expr(ctx);
 
     if (ctx->token == TOK_COMMA) {
@@ -334,7 +334,7 @@ static struct expr_call_arg *parse_args(struct parse_ctx *ctx) {
 
 static struct expr *parse_call(struct parse_ctx *ctx, struct expr *fn_expr) {
     struct expr *result;
-    struct expr_call_arg *args;
+    struct expr_link *args;
 
     assert(ctx->token == TOK_LPAREN);
     NEXT_TOKEN();
@@ -349,7 +349,7 @@ static struct expr *parse_call(struct parse_ctx *ctx, struct expr *fn_expr) {
 
 static struct expr *parse_prim_call(struct parse_ctx *ctx, int prim, uint arg_count) {
     struct expr *result;
-    struct expr_call_arg *args;
+    struct expr_link *args;
     slice_t name = ctx->token_text;
     uint i;
 
@@ -360,7 +360,7 @@ static struct expr *parse_prim_call(struct parse_ctx *ctx, int prim, uint arg_co
     NEXT_TOKEN();
 
     args = parse_args(ctx);
-    if (calc_arg_count(args) != arg_count) {
+    if (expr_list_length(args) != arg_count) {
         PARSE_ERR("expected %d arguments for '%.*s'", arg_count, name.len, name.ptr);
     }
 
@@ -452,7 +452,7 @@ static struct expr *parse_infix(struct parse_ctx *ctx, int min_precedence) {
     return lhs;
 }
 
-static void wrap_args_in_expr(struct parse_ctx *ctx, struct expr_call_arg *arg) {
+static void wrap_args_in_expr(struct parse_ctx *ctx, struct expr_link *arg) {
     struct expr *e;
     if (!arg) {
         return;

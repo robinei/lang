@@ -35,9 +35,7 @@
     X(PRINT)
 
 #define DECL_PRIM_ENUM(name) PRIM_##name,
-enum {
-    FOR_ALL_PRIMS(DECL_PRIM_ENUM)
-};
+enum prim_kind { FOR_ALL_PRIMS(DECL_PRIM_ENUM) };
 #undef DECL_PRIM_ENUM
 
 extern const char *prim_names[];
@@ -54,13 +52,16 @@ extern const char *prim_names[];
     X(CALL)
 
 #define DECL_EXPR_ENUM(name) EXPR_##name,
-enum {
-    FOR_ALL_EXPRS(DECL_EXPR_ENUM)
-};
+enum expr_kind { FOR_ALL_EXPRS(DECL_EXPR_ENUM) };
 #undef DECL_EXPR_ENUM
 
 extern const char *expr_names[];
 
+
+struct expr_link {
+    struct expr *expr;
+    struct expr_link *next;
+};
 
 struct expr_decl {
     slice_t name;
@@ -69,14 +70,15 @@ struct expr_decl {
     struct expr_decl *next;
 };
 
+
 struct expr_const {
     struct type *type;
     union {
+        slice_t fn_name; /* name of the function (in the module function table) */
         struct expr *expr;
         struct type *type;
         int _bool;
         int _int;
-        slice_t fn_name;
     } u;
 };
 
@@ -106,21 +108,17 @@ struct expr_if {
 };
 
 struct expr_prim {
-    uint prim;
+    enum prim_kind prim;
     struct expr *arg_exprs[2];
 };
 
 struct expr_call {
     struct expr *fn_expr;
-    struct expr_call_arg *args;
-};
-struct expr_call_arg {
-    struct expr *expr;
-    struct expr_call_arg *next;
+    struct expr_link *args;
 };
 
 struct expr {
-    uint expr;
+    enum expr_kind expr;
     slice_t source_text;
     struct expr *antecedent;
 
@@ -138,6 +136,7 @@ struct expr {
 
 
 
+struct expr_visit_ctx;
 typedef void (*expr_visitor_t)(struct expr_visit_ctx *ctx, struct expr *e);
 struct expr_visit_ctx {
     expr_visitor_t visitor;
@@ -155,7 +154,7 @@ struct print_ctx {
 void print_expr(struct print_ctx *ctx, struct expr *e);
 
 
-static uint decl_count(struct expr_decl *decl) {
+static uint decl_list_length(struct expr_decl *decl) {
     uint count = 0;
     while (decl) {
         ++count;
@@ -164,11 +163,11 @@ static uint decl_count(struct expr_decl *decl) {
     return count;
 }
 
-static uint calc_arg_count(struct expr_call_arg *arg) {
+static uint expr_list_length(struct expr_link *link) {
     uint count = 0;
-    while (arg) {
+    while (link) {
         ++count;
-        arg = arg->next;
+        link = link->next;
     }
     return count;
 }

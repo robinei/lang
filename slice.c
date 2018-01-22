@@ -1,5 +1,6 @@
 #include "slice.h"
 #include "murmur3.h"
+#include "fnv.h"
 #include "hashtable_impl.h"
 #include <stdlib.h>
 
@@ -8,6 +9,13 @@ slice_t slice_from_str(char *str) {
     result.ptr = str;
     result.len = strlen(str);
     return result;
+}
+
+int slice_equals(slice_t a, slice_t b) {
+    if (a.len != b.len) {
+        return 0;
+    }
+    return !memcmp(a.ptr, b.ptr, a.len);
 }
 
 int slice_cmp(slice_t a, slice_t b) {
@@ -22,7 +30,7 @@ int slice_str_cmp(slice_t a, char *b_str) {
 }
 
 slice_t slice_span(slice_t a, slice_t b) {
-    slice_t c;
+    slice_t c = {0,};
     c.ptr = a.ptr <= b.ptr ?
         a.ptr :
         b.ptr;
@@ -32,17 +40,14 @@ slice_t slice_span(slice_t a, slice_t b) {
     return c;
 }
 
-static uint slice_hash(slice_t s) {
+uint slice_hash_murmur(slice_t s) {
     uint hash;
     MurmurHash3_x86_32(s.ptr, s.len, 0, &hash);
     return hash;
 }
 
-static int slice_equals(slice_t a, slice_t b) {
-    if (a.len != b.len) {
-        return 0;
-    }
-    return !memcmp(a.ptr, b.ptr, a.len);
+uint slice_hash_fnv1a(slice_t s) {
+    return fnv1a((unsigned char *)s.ptr, s.len, FNV_SEED);
 }
 
-IMPL_HASH_TABLE(slice_table, slice_t, void *, slice_hash, slice_equals)
+IMPL_HASH_TABLE(slice_table, slice_t, void *, slice_hash_murmur, slice_equals)

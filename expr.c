@@ -53,8 +53,8 @@ static struct expr_decl *expr_decl_visit(struct expr_visit_ctx *ctx, struct expr
     return decl;
 }
 
-static struct expr_call_arg *expr_call_arg_visit(struct expr_visit_ctx *ctx, struct expr_call_arg *arg) {
-    struct expr_call_arg arg_new;
+static struct expr_link *expr_call_arg_visit(struct expr_visit_ctx *ctx, struct expr_link *arg) {
+    struct expr_link arg_new;
     if (!arg) {
         return NULL;
     }
@@ -62,7 +62,7 @@ static struct expr_call_arg *expr_call_arg_visit(struct expr_visit_ctx *ctx, str
     arg_new.next = expr_call_arg_visit(ctx, arg_new.next);
     arg_new.expr = expr_visit(ctx, arg_new.expr);
     if (memcmp(&arg_new, arg, sizeof(arg_new))) {
-        struct expr_call_arg *arg_copy = malloc(sizeof(struct expr_call_arg));
+        struct expr_link *arg_copy = malloc(sizeof(struct expr_link));
         *arg_copy = arg_new;
         return arg_copy;
     }
@@ -156,19 +156,19 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
     case EXPR_CONST:
         switch (e->u._const.type->type) {
         case TYPE_EXPR:
-            printf("Expr[");
+            printf("Expr<");
             print_expr(ctx, e->u._const.u.expr);
-            printf("]");
+            printf(">");
             break;
         case TYPE_TYPE:
             switch (e->u._const.u.type->type) {
-            case TYPE_EXPR: print(ctx, "Expr"); break;
-            case TYPE_TYPE: print(ctx, "Type"); break;
-            case TYPE_UNIT: print(ctx, "Unit"); break;
-            case TYPE_BOOL: print(ctx, "Bool"); break;
-            case TYPE_INT: print(ctx, "Int"); break;
+            case TYPE_EXPR: print(ctx, "<Expr>"); break;
+            case TYPE_TYPE: print(ctx, "<Type>"); break;
+            case TYPE_UNIT: print(ctx, "<Unit>"); break;
+            case TYPE_BOOL: print(ctx, "<Bool>"); break;
+            case TYPE_INT: print(ctx, "<Int>"); break;
             default:
-                print(ctx, "type:%s", type_names[e->u._const.u.type->type]); break;
+                print(ctx, "<type:%s>", type_names[e->u._const.u.type->type]); break;
             }
             break;
         case TYPE_BOOL:
@@ -184,7 +184,7 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
             print(ctx, "<%.*s>", e->u._const.u.fn_name.len, e->u._const.u.fn_name.ptr);
             break;
         default:
-            print(ctx, "const:%s", type_names[e->u._const.type->type]);
+            print(ctx, "<const:%s>", type_names[e->u._const.type->type]);
             break;
         }
         break;
@@ -296,7 +296,7 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         break;
     }
     case EXPR_CALL: {
-        struct expr_call_arg *arg;
+        struct expr_link *arg;
         print_expr(ctx, e->u.call.fn_expr);
         print(ctx, "(");
         for (arg = e->u.call.args; arg; arg = arg->next) {

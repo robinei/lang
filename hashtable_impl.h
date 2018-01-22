@@ -62,6 +62,7 @@ static uint32_t hashutil_dist_to_start(uint32_t table_size, uint32_t hash, uint3
         return hash ? hash : 1;                                         \
     }                                                                   \
     int name##_find(struct name *table, key_type key, uint32_t *index_out) { \
+        assert(table->used <= table->size);                              \
         if (table->used == 0) {                                         \
             return 0;                                                   \
         }                                                               \
@@ -131,6 +132,7 @@ static uint32_t hashutil_dist_to_start(uint32_t table_size, uint32_t hash, uint3
         return 0;                                                       \
     }                                                                   \
     static void name##_resize(struct name *table, uint32_t new_size) {  \
+        assert(new_size > 0);                                           \
         uint32_t old_used = table->used;                                \
         uint32_t old_size = table->size;                                \
         struct name##_entry *old_entries = table->entries;              \
@@ -169,14 +171,14 @@ static uint32_t hashutil_dist_to_start(uint32_t table_size, uint32_t hash, uint3
     void name##_init(struct name *table, uint32_t initial_size) {       \
         table->used = 0;                                                \
         table->size = 0;                                                \
-        table->entries = 0;                                             \
+        table->entries = NULL;                                          \
         name##_resize(table, initial_size);                             \
     }                                                                   \
     void name##_free(struct name *table) {                              \
         free(table->entries);                                           \
         table->used = 0;                                                \
         table->size = 0;                                                \
-        table->entries = 0;                                             \
+        table->entries = NULL;                                          \
     }
 
 #endif

@@ -31,7 +31,8 @@ testExp = fn():
 testTypeExpr = fn():
     let
         getType = fn(i: Int) Type: if i == 0: Bool else Int;
-        test = fn(): let x: getType(1) = 123 in x
+        test = fn(): let x = 123 in x;
+        procType = fn(t: Type) Type: t
     in
         assert(test() == 123);
 
@@ -46,6 +47,11 @@ testLetOrder = fn():
         add3 = fn(n): n + 3
     in
         assert(x == 5);
+
+IntFn: Type = fn() Int;
+_testFnReturn = fn():
+    let getAdder = fn(n: Int) IntFn: fn: 99 + n
+    in assert(getAdder(700)() == 799);
 
 vec2 = struct x, y: Int end;
 
@@ -85,4 +91,6 @@ when = fn(cond, body: Expr) Expr:
 
 testWhenRaw = fn(): splice(when(quote(1 == 1), quote(assert(true))));
 
-testWhenWithSugar = fn(): when!(1 == 1, assert(true));
+testWhenWithSugar = fn(): when!(1 == 1,
+                            assert(true)
+                            when!(1 == 1, assert(true)));
