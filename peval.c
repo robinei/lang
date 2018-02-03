@@ -32,11 +32,19 @@ static slice_t make_fn_name(struct peval_ctx *ctx) {
 }
 
 
-static struct scope *new_scope(struct peval_ctx *ctx, enum scope_kind kind) {
+static void process_pending_functions(struct peval_ctx *ctx);
+
+static struct scope *set_new_scope_and_return_prev(struct peval_ctx *ctx, enum scope_kind kind) {
     struct scope *scope = calloc(1, sizeof(struct scope));
     scope->kind = kind;
-    if (kind == SCOPE_FUNCTION && ctx->scope) {
-        scope->function_depth = ctx->scope->function_depth + 1;
+    if (kind == SCOPE_FUNCTION) {
+        scope->nearest_function_scope = scope;
+    }
+    else if (ctx->scope) {
+        scope->nearest_function_scope = ctx->scope->nearest_function_scope;
+    }
+    if (ctx->scope) {
+        scope->depth = ctx->scope->depth + 1;
     }
     scope->outer_scope = ctx->scope;
     ctx->scope = scope;
@@ -112,21 +120,21 @@ static void check_type(struct peval_ctx *ctx, struct expr *e, struct expr *e_typ
 }
 
 static struct expr *peval_type(struct peval_ctx *ctx, struct expr *e) {
-    if (!e) {
-        return NULL;
+    if (!e || ctx->inhibit_call_expansion) {
+        return e;
     }
     
     ++ctx->force_full_expansion;
-    struct expr *e_new = peval(ctx, e);
+    struct expr *result = peval(ctx, e);
     --ctx->force_full_expansion;
 
-    if (e_new->expr != EXPR_CONST) {
-        PEVAL_ERR(e_new, "expected constant type expression");
+    if (result->expr != EXPR_CONST) {
+        PEVAL_ERR(result, "expected constant type expression");
     }
-    if (e_new->u._const.type->type != TYPE_TYPE) {
-        PEVAL_ERR(e_new, "expected type expression");
+    if (result->u._const.type->type != TYPE_TYPE) {
+        PEVAL_ERR(result, "expected type expression");
     }
-    return e_new;
+    return result;
 }
 
 static struct expr_decl *read_back_values_and_peval_types(struct peval_ctx *ctx, struct expr_decl *f) {
@@ -216,7 +224,7 @@ static uint hash_const_args(struct expr_decl *p, struct expr_link *a, uint hash)
 }
 
 static slice_t function_name_with_hashed_const_args(struct peval_ctx *ctx, struct function *func, struct expr_link *args) {
-    uint hash = hash_const_args(func->params, args, FNV_SEED);
+    uint hash = hash_const_args(func->fn_expr->u.fn.params, args, FNV_SEED);
     uint fn_name_capacity = func->name.len + 8;
     slice_t fn_name_new;
     fn_name_new.ptr = malloc(fn_name_capacity + 1);
@@ -229,7 +237,7 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
     struct expr e_new = *e;
     uint param_count = 0, const_count = 0;
     struct function *func = NULL;
-    slice_t fn_name;
+    struct expr *fn = NULL;
 
     assert(e->expr == EXPR_CALL);
 
@@ -237,23 +245,30 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
     e_new.u.call.args = peval_args(ctx, e->u.call.args, &const_count);
     int changed = name_expr != e->u.call.fn_expr || e_new.u.call.args != e->u.call.args;
 
-    if (name_expr->expr == EXPR_CONST) {
+    if (name_expr->expr == EXPR_CONST && name_expr->u._const.type->type != TYPE_DUMMY_FN) {
         if (name_expr->u._const.type->type != TYPE_FN) {
             PEVAL_ERR(name_expr, "expected a function");
         }
-        fn_name = name_expr->u._const.u.fn_name;
+        slice_t fn_name = name_expr->u._const.u.fn.name;
         func = lookup_func(ctx, fn_name);
-        param_count = decl_list_length(func->params);
+        fn = func->fn_expr;
+        param_count = decl_list_length(fn->u.fn.params);
     }
 
     if (func && (ctx->force_full_expansion || !ctx->inhibit_call_expansion) &&
         (const_count > 0 || const_count == param_count))
     {
-        struct scope *prev_scope = new_scope(ctx, SCOPE_FUNCTION);
+        struct scope *prev_scope = set_new_scope_and_return_prev(ctx, SCOPE_FUNCTION);
         ctx->scope->outer_scope = NULL;
         {
+            struct expr_decl *decl = name_expr->u._const.u.fn.captured_consts;
+            for (; decl; decl = decl->next) {
+                push_binding(ctx, decl->name, decl->value_expr);
+            }
+        }
+        {
             struct expr_link *a = e_new.u.call.args;
-            struct expr_decl *p = func->params;
+            struct expr_decl *p = fn->u.fn.params;
             for (; a; a = a->next, p = p->next) {
                 check_type(ctx, a->expr, p->type_expr);
                 push_binding(ctx, p->name, a->expr);
@@ -261,8 +276,8 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
         }
 
         if (const_count == param_count) {
-            e_new = *peval(ctx, func->body_expr);
-            check_type(ctx, &e_new, func->return_type_expr);
+            e_new = *peval(ctx, fn->u.fn.body_expr);
+            check_type(ctx, &e_new, fn->u.fn.return_type_expr);
         }
         else {
             slice_t fn_name_new = function_name_with_hashed_const_args(ctx, func, e_new.u.call.args);
@@ -271,19 +286,25 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
             if (!new_func) {
                 new_func = calloc(1, sizeof(struct function));
                 *new_func = *func;
-                new_func->params = strip_const_params(ctx, func->params, e_new.u.call.args);
+                new_func->name = fn_name_new;
+
+                struct expr *new_fn = expr_create(ctx, EXPR_FN, fn);
+                new_fn->u.fn.params = strip_const_params(ctx, fn->u.fn.params, e_new.u.call.args);
+                new_fn->u.fn.return_type_expr = peval(ctx, fn->u.fn.return_type_expr);
                 bind_func(ctx, fn_name_new, new_func);
-                new_func->body_expr = peval(ctx, func->body_expr);
+                new_fn->u.fn.body_expr = peval(ctx, fn->u.fn.body_expr);
+                new_func->fn_expr = new_fn;
             }
 
             struct expr *new_name_expr = expr_create(ctx, EXPR_CONST, name_expr);
             new_name_expr->u._const.type = &type_fn;
-            new_name_expr->u._const.u.fn_name = fn_name_new;
+            new_name_expr->u._const.u.fn.name = fn_name_new;
 
             e_new.u.call.fn_expr = new_name_expr;
             e_new.u.call.args = strip_const_args(ctx, e_new.u.call.args);
         }
 
+        process_pending_functions(ctx);
         ctx->scope = prev_scope;
         changed = 1;
     }
@@ -297,7 +318,7 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
 
 static void peval_binding(struct peval_ctx *ctx, struct binding *b) {
     assert(b);
-    if (!b->expr || b->expr->expr == EXPR_CONST) {
+    if (!b->expr || b->expr->expr == EXPR_CONST || b->pevaled) {
         return;
     }
 
@@ -306,6 +327,7 @@ static void peval_binding(struct peval_ctx *ctx, struct binding *b) {
     ctx->closest_name = b->name;
 
     b->expr = peval(ctx, b->expr);
+    b->pevaled = true;
 
     ctx->closest_name = prev_name;
     ctx->scope = prev_scope;
@@ -316,9 +338,11 @@ static uint peval_scope_bindings_returning_const_count(struct peval_ctx *ctx) {
     struct scope *scope = ctx->scope;
     for (uint i = 0; i < scope->num_bindings; ++i) {
         struct binding *b = scope->bindings + i;
-        peval_binding(ctx, b);
-        if (b->expr && b->expr->expr == EXPR_CONST) {
-            ++const_count;
+        if (b->expr) {
+            peval_binding(ctx, b);
+            if (b->expr->expr == EXPR_CONST) {
+                ++const_count;
+            }
         }
     }
     return const_count;
@@ -347,52 +371,98 @@ static struct expr *peval_sym(struct peval_ctx *ctx, struct expr *e) {
         PEVAL_ERR(b->expr, "could not fully evaluate expected static expression");
     }
 
-    if (b->scope->function_depth < ctx->scope->function_depth) {
-        ++ctx->closed_var_count;
+    struct scope *fn_scope = ctx->scope->nearest_function_scope;
+    assert(fn_scope);
+    if (b->scope->depth < fn_scope->depth) {
+        e->u.sym.next = fn_scope->closure_syms;
+        fn_scope->closure_syms = e;
     }
 
     return e;
 }
 
-static void peval_func(struct peval_ctx *ctx, struct function *func) {
-    struct scope *prev_scope = new_scope(ctx, SCOPE_FUNCTION);
-    uint prev_closed_var_count = ctx->closed_var_count;
-    ctx->closed_var_count = 0;
+static void process_pending_function(struct peval_ctx *ctx, struct expr *fn, struct function *func) {
+    assert(fn->expr == EXPR_FN);
+    struct scope *prev_scope = set_new_scope_and_return_prev(ctx, SCOPE_FUNCTION);
 
-    push_decls_returning_count(ctx, func->params);
-    func->params = read_back_values_and_peval_types(ctx, func->params);
-    func->return_type_expr = peval_type(ctx, func->return_type_expr);
-    ++ctx->inhibit_call_expansion;
-    func->body_expr = peval(ctx, func->body_expr);
-    --ctx->inhibit_call_expansion;
+    push_decls_returning_count(ctx, fn->u.fn.params);
 
-    uint closed_var_count = ctx->closed_var_count;
-    ctx->closed_var_count = prev_closed_var_count;
-    ctx->scope = prev_scope;
-    printf("closed_var_count: %d\n", closed_var_count);
-}
+    slice_t prev_name;
+    if (func) {
+        prev_name = ctx->closest_name;
+        ctx->closest_name = func->name;
+    }
 
-static void begin_delay_peval_func(struct peval_ctx *ctx) {
-    assert(!ctx->scope->delay_peval_func);
-    ctx->scope->delay_peval_func = true;
-}
+    struct expr new_fn = *fn;
+    new_fn.u.fn.params = read_back_values_and_peval_types(ctx, fn->u.fn.params);
+    new_fn.u.fn.return_type_expr = peval_type(ctx, fn->u.fn.return_type_expr);
+    new_fn.u.fn.body_expr = peval(ctx, fn->u.fn.body_expr);
 
-static void end_delay_peval_func(struct peval_ctx *ctx) {
+    if (func) {
+        ctx->closest_name = prev_name;
+        func->fn_expr = dup_expr(ctx, &new_fn, fn);
+        func->free_var_syms = NULL;
+    }
+
     struct scope *scope = ctx->scope;
-    assert(scope->delay_peval_func);
-    scope->delay_peval_func = false;
+    struct scope *outer_scope = scope->outer_scope;
+    struct scope *outer_fn_scope = outer_scope ? outer_scope->nearest_function_scope : NULL;
 
-    struct function *func = scope->delayed_funcs;
-    scope->delayed_funcs = NULL;
-    while (func) {
-        peval_func(ctx, func);
-        struct function *next = func->next;
-        func->next = NULL;
-        func = next;
+    process_pending_functions(ctx);
+
+    struct expr *sym = scope->closure_syms;
+    while (sym) {
+        assert(sym->expr == EXPR_SYM);
+        struct expr *next = sym->u.sym.next;
+        struct binding *b = lookup_binding(ctx, sym->u.sym.name);
+        assert(b);
+
+        if (func) {
+            struct expr *new_sym = dup_expr(ctx, sym, sym);
+            new_sym->u.sym.next = func->free_var_syms;
+            func->free_var_syms = new_sym;
+        }
+
+        if (outer_fn_scope && b->scope->depth < outer_fn_scope->depth) {
+            sym->u.sym.next = outer_fn_scope->closure_syms;
+            outer_fn_scope->closure_syms = sym;
+        }
+        else {
+            sym->u.sym.next = NULL;
+        }
+
+        sym = next;
+    }
+
+    fn->is_closure_fn = !!scope->closure_syms;
+    scope->closure_syms = NULL;
+    ctx->scope = prev_scope;
+}
+
+static void process_pending_functions(struct peval_ctx *ctx) {
+    if (ctx->identify_closures) {
+        assert(!ctx->scope->pending_functions);
+        struct expr *dummy_fn = ctx->scope->pending_dummy_fns;
+        while (dummy_fn) {
+            assert(dummy_fn->expr == EXPR_CONST);
+            assert(dummy_fn->u._const.type->type == TYPE_DUMMY_FN);
+            process_pending_function(ctx, dummy_fn->u._const.u.dummy_fn.expr, NULL);
+            dummy_fn = dummy_fn->u._const.u.dummy_fn.next;
+        }
+    }
+    else {
+        assert(!ctx->scope->pending_dummy_fns);
+        struct function *func = ctx->scope->pending_functions;
+        while (func) {
+            process_pending_function(ctx, func->fn_expr, func);
+            func = func->next;
+        }
     }
 }
 
 struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
+    assert(ctx);
+    assert(ctx->scope);
     if (!e) {
         return NULL;
     }
@@ -400,19 +470,20 @@ struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
     struct expr *result = e;
 
     switch (e->expr) {
+    case EXPR_CONST:
+        break;
     case EXPR_SYM:
         return peval_sym(ctx, e);
     case EXPR_STRUCT: {
         struct expr e_new = *e;
 
-        struct scope *prev_scope = new_scope(ctx, SCOPE_STATIC);
-        begin_delay_peval_func(ctx);
+        struct scope *prev_scope = set_new_scope_and_return_prev(ctx, SCOPE_STATIC);
 
         push_decls_returning_count(ctx, e->u._struct.fields);
         peval_scope_bindings_returning_const_count(ctx);
         e_new.u._struct.fields = read_back_values_and_peval_types(ctx, e->u._struct.fields);
 
-        end_delay_peval_func(ctx);
+        process_pending_functions(ctx);
         ctx->scope = prev_scope;
 
         if (e_new.u._struct.fields != e->u._struct.fields) {
@@ -421,32 +492,74 @@ struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
         break;
     }
     case EXPR_FN: {
-        if (e->u.fn.body_expr) {
-            struct function *func = calloc(1, sizeof(struct function));
-            func->name = make_fn_name(ctx);
-            func->fn_expr = e;
-            func->params = e->u.fn.params;
-            func->return_type_expr = e->u.fn.return_type_expr;
-            func->body_expr = e->u.fn.body_expr;
-
-            bind_func(ctx, func->name, func);
-
-            if (!ctx->scope->delay_peval_func) {
-                peval_func(ctx, func);
-            }
-            else {
-                func->next = ctx->scope->delayed_funcs;
-                ctx->scope->delayed_funcs = func;
-            }
-
-            result = expr_create(ctx, EXPR_CONST, e);
-            result->u._const.type = &type_fn;
-            result->u._const.u.fn_name = func->name;
-        }
-        else {
+        if (!e->u.fn.body_expr) {
+            /* this is a function type expression */
             result = expr_create(ctx, EXPR_CONST, e);
             result->u._const.type = &type_type;
             result->u._const.u.type = &type_fn;
+            break;
+        }
+
+        if (ctx->identify_closures) {
+            /* assume all functions are have zero free variables and return them as dummy constants.
+               later when identify_closures is false, functions which still have free
+               variables will be "demoted" from a function constant to a closure constructor.
+               that may in turn affect others which referenced that function, and so on */
+            result = expr_create(ctx, EXPR_CONST, e);
+            result->u._const.type = &type_dummy_fn;
+            result->u._const.u.dummy_fn.expr = e;
+            result->u._const.u.dummy_fn.next = ctx->scope->pending_dummy_fns;
+            ctx->scope->pending_dummy_fns = result;
+            break;
+        }
+
+        struct function *func = calloc(1, sizeof(struct function));
+        func->name = make_fn_name(ctx);
+        func->fn_expr = e;
+        func->next = ctx->scope->pending_functions;
+        ctx->scope->pending_functions = func;
+        bind_func(ctx, func->name, func);
+
+        if (!e->is_closure_fn) {
+            /* the identify stage determined that this wasn't a closure, so return a constant function */
+            result = expr_create(ctx, EXPR_CONST, e);
+            result->u._const.type = &type_fn;
+            result->u._const.u.fn.name = func->name;
+        }
+        else {
+            /* return a closure constructor */
+            result = expr_create(ctx, EXPR_CAP, e);
+            result->u.cap.fn_name = func->name;
+        }
+        break;
+    }
+    case EXPR_CAP: {
+        struct function *func = lookup_func(ctx, e->u.cap.fn_name);
+        assert(func);
+
+        struct expr_decl *captured_consts = NULL;
+        struct expr *sym = func->free_var_syms;
+        while (sym) {
+            struct expr *temp = peval_sym(ctx, sym);
+            if (temp->expr == EXPR_CONST) {
+                struct expr_decl *decl = calloc(1, sizeof(struct expr_decl));
+                decl->name = sym->u.sym.name;
+                decl->value_expr = temp;
+                decl->next = captured_consts;
+                captured_consts = decl;
+            }
+            else {
+                captured_consts = NULL;
+                break;
+            }
+            sym = sym->u.sym.next;
+        }
+
+        if (captured_consts) {
+            result = expr_create(ctx, EXPR_CONST, e);
+            result->u._const.type = &type_fn;
+            result->u._const.u.fn.name = func->name;
+            result->u._const.u.fn.captured_consts = captured_consts;
         }
         break;
     }
@@ -454,13 +567,14 @@ struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
         struct expr e_new = *e;
         int changed = 0;
 
-        struct scope *prev_scope = new_scope(ctx, SCOPE_LOCAL);
-        begin_delay_peval_func(ctx);
+        struct scope *prev_scope = set_new_scope_and_return_prev(ctx, SCOPE_LOCAL);
 
         uint total_count = push_decls_returning_count(ctx, e->u.let.bindings);
         uint const_count = peval_scope_bindings_returning_const_count(ctx);
         e_new.u.let.bindings = read_back_values_and_peval_types(ctx, e->u.let.bindings);
         changed = changed || e_new.u.let.bindings != e->u.let.bindings;
+
+        process_pending_functions(ctx);
 
         if (const_count == total_count) {
             e_new = *peval(ctx, e->u.let.body_expr);
@@ -471,7 +585,6 @@ struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
             changed = changed || e_new.u.let.body_expr != e->u.let.body_expr;
         }
 
-        end_delay_peval_func(ctx);
         ctx->scope = prev_scope;
 
         if (changed) {
@@ -542,7 +655,7 @@ void peval_ctx_init(struct peval_ctx *ctx, struct module_ctx *mod_ctx, struct er
     ctx->closest_name.ptr = "root";
     ctx->closest_name.len = 4;
 
-    new_scope(ctx, SCOPE_STATIC);
+    set_new_scope_and_return_prev(ctx, SCOPE_STATIC);
     bind_type(ctx, "Expr", &type_expr);
     bind_type(ctx, "Type", &type_type);
     bind_type(ctx, "Unit", &type_unit);

@@ -167,6 +167,8 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
             case TYPE_UNIT: print(ctx, "<Unit>"); break;
             case TYPE_BOOL: print(ctx, "<Bool>"); break;
             case TYPE_INT: print(ctx, "<Int>"); break;
+            case TYPE_FN: print(ctx, "<Fn>"); break;
+            case TYPE_STRUCT: print(ctx, "<Struct>"); break;
             default:
                 print(ctx, "<type:%s>", type_names[e->u._const.u.type->type]); break;
             }
@@ -180,8 +182,11 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         case TYPE_INT:
             print(ctx, "%d", e->u._const.u._int);
             break;
+        case TYPE_DUMMY_FN:
+            print(ctx, "<dummy_fn:%p>", e);
+            break;
         case TYPE_FN:
-            print(ctx, "<%.*s>", e->u._const.u.fn_name.len, e->u._const.u.fn_name.ptr);
+            print(ctx, "<fn:%.*s>", e->u._const.u.fn.name.len, e->u._const.u.fn.name.ptr);
             break;
         default:
             print(ctx, "<const:%s>", type_names[e->u._const.type->type]);
@@ -213,6 +218,9 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         print_expr(ctx, e->u.fn.body_expr);
         break;
     }
+    case EXPR_CAP:
+        print(ctx, "<cap:%.*s>", e->u.cap.fn_name.len, e->u.cap.fn_name.ptr);
+        break;
     case EXPR_LET: {
         struct expr_decl *b;
         print(ctx, "let ");

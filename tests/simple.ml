@@ -49,10 +49,14 @@ testLetOrder = fn():
         assert(x == 5);
 
 IntFn: Type = fn() Int;
-_testFnReturn = fn():
+testFnReturn = fn():
     let getAdder = fn(n: Int) IntFn: fn: 99 + n
-    in assert(getAdder(700)() == 799);
+    in  assert(getAdder(700)() == 799)
+        assert(getAdder(1)() == 100);
 
+testFnReturn2 = fn:
+    assert((fn(x): fn(y): fn(z): x * y + z)(100)(2)(3) == 203);
+        
 vec2 = struct x, y: Int end;
 
 testOps = fn():

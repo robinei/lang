@@ -20,19 +20,23 @@ struct binding {
     struct expr *expr;
     struct scope *scope;
     uint name_hash;
+    bool pevaled;
 };
 
 struct scope {
+    struct expr *pending_dummy_fns;
+    struct function *pending_functions;
+    struct expr *closure_syms;
+
     struct scope *outer_scope;
-    enum scope_kind kind;
-    uint function_depth;
+    struct scope *nearest_function_scope;
 
-    bool delay_peval_func;
-    struct function *delayed_funcs;
-
+    struct binding *bindings;
     uint num_bindings;
     uint max_bindings;
-    struct binding *bindings;
+
+    uint depth;
+    enum scope_kind kind;
 };
 
 

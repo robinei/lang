@@ -6,12 +6,9 @@
 
 struct function {
     slice_t name;
+    struct expr *fn_expr;
+    struct expr *free_var_syms;
     struct function *next;
-
-    struct expr *fn_expr; /* original expr */
-    struct expr_decl *params;
-    struct expr *return_type_expr;
-    struct expr *body_expr;
 };
 
 struct module_ctx {

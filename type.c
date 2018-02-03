@@ -6,6 +6,7 @@ struct type type_unit = { TYPE_UNIT };
 struct type type_bool = { TYPE_BOOL };
 struct type type_int = { TYPE_INT };
 struct type type_fn = { TYPE_FN };
+struct type type_dummy_fn = { TYPE_DUMMY_FN };
 
 #define DECL_TYPE_NAME(name) #name,
 const char *type_names[] = {

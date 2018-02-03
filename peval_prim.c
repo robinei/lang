@@ -166,6 +166,9 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
         break;
 
     case PRIM_SPLICE:
+        if (ctx->identify_closures) {
+            break;
+        }
         ++ctx->force_full_expansion;
         PEVAL_ARG(0);
         --ctx->force_full_expansion;

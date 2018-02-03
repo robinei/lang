@@ -31,6 +31,24 @@ static char *read_file(const char *filename) {
     return str;
 }
 
+static void peval_module(struct peval_ctx *ctx, struct module_ctx *mod) {
+    ctx->inhibit_call_expansion = true;
+
+    ctx->identify_closures = true;
+    struct expr *temp_struct = peval(ctx, mod->struct_expr);
+    ctx->identify_closures = false;
+    
+    while (true) {
+        temp_struct = peval(ctx, mod->struct_expr);
+        if (temp_struct == mod->struct_expr) {
+            break;
+        }
+        mod->struct_expr = temp_struct;
+    }
+    
+    ctx->inhibit_call_expansion = false;
+}
+
 static void run_tests(char *filename) {
     struct error_ctx err_ctx;
     struct module_ctx mod_ctx;
@@ -62,7 +80,8 @@ static void run_tests(char *filename) {
         print_errors(&err_ctx);
         return;
     }
-    mod_ctx.struct_expr = peval(&peval_ctx, mod_ctx.struct_expr);
+
+    peval_module(&peval_ctx, &mod_ctx);
 
     printf("running tests...\n");
 
@@ -72,7 +91,9 @@ static void run_tests(char *filename) {
         struct expr *e = decls->value_expr;
         struct function *func;
         slice_t fn_name;
-        struct expr call_expr = { EXPR_CALL };
+        struct expr call_expr;
+        memset(&call_expr, 0, sizeof(call_expr));
+        call_expr.expr = EXPR_CALL;
 
         if (!e) {
             continue;
@@ -83,14 +104,14 @@ static void run_tests(char *filename) {
         if (e->u._const.type->type != TYPE_FN) {
             continue;
         }
-        fn_name = e->u._const.u.fn_name;
+        fn_name = e->u._const.u.fn.name;
         if (fn_name.len < 4 || memcmp(fn_name.ptr, "test", 4)) {
             continue;
         }
         if (!slice_table_get(&mod_ctx.functions, fn_name, (void **)&func)) {
             continue;
         }
-        if (func->params) {
+        if (func->fn_expr->u.fn.params) {
             continue;
         }
         call_expr.u.call.fn_expr = e;
@@ -98,7 +119,7 @@ static void run_tests(char *filename) {
         fflush(stdout);
 
         struct print_ctx print_ctx = { 0, };
-        print_expr(&print_ctx, func->body_expr);
+        print_expr(&print_ctx, func->fn_expr);
         printf("\n\n");
 
         if (setjmp(peval_ctx.error_jmp_buf)) {
