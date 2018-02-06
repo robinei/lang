@@ -168,7 +168,7 @@ static struct expr *parse_fn(struct parse_ctx *ctx) {
     struct expr_decl *params = NULL, *p;
     slice_t first_token = ctx->token_text;
 
-    assert(ctx->token == TOK_KW_FN);
+    assert(ctx->token == TOK_KW_FUN);
     NEXT_TOKEN();
 
     if (ctx->token == TOK_LPAREN) {
@@ -518,7 +518,7 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
     case TOK_DEC: return parse_int(ctx, 0, 10);
     case TOK_HEX: return parse_int(ctx, 2, 16);
     case TOK_KW_STRUCT: return parse_struct(ctx);
-    case TOK_KW_FN: return parse_fn(ctx);
+    case TOK_KW_FUN: return parse_fn(ctx);
     case TOK_KW_LET: return parse_let(ctx);
     case TOK_KW_IF: return parse_if(ctx, 0);
     case TOK_KW_WHILE: return parse_while(ctx);

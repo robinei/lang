@@ -71,7 +71,7 @@ next_token_start:;
     "module"    { TOK(KW_MODULE); }
     "import"    { TOK(KW_IMPORT); }
     "struct"    { TOK(KW_STRUCT); }
-    "fn"    { TOK(KW_FN); }
+    "fun"    { TOK(KW_FUN); }
     "let"   { TOK(KW_LET); }
     "in"    { TOK(KW_IN); }
     "if"    { TOK(KW_IF); }

@@ -38,7 +38,7 @@
     X(KW_MODULE) \
     X(KW_IMPORT) \
     X(KW_STRUCT) \
-    X(KW_FN) \
+    X(KW_FUN) \
     X(KW_LET) \
     X(KW_IN) \
     X(KW_IF) \
@@ -59,9 +59,7 @@
     X(HEX)
 
 #define DECL_TOK_ENUM(Tok) TOK_##Tok,
-enum {
-    FOR_ALL_TOKENS(DECL_TOK_ENUM)
-};
+enum { FOR_ALL_TOKENS(DECL_TOK_ENUM) };
 #undef DECL_TOK_ENUM
 
 extern const char *token_strings[];

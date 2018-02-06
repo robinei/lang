@@ -1,65 +1,65 @@
 // simple tests.
 
-testAssert = fn(): assert(true);
+testAssert = fun(): assert(true);
 
-testShortCircuit = fn():
+testShortCircuit = fun():
     assert(!(false && assert(false)))
     assert(true || assert(false));
 
-testOnlyOneIfBranchEvaled = fn():
+testOnlyOneIfBranchEvaled = fun():
     if true: () else assert(false) end
     if false: assert(false) else ();
 
-testSeq = fn(): assert(1 2 3 == 3);
+testSeq = fun(): assert(1 2 3 == 3);
 
-testUnit = fn(): let x: Unit = () in assert(x == ());
+testUnit = fun(): let x: Unit = () in assert(x == ());
 
-testMutual = fn():
+testMutual = fun():
     let
-        even = fn(n: Int) Bool: if n == 0: true else odd(n - 1);
-        odd = fn(n: Int) Bool: if n == 0: false else even(n - 1)
+        even = fun(n: Int) Bool: if n == 0: true else odd(n - 1);
+        odd = fun(n: Int) Bool: if n == 0: false else even(n - 1)
     in
         assert(even(2))
         assert(!even(5));
 
-exp = fn(x, n: Int) Int: if n == 0: 1 else x * exp(x, n - 1);
-pow2 = fn(n: Int) Int: exp(2, n);
-testExp = fn():
+exp = fun(x, n: Int) Int: if n == 0: 1 else x * exp(x, n - 1);
+pow2 = fun(n: Int) Int: exp(2, n);
+testExp = fun():
     assert(pow2(3) == 8)
     assert(exp(3, 3) == 27);
 
-testTypeExpr = fn():
+testTypeExpr = fun():
     let
-        getType = fn(i: Int) Type: if i == 0: Bool else Int;
-        test = fn(): let x = 123 in x;
-        procType = fn(t: Type) Type: t
+        getType = fun(i: Int) Type: if i == 0: Bool else Int;
+        test = fun(): let x: procType(getType(1)) = 123 in x;
+        procType = fun(t: Type) Type: t
     in
         assert(test() == 123);
 
-fibHelp = fn(a, b, n: Int) Int: if n == 0: a else fibHelp(b, a+b, n-1);
-fib = fn(n: Int) Int: fibHelp(0, 1, n);
-testFib = fn():
+fibHelp = fun(a, b, n: Int) Int: if n == 0: a else fibHelp(b, a+b, n-1);
+fib = fun(n: Int) Int: fibHelp(0, 1, n);
+testFib = fun():
     assert(fib(6) == 8);
 
-testLetOrder = fn():
+testLetOrder = fun():
     let
         x = add3(2);
-        add3 = fn(n): n + 3
+        add3 = fun(n): n + 3
     in
         assert(x == 5);
 
-IntFn: Type = fn() Int;
-testFnReturn = fn():
-    let getAdder = fn(n: Int) IntFn: fn: 99 + n
+IntFun: Type = fun() Int;
+testFunReturn = fun():
+    let getAdder = fun(n: Int) IntFun: fun: 99 + n
     in  assert(getAdder(700)() == 799)
         assert(getAdder(1)() == 100);
 
-testFnReturn2 = fn:
-    assert((fn(x): fn(y): fn(z): x * y + z)(100)(2)(3) == 203);
+testFnReturn2 = fun:
+    assert((fun(x): fun(y): fun(z): x * y + z)(100)(2)(3) == 203);
         
 vec2 = struct x, y: Int end;
 
-testOps = fn():
+testOps = fun():
     assert(1 == 1)
     assert(1 != 2)
     assert(1 < 2)
@@ -90,11 +90,11 @@ testOps = fn():
 
 
 
-when = fn(cond, body: Expr) Expr:
+when = fun(cond, body: Expr) Expr:
     quote(if splice(cond): splice(body) else ());
 
-testWhenRaw = fn(): splice(when(quote(1 == 1), quote(assert(true))));
+testWhenRaw = fun(): splice(when(quote(1 == 1), quote(assert(true))));
 
-testWhenWithSugar = fn(): when!(1 == 1,
+testWhenWithSugar = fun(): when!(1 == 1,
                             assert(true)
                             when!(1 == 1, assert(true)));
