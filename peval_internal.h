@@ -9,37 +9,6 @@
     } while(0)
 
 
-enum scope_kind {
-    SCOPE_STATIC,
-    SCOPE_FUNCTION,
-    SCOPE_LOCAL
-};
-
-struct binding {
-    slice_t name;
-    struct expr *expr;
-    struct scope *scope;
-    uint name_hash;
-    bool pevaled;
-};
-
-struct scope {
-    struct expr *pending_dummy_fns;
-    struct function *pending_functions;
-    struct expr *closure_syms;
-
-    struct scope *outer_scope;
-    struct scope *nearest_function_scope;
-
-    struct binding *bindings;
-    uint num_bindings;
-    uint max_bindings;
-
-    uint depth;
-    enum scope_kind kind;
-};
-
-
 static struct expr *expr_create(struct peval_ctx *ctx, uint expr_type, struct expr *antecedent) {
     struct expr *e = calloc(1, sizeof(struct expr));
     e->expr = expr_type;

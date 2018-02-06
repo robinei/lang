@@ -37,14 +37,8 @@ static void peval_module(struct peval_ctx *ctx, struct module_ctx *mod) {
     ctx->identify_closures = true;
     struct expr *temp_struct = peval(ctx, mod->struct_expr);
     ctx->identify_closures = false;
-    
-    while (true) {
-        temp_struct = peval(ctx, mod->struct_expr);
-        if (temp_struct == mod->struct_expr) {
-            break;
-        }
-        mod->struct_expr = temp_struct;
-    }
+
+    mod->struct_expr = peval(ctx, mod->struct_expr);
     
     ctx->inhibit_call_expansion = false;
 }
