@@ -190,6 +190,16 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
         }
         break;
 
+    case PRIM_STATIC:
+        if (ctx->identify_closures) {
+            PEVAL_ARG(0);
+            break;
+        }
+        ++ctx->force_full_expansion;
+        PEVAL_ARG(0);
+        --ctx->force_full_expansion;
+        return ARG(0);
+
     default:
         PEVAL_ERR(e, "invalid primitive");
     }

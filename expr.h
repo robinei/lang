@@ -32,7 +32,8 @@
     X(ASSERT) \
     X(QUOTE) \
     X(SPLICE) \
-    X(PRINT)
+    X(PRINT) \
+    X(STATIC)
 
 #define DECL_PRIM_ENUM(name) PRIM_##name,
 enum prim_kind { FOR_ALL_PRIMS(DECL_PRIM_ENUM) };

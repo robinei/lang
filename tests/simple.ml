@@ -98,3 +98,5 @@ testWhenRaw = fun(): splice(when(quote(1 == 1), quote(assert(true))));
 testWhenWithSugar = fun(): when!(1 == 1,
                             assert(true)
                             when!(1 == 1, assert(true)));
+
+testStatic = fun(): let x = static(pow2(5)) in assert(x == 32);

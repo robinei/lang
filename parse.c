@@ -522,6 +522,7 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
     case TOK_KW_LET: return parse_let(ctx);
     case TOK_KW_IF: return parse_if(ctx, 0);
     case TOK_KW_WHILE: return parse_while(ctx);
+    case TOK_KW_STATIC: return parse_single_arg_prim(ctx, PRIM_STATIC);
     default:
         PARSE_ERR("unexpected token in expression");
     }

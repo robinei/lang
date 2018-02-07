@@ -266,6 +266,11 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
         return changed ? dup_expr(ctx, &e_new, e) : e;
     }
 
+    uint arg_count = expr_list_length(e_new.u.call.args);
+    if (arg_count != param_count) {
+        PEVAL_ERR(e, "function expected %u arguments; %d were provided", param_count, arg_count);
+    }
+
     BEGIN_SCOPE(SCOPE_FUNCTION);
     ctx->scope->outer_scope = NULL;
     {
@@ -318,7 +323,6 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
     return dup_expr(ctx, &e_new, e);
 }
 
-
 static void peval_binding(struct peval_ctx *ctx, struct binding *b) {
     assert(b);
     if (!b->expr || b->expr->expr == EXPR_CONST || b->pevaled) {
@@ -330,8 +334,10 @@ static void peval_binding(struct peval_ctx *ctx, struct binding *b) {
     slice_t prev_name = ctx->closest_name;
     ctx->closest_name = b->name;
 
-    b->expr = peval(ctx, b->expr);
     b->pevaled = true;
+    b->expr = peval(ctx, b->expr);
+
+    process_pending_functions(ctx);
 
     ctx->closest_name = prev_name;
     ctx->scope = prev_scope;
@@ -474,7 +480,6 @@ static struct expr *peval_struct(struct peval_ctx *ctx, struct expr *e) {
     peval_scope_bindings_returning_const_count(ctx);
     e_new.u._struct.fields = read_back_values_and_peval_types(ctx, e->u._struct.fields);
 
-    process_pending_functions(ctx);
     END_SCOPE();
 
     if (e_new.u._struct.fields != e->u._struct.fields) {
@@ -493,8 +498,6 @@ static struct expr *peval_let(struct peval_ctx *ctx, struct expr *e) {
     uint const_count = peval_scope_bindings_returning_const_count(ctx);
     e_new.u.let.bindings = read_back_values_and_peval_types(ctx, e->u.let.bindings);
     changed = changed || e_new.u.let.bindings != e->u.let.bindings;
-
-    process_pending_functions(ctx);
 
     if (const_count == ctx->scope->num_bindings) {
         e_new = *peval(ctx, e->u.let.body_expr);
