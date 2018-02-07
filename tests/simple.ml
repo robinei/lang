@@ -100,3 +100,5 @@ testWhenWithSugar = fun(): when!(1 == 1,
                             when!(1 == 1, assert(true)));
 
 testStatic = fun(): let x = static(pow2(5)) in assert(x == 32);
+
+testStatic2 = fun: let x = static((fun(x): x + 100)(3)) in assert(x == 103);

@@ -30,9 +30,9 @@ static struct function *lookup_func(struct peval_ctx *ctx, slice_t name) {
         _scope.stack_bindings = true; \
         _scope.kind = Kind; \
         if (Kind == SCOPE_FUNCTION) { _scope.nearest_function_scope = &_scope; } \
-        else if (ctx->scope) { _scope.nearest_function_scope = ctx->scope->nearest_function_scope; } \
-        if (ctx->scope) { _scope.depth = ctx->scope->depth + 1; } \
-        _scope.outer_scope = ctx->scope; \
+        else if (_prev_scope) { _scope.nearest_function_scope = _prev_scope->nearest_function_scope; } \
+        if (_prev_scope) { _scope.depth = _prev_scope->depth + 1; } \
+        _scope.outer_scope = _prev_scope; \
         ctx->scope = &_scope;
 
 #define END_SCOPE() \
@@ -373,6 +373,7 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
 
     BEGIN_SCOPE(SCOPE_FUNCTION);
     ctx->scope->outer_scope = NULL;
+    ctx->scope->depth = 0;
     {
         struct expr_decl *decl = callable_expr->u._const.u.fun.captured_consts;
         for (; decl; decl = decl->next) {
