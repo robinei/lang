@@ -163,7 +163,7 @@ struct expr *parse_struct(struct parse_ctx *ctx) {
     return result;
 }
 
-static struct expr *parse_fn(struct parse_ctx *ctx) {
+static struct expr *parse_fun(struct parse_ctx *ctx) {
     struct expr *result, *return_type_expr = NULL, *body_expr = NULL;
     struct expr_decl *params = NULL, *p;
     slice_t first_token = ctx->token_text;
@@ -209,10 +209,10 @@ static struct expr *parse_fn(struct parse_ctx *ctx) {
         }
     }
 
-    result = expr_create(ctx, EXPR_FN, slice_span(first_token, ctx->prev_token_text));
-    result->u.fn.params = params;
-    result->u.fn.return_type_expr = return_type_expr;
-    result->u.fn.body_expr = body_expr;
+    result = expr_create(ctx, EXPR_FUN, slice_span(first_token, ctx->prev_token_text));
+    result->u.fun.params = params;
+    result->u.fun.return_type_expr = return_type_expr;
+    result->u.fun.body_expr = body_expr;
     return result;
 }
 
@@ -332,7 +332,7 @@ static struct expr_link *parse_args(struct parse_ctx *ctx) {
     return a;
 }
 
-static struct expr *parse_call(struct parse_ctx *ctx, struct expr *fn_expr) {
+static struct expr *parse_call(struct parse_ctx *ctx, struct expr *callable_expr) {
     struct expr *result;
     struct expr_link *args;
 
@@ -341,8 +341,8 @@ static struct expr *parse_call(struct parse_ctx *ctx, struct expr *fn_expr) {
 
     args = parse_args(ctx);
 
-    result = expr_create(ctx, EXPR_CALL, slice_span(fn_expr->source_text, ctx->prev_token_text));
-    result->u.call.fn_expr = fn_expr;
+    result = expr_create(ctx, EXPR_CALL, slice_span(callable_expr->source_text, ctx->prev_token_text));
+    result->u.call.callable_expr = callable_expr;
     result->u.call.args = args;
     return result;
 }
@@ -518,7 +518,7 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
     case TOK_DEC: return parse_int(ctx, 0, 10);
     case TOK_HEX: return parse_int(ctx, 2, 16);
     case TOK_KW_STRUCT: return parse_struct(ctx);
-    case TOK_KW_FUN: return parse_fn(ctx);
+    case TOK_KW_FUN: return parse_fun(ctx);
     case TOK_KW_LET: return parse_let(ctx);
     case TOK_KW_IF: return parse_if(ctx, 0);
     case TOK_KW_WHILE: return parse_while(ctx);

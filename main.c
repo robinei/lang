@@ -84,7 +84,6 @@ static void run_tests(char *filename) {
     for (; decls; decls = decls->next) {
         struct expr *e = decls->value_expr;
         struct function *func;
-        slice_t fn_name;
         struct expr call_expr;
         memset(&call_expr, 0, sizeof(call_expr));
         call_expr.expr = EXPR_CALL;
@@ -95,25 +94,22 @@ static void run_tests(char *filename) {
         if (e->expr != EXPR_CONST) {
             continue;
         }
-        if (e->u._const.type->type != TYPE_FN) {
+        if (e->u._const.type->type != TYPE_FUN) {
             continue;
         }
-        fn_name = e->u._const.u.fn.name;
-        if (fn_name.len < 4 || memcmp(fn_name.ptr, "test", 4)) {
+        func = e->u._const.u.fun.func;
+        if (func->name.len < 4 || memcmp(func->name.ptr, "test", 4)) {
             continue;
         }
-        if (!slice_table_get(&mod_ctx.functions, fn_name, (void **)&func)) {
+        if (func->fun_expr->u.fun.params) {
             continue;
         }
-        if (func->fn_expr->u.fn.params) {
-            continue;
-        }
-        call_expr.u.call.fn_expr = e;
-        printf("running test function: %.*s\n", fn_name.len, fn_name.ptr);
+        call_expr.u.call.callable_expr = e;
+        printf("running test function: %.*s\n", func->name.len, func->name.ptr);
         fflush(stdout);
 
         struct print_ctx print_ctx = { 0, };
-        print_expr(&print_ctx, func->fn_expr);
+        print_expr(&print_ctx, func->fun_expr);
         printf("\n\n");
 
         if (setjmp(peval_ctx.error_jmp_buf)) {

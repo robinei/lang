@@ -10,8 +10,8 @@
     X(UNIT) \
     X(BOOL) \
     X(INT) \
-    X(FN) \
-    X(DUMMY_FN) \
+    X(FUN) \
+    X(DUMMY_FUN) \
     X(STRUCT)
 
 #define DECL_TYPE_ENUM(name) TYPE_##name,
@@ -22,15 +22,15 @@ enum type_enum {
 
 extern const char *type_names[];
 
-struct type_fn {
+struct type_fun {
     uint param_count;
-    struct type_fn_param *params;
+    struct type_fun_param *params;
     struct type *return_type;
 };
-struct type_fn_param {
+struct type_fun_param {
     slice_t name;
     struct type *type;
-    struct type_fn_param *next;
+    struct type_fun_param *next;
 };
 
 struct type_struct {
@@ -46,7 +46,7 @@ struct type_struct_field {
 struct type {
     enum type_enum type;
     union {
-        struct type_fn fn;
+        struct type_fun fun;
         struct type_struct _struct;
     } u;
 };
@@ -56,7 +56,7 @@ extern struct type type_type;
 extern struct type type_unit;
 extern struct type type_bool;
 extern struct type type_int;
-extern struct type type_fn; /* TODO: replace with fn types actually having structure, and which are different */
-extern struct type type_dummy_fn;
+extern struct type type_fun; /* TODO: replace with fun types actually having structure, and which are different */
+extern struct type type_dummy_fun;
 
 #endif

@@ -6,7 +6,7 @@
 
 struct function {
     slice_t name;
-    struct expr *fn_expr;
+    struct expr *fun_expr;
     struct expr *free_var_syms;
     struct function *next;
 };

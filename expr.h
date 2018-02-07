@@ -45,7 +45,7 @@ extern const char *prim_names[];
 #define FOR_ALL_EXPRS(X) \
     X(CONST) \
     X(SYM) \
-    X(FN) \
+    X(FUN) \
     X(CAP) \
     X(LET) \
     X(STRUCT) \
@@ -79,11 +79,11 @@ struct expr_const {
         struct {
             struct expr *expr;
             struct expr *next; /* for chaining in the peval scope */
-        } dummy_fn;
+        } dummy_fun;
         struct {
-            slice_t name; /* name of the function (in the module function table) */
+            struct function *func;
             struct expr_decl *captured_consts;
-        } fn;
+        } fun;
         struct expr *expr;
         struct type *type;
         int _bool;
@@ -96,14 +96,14 @@ struct expr_sym {
     struct expr *next; /* for chaining closure vars */
 };
 
-struct expr_fn {
+struct expr_fun {
     struct expr_decl *params;
     struct expr *return_type_expr;
-    struct expr *body_expr; /* NULL for fn type declaration */
+    struct expr *body_expr; /* NULL for fun type declaration */
 };
 
 struct expr_cap {
-    slice_t fn_name;
+    struct function *func;
 };
 
 struct expr_let {
@@ -127,7 +127,7 @@ struct expr_prim {
 };
 
 struct expr_call {
-    struct expr *fn_expr;
+    struct expr *callable_expr;
     struct expr_link *args;
 };
 
@@ -135,7 +135,7 @@ struct expr {
     union {
         struct expr_const _const;
         struct expr_sym sym;
-        struct expr_fn fn;
+        struct expr_fun fun;
         struct expr_cap cap;
         struct expr_let let;
         struct expr_struct _struct;
@@ -148,7 +148,7 @@ struct expr {
     struct expr *antecedent;
 
     enum expr_kind expr;
-    bool is_closure_fn;
+    bool is_closure_fun;
 };
 
 
