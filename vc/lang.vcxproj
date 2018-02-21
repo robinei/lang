@@ -39,7 +39,6 @@
     <ClInclude Include="..\expr.h" />
     <ClInclude Include="..\fnv.h" />
     <ClInclude Include="..\hashtable.h" />
-    <ClInclude Include="..\hashtable_impl.h" />
     <ClInclude Include="..\mod.h" />
     <ClInclude Include="..\murmur3.h" />
     <ClInclude Include="..\parse.h" />

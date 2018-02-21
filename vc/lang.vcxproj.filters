@@ -77,9 +77,6 @@
     <ClInclude Include="..\expr.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\hashtable_impl.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="..\slice.h">
       <Filter>Header Files</Filter>
     </ClInclude>
