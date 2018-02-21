@@ -46,7 +46,6 @@ struct peval_ctx {
     slice_t closest_name;
 
     bool identify_closures;
-    bool force_type_expansion;
     uint force_full_expansion;
     bool inhibit_call_expansion;
 

@@ -181,84 +181,6 @@ static struct expr_decl *read_back_values_and_peval_types(struct peval_ctx *ctx,
 }
 
 
-static struct expr_link *peval_args(struct peval_ctx *ctx, struct expr_link *a, uint *const_count) {
-    if (a) {
-        struct expr_link a_new = *a;
-        a_new.expr = peval(ctx, a->expr);
-        a_new.next = peval_args(ctx, a->next, const_count);
-        if (a_new.expr->expr == EXPR_CONST) {
-            ++*const_count;
-        }
-        if (a_new.expr != a->expr || a_new.next != a->next) {
-            return dup_arg(ctx, &a_new);
-        }
-    }
-    return a;
-}
-
-static struct expr_link *strip_const_args(struct peval_ctx *ctx, struct expr_link *a) {
-    if (a) {
-        if (a->expr->expr == EXPR_CONST) {
-            return strip_const_args(ctx, a->next);
-        }
-        else {
-            struct expr_link a_new = *a;
-            a_new.next = strip_const_args(ctx, a->next);
-            if (a_new.next != a->next) {
-                return dup_arg(ctx, &a_new);
-            }
-        }
-    }
-    return a;
-}
-
-static struct expr_decl *strip_const_params(struct peval_ctx *ctx, struct expr_decl *p, struct expr_link *a) {
-    assert((a && p) || (!a && !p));
-    if (p) {
-        if (a->expr->expr == EXPR_CONST) {
-            return strip_const_params(ctx, p->next, a->next);
-        }
-        else {
-            struct expr_decl p_new = *p;
-            p_new.next = strip_const_params(ctx, p->next, a->next);
-            if (p_new.next != p->next) {
-                return dup_decl(ctx, &p_new);
-            }
-        }
-    }
-    return p;
-}
-
-static uint hash_const_args(struct expr_decl *p, struct expr_link *a, uint hash) {
-    if (a) {
-        assert(p);
-        if (a->expr->expr == EXPR_CONST) {
-            hash = fnv1a((unsigned char *)p->name.ptr, p->name.len, hash);
-            switch (a->expr->u._const.type->type) {
-            case TYPE_TYPE: hash = fnv1a((unsigned char *)&a->expr->u._const.type, sizeof(struct type *), hash); break;
-            case TYPE_BOOL: hash = fnv1a((unsigned char *)&a->expr->u._const.u._bool, sizeof(a->expr->u._const.u._bool), hash); break;
-            case TYPE_INT: hash = fnv1a((unsigned char *)&a->expr->u._const.u._int, sizeof(a->expr->u._const.u._int), hash); break;
-            default: assert(0); break;
-            }
-        }
-        hash = hash_const_args(p->next, a->next, hash);
-    }
-    else {
-        assert(!p);
-    }
-    return hash;
-}
-
-static slice_t function_name_with_hashed_const_args(struct peval_ctx *ctx, struct function *func, struct expr_link *args) {
-    uint hash = hash_const_args(func->fun_expr->u.fun.params, args, FNV_SEED);
-    uint fun_name_capacity = func->name.len + 8;
-    slice_t fun_name_new;
-    fun_name_new.ptr = malloc(fun_name_capacity + 1);
-    memcpy(fun_name_new.ptr, func->name.ptr, func->name.len);
-    fun_name_new.len = func->name.len + snprintf(fun_name_new.ptr + func->name.len, 8, "_%u", hash);
-    return fun_name_new;
-}
-
 static void process_pending_function(struct peval_ctx *ctx, struct expr *fun, struct function *func) {
     assert(fun->expr == EXPR_FUN);
 
@@ -339,6 +261,92 @@ static void process_pending_functions(struct peval_ctx *ctx) {
     }
 }
 
+
+static void push_call_args(struct peval_ctx *ctx, struct expr_decl *p, struct expr_link *a) {
+    for (; a; a = a->next, p = p->next) {
+        check_type(ctx, a->expr, p->type_expr);
+        push_binding(ctx, p->name, a->expr);
+    }
+}
+
+static struct expr_link *peval_args(struct peval_ctx *ctx, struct expr_link *a, uint *const_count) {
+    if (a) {
+        struct expr_link a_new = *a;
+        a_new.expr = peval(ctx, a->expr);
+        a_new.next = peval_args(ctx, a->next, const_count);
+        if (a_new.expr->expr == EXPR_CONST) {
+            ++*const_count;
+        }
+        if (a_new.expr != a->expr || a_new.next != a->next) {
+            return dup_arg(ctx, &a_new);
+        }
+    }
+    return a;
+}
+
+static struct expr_link *strip_const_args(struct peval_ctx *ctx, struct expr_link *a) {
+    if (a) {
+        if (a->expr->expr == EXPR_CONST) {
+            return strip_const_args(ctx, a->next);
+        }
+        else {
+            struct expr_link a_new = *a;
+            a_new.next = strip_const_args(ctx, a->next);
+            if (a_new.next != a->next) {
+                return dup_arg(ctx, &a_new);
+            }
+        }
+    }
+    return a;
+}
+
+static struct expr_decl *strip_const_params(struct peval_ctx *ctx, struct expr_decl *p, struct expr_link *a) {
+    assert((a && p) || (!a && !p));
+    if (p) {
+        if (a->expr->expr == EXPR_CONST) {
+            return strip_const_params(ctx, p->next, a->next);
+        }
+        else {
+            struct expr_decl p_new = *p;
+            p_new.next = strip_const_params(ctx, p->next, a->next);
+            if (p_new.next != p->next) {
+                return dup_decl(ctx, &p_new);
+            }
+        }
+    }
+    return p;
+}
+
+static uint hash_const_args(struct expr_decl *p, struct expr_link *a, uint hash) {
+    if (a) {
+        assert(p);
+        if (a->expr->expr == EXPR_CONST) {
+            hash = fnv1a((unsigned char *)p->name.ptr, p->name.len, hash);
+            switch (a->expr->u._const.type->type) {
+            case TYPE_TYPE: hash = fnv1a((unsigned char *)&a->expr->u._const.type, sizeof(struct type *), hash); break;
+            case TYPE_BOOL: hash = fnv1a((unsigned char *)&a->expr->u._const.u._bool, sizeof(a->expr->u._const.u._bool), hash); break;
+            case TYPE_INT: hash = fnv1a((unsigned char *)&a->expr->u._const.u._int, sizeof(a->expr->u._const.u._int), hash); break;
+            default: assert(0); break;
+            }
+        }
+        hash = hash_const_args(p->next, a->next, hash);
+    }
+    else {
+        assert(!p);
+    }
+    return hash;
+}
+
+static slice_t function_name_with_hashed_const_args(struct peval_ctx *ctx, struct function *func, struct expr_link *args) {
+    uint hash = hash_const_args(func->fun_expr->u.fun.params, args, FNV_SEED);
+    uint fun_name_capacity = func->name.len + 8;
+    slice_t fun_name_new;
+    fun_name_new.ptr = malloc(fun_name_capacity + 1);
+    memcpy(fun_name_new.ptr, func->name.ptr, func->name.len);
+    fun_name_new.len = func->name.len + snprintf(fun_name_new.ptr + func->name.len, 8, "_%u", hash);
+    return fun_name_new;
+}
+
 static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
     struct expr e_new = *e;
     uint param_count = 0, const_count = 0;
@@ -374,19 +382,9 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
     BEGIN_SCOPE(SCOPE_FUNCTION);
     ctx->scope->outer_scope = NULL;
     ctx->scope->depth = 0;
-    {
-        struct expr_decl *decl = callable_expr->u._const.u.fun.captured_consts;
-        for (; decl; decl = decl->next) {
-            push_binding(ctx, decl->name, decl->value_expr);
-        }
 
-        struct expr_link *a = e_new.u.call.args;
-        struct expr_decl *p = fun_expr->u.fun.params;
-        for (; a; a = a->next, p = p->next) {
-            check_type(ctx, a->expr, p->type_expr);
-            push_binding(ctx, p->name, a->expr);
-        }
-    }
+    push_decls(ctx, callable_expr->u._const.u.fun.captured_consts);
+    push_call_args(ctx, fun_expr->u.fun.params, e_new.u.call.args);
 
     if (const_count == param_count) {
         e_new = *peval(ctx, fun_expr->u.fun.body_expr);
