@@ -32,15 +32,11 @@ static char *read_file(const char *filename) {
 }
 
 static void peval_module(struct peval_ctx *ctx, struct module_ctx *mod) {
-    ctx->inhibit_call_expansion = true;
-
     ctx->identify_closures = true;
     peval(ctx, mod->struct_expr);
     ctx->identify_closures = false;
 
     mod->struct_expr = peval(ctx, mod->struct_expr);
-    
-    ctx->inhibit_call_expansion = false;
 }
 
 static void run_tests(char *filename) {

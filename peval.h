@@ -42,12 +42,10 @@ struct peval_ctx {
 
     struct scope root_scope;
     struct scope *scope;
-    uint closed_var_count;
     slice_t closest_name;
 
     bool identify_closures;
     uint force_full_expansion;
-    bool inhibit_call_expansion;
 
     uint assert_count;
     uint assert_fails;

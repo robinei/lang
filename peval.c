@@ -131,20 +131,28 @@ static void check_type(struct peval_ctx *ctx, struct expr *e, struct expr *e_typ
 }
 
 static struct expr *peval_type(struct peval_ctx *ctx, struct expr *e) {
-    if (!e || ctx->inhibit_call_expansion) {
+    if (!e) {
         return e;
     }
     
-    ++ctx->force_full_expansion;
-    struct expr *result = peval(ctx, e);
-    --ctx->force_full_expansion;
-
-    if (result->expr != EXPR_CONST) {
-        PEVAL_ERR(result, "expected constant type expression");
+    bool force_expansion = !ctx->identify_closures;
+    if (force_expansion) {
+        ++ctx->force_full_expansion;
     }
-    if (result->u._const.type->type != TYPE_TYPE) {
+
+    struct expr *result = peval(ctx, e);
+
+    if (force_expansion) {
+        --ctx->force_full_expansion;
+        if (result->expr != EXPR_CONST) {
+            PEVAL_ERR(result, "expected constant type expression");
+        }
+    }
+
+    if (result->expr == EXPR_CONST && result->u._const.type->type != TYPE_TYPE) {
         PEVAL_ERR(result, "expected type expression");
     }
+
     return result;
 }
 
@@ -197,7 +205,11 @@ static void process_pending_function(struct peval_ctx *ctx, struct expr *fun, st
     struct expr new_fun = *fun;
     new_fun.u.fun.params = read_back_values_and_peval_types(ctx, fun->u.fun.params);
     new_fun.u.fun.return_type_expr = peval_type(ctx, fun->u.fun.return_type_expr);
+
+    uint old_force = ctx->force_full_expansion;
+    ctx->force_full_expansion = 0;
     new_fun.u.fun.body_expr = peval(ctx, fun->u.fun.body_expr);
+    ctx->force_full_expansion = old_force;
 
     if (func) {
         ctx->closest_name = prev_name;
@@ -368,9 +380,7 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
         param_count = decl_list_length(fun_expr->u.fun.params);
     }
 
-    if (!(func && (ctx->force_full_expansion || !ctx->inhibit_call_expansion) &&
-        (const_count > 0 || const_count == param_count)))
-    {
+    if (!func || !ctx->force_full_expansion) { // TODO: handle functions with static params (must be expanded)
         return changed ? dup_expr(ctx, &e_new, e) : e;
     }
 
