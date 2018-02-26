@@ -91,10 +91,20 @@ static struct expr_decl *parse_decls(struct parse_ctx *ctx) {
         f->next = parse_decls(ctx);
         f->type_expr = f->next->type_expr;
         f->value_expr = f->next->value_expr;
+        f->is_static = f->next->is_static;
+        f->is_mut = f->next->is_mut;
     }
     else {
         if (ctx->token == TOK_COLON) {
             NEXT_TOKEN();
+            if (ctx->token == TOK_KW_STATIC) {
+                f->is_static = true;
+                NEXT_TOKEN();
+            }
+            if (ctx->token == TOK_KW_MUT) {
+                f->is_mut = true;
+                NEXT_TOKEN();
+            }
             f->type_expr = parse_expr(ctx);
         }
 

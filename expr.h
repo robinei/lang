@@ -70,6 +70,8 @@ struct expr_decl {
     struct expr *type_expr;
     struct expr *value_expr;
     struct expr_decl *next;
+    bool is_static : 1;
+    bool is_mut : 1;
 };
 
 

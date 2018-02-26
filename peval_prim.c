@@ -141,7 +141,7 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
 
     case PRIM_ASSERT:
         PEVAL_ARG(0);
-        if (ARG_CONST(0) && ctx->force_full_expansion) {
+        if (ARG_CONST(0) && !ctx->identify_closures) {
             ++ctx->assert_count;
             if (!bool_value(ctx, ARG(0))) {
                 ++ctx->assert_fails;
