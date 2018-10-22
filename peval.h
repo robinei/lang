@@ -16,7 +16,8 @@ struct binding {
     struct expr *expr;
     struct scope *scope;
     uint name_hash;
-    bool pevaled;
+    bool pevaled : 1;
+    bool is_static : 1;
 };
 
 struct scope {

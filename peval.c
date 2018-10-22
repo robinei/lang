@@ -40,7 +40,7 @@ static struct function *lookup_func(struct peval_ctx *ctx, slice_t name) {
         ctx->scope = _prev_scope; \
     }
 
-static void push_binding(struct peval_ctx *ctx, slice_t name, struct expr *e) {
+static struct binding *push_binding(struct peval_ctx *ctx, slice_t name, struct expr *e) {
     struct scope *scope = ctx->scope;
     assert(scope);
 
@@ -66,6 +66,7 @@ static void push_binding(struct peval_ctx *ctx, slice_t name, struct expr *e) {
     b->scope = scope;
     b->name_hash = slice_hash_fnv1a(name);
     b->pevaled = false;
+    return b;
 }
 
 static struct binding *lookup_binding(struct peval_ctx *ctx, slice_t name) {
@@ -104,8 +105,17 @@ static void peval_binding(struct peval_ctx *ctx, struct binding *b) {
     slice_t prev_name = ctx->closest_name;
     ctx->closest_name = b->name;
 
+    bool force_expansion = !ctx->identify_closures && (b->is_static || b->scope->kind == SCOPE_STATIC);
+    if (force_expansion) {
+        ++ctx->force_full_expansion;
+    }
+
     b->pevaled = true;
     b->expr = peval(ctx, b->expr);
+
+    if (force_expansion) {
+        --ctx->force_full_expansion;
+    }
 
     process_pending_functions(ctx);
 
@@ -116,7 +126,8 @@ static void peval_binding(struct peval_ctx *ctx, struct binding *b) {
 
 static void push_decls(struct peval_ctx *ctx, struct expr_decl *decls) {
     for (struct expr_decl *d = decls; d; d = d->next) {
-        push_binding(ctx, d->name, d->value_expr);
+        struct binding *b = push_binding(ctx, d->name, d->value_expr);
+        b->is_static = d->is_static;
     }
 }
 
@@ -277,7 +288,8 @@ static void process_pending_functions(struct peval_ctx *ctx) {
 static void push_call_args(struct peval_ctx *ctx, struct expr_decl *p, struct expr_link *a) {
     for (; a; a = a->next, p = p->next) {
         check_type(ctx, a->expr, p->type_expr);
-        push_binding(ctx, p->name, a->expr);
+        struct binding *b = push_binding(ctx, p->name, a->expr);
+        b->is_static = p->is_static;
     }
 }
 
@@ -361,15 +373,16 @@ static slice_t function_name_with_hashed_const_args(struct peval_ctx *ctx, struc
 
 static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
     struct expr e_new = *e;
-    uint param_count = 0, const_count = 0;
+    uint param_count = 0, static_param_count = 0, const_arg_count = 0;
     struct function *func = NULL;
     struct expr *fun_expr = NULL;
 
     assert(e->expr == EXPR_CALL);
 
     struct expr *callable_expr = e_new.u.call.callable_expr = peval(ctx, e->u.call.callable_expr);
-    e_new.u.call.args = peval_args(ctx, e->u.call.args, &const_count);
+    e_new.u.call.args = peval_args(ctx, e->u.call.args, &const_arg_count);
     int changed = callable_expr != e->u.call.callable_expr || e_new.u.call.args != e->u.call.args;
+    uint arg_count = expr_list_length(e_new.u.call.args);
 
     if (callable_expr->expr == EXPR_CONST && callable_expr->u._const.type->type != TYPE_DUMMY_FUN) {
         if (callable_expr->u._const.type->type != TYPE_FUN) {
@@ -377,16 +390,27 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
         }
         func = callable_expr->u._const.u.fun.func;
         fun_expr = func->fun_expr;
+
         param_count = decl_list_length(fun_expr->u.fun.params);
+        if (arg_count != param_count) {
+            PEVAL_ERR(e, "function expected %u arguments; %d were provided", param_count, arg_count);
+        }
+
+        struct expr_decl *d = fun_expr->u.fun.params;
+        struct expr_link *a = e_new.u.call.args;
+        for (; d; d = d->next, a = a->next) {
+            if (d->is_static) {
+                if (a->expr->expr != EXPR_CONST) {
+                    PEVAL_ERR(callable_expr, "argument to static parameter not const");
+                }
+                ++static_param_count;
+            }
+            ++param_count;
+        }
     }
 
     if (!func || !ctx->force_full_expansion) { // TODO: handle functions with static params (must be expanded)
         return changed ? dup_expr(ctx, &e_new, e) : e;
-    }
-
-    uint arg_count = expr_list_length(e_new.u.call.args);
-    if (arg_count != param_count) {
-        PEVAL_ERR(e, "function expected %u arguments; %d were provided", param_count, arg_count);
     }
 
     BEGIN_SCOPE(SCOPE_FUNCTION);
@@ -396,7 +420,7 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
     push_decls(ctx, callable_expr->u._const.u.fun.captured_consts);
     push_call_args(ctx, fun_expr->u.fun.params, e_new.u.call.args);
 
-    if (const_count == param_count) {
+    if (const_arg_count == param_count) {
         e_new = *peval(ctx, fun_expr->u.fun.body_expr);
         check_type(ctx, &e_new, fun_expr->u.fun.return_type_expr);
     }

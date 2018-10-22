@@ -57,7 +57,7 @@ testFunReturn = fun():
 testFnReturn2 = fun:
     assert((fun(x): fun(y): fun(z): x * y + z)(100)(2)(3) == 203);
         
-vec2 = struct x, y: Int end;
+//vec2 = struct x, y: Int end;
 
 testOps = fun():
     assert(1 == 1)
@@ -106,4 +106,11 @@ testStatic2 = fun: let x = static((fun(x): x + 100)(3)) in assert(x == 103);
 
 staticFoo = fun(x: static Int) Int: x * x;
 
+
+testCallArg = fun:
+    let foo = fun(y, x):
+        let bar = fun(x, y): x in
+        assert(bar(y, x) == 2)
+    in
+        foo(2, 1);
 
