@@ -132,13 +132,14 @@ struct expr *parse_module(char *source_text, struct error_ctx *err_ctx) {
 struct expr *do_parse_module(struct parse_ctx *ctx) {
     struct expr *result;
     struct expr_decl *fields;
-    slice_t first_token = ctx->token_text;
+    slice_t first_token;
 
     if (setjmp(ctx->error_jmp_buf)) {
         return NULL;
     }
 
     NEXT_TOKEN();
+    first_token = ctx->token_text;
 
     fields = parse_decls(ctx);
 

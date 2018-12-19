@@ -401,15 +401,16 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
         for (; d; d = d->next, a = a->next) {
             if (d->is_static) {
                 if (a->expr->expr != EXPR_CONST) {
-                    PEVAL_ERR(callable_expr, "argument to static parameter not const");
+                    PEVAL_ERR(a->expr, "argument to static parameter not const");
                 }
                 ++static_param_count;
             }
-            ++param_count;
         }
     }
 
-    if (!func || !ctx->force_full_expansion) { // TODO: handle functions with static params (must be expanded)
+    assert(const_arg_count >= static_param_count);
+
+    if (!func || (!ctx->force_full_expansion && static_param_count == 0)) {
         return changed ? dup_expr(ctx, &e_new, e) : e;
     }
 

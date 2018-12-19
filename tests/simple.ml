@@ -105,7 +105,7 @@ testStatic2 = fun: let x = static((fun(x): x + 100)(3)) in assert(x == 103);
 
 
 staticFoo = fun(x: static Int) Int: x * x;
-
+testStaticFoo = fun: assert(staticFoo(2) == 4);
 
 testCallArg = fun:
     let foo = fun(y, x):
