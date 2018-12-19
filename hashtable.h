@@ -12,6 +12,9 @@
 #ifndef VALUE_TYPE
 #error Define VALUE_TYPE before including this header
 #endif
+#ifndef LINKAGE
+#define LINKAGE
+#endif
 
 #define CONCAT_SYMBOLS2(x, y) x ## y
 #define CONCAT_SYMBOLS(x, y) CONCAT_SYMBOLS2(x, y)
@@ -34,13 +37,13 @@ struct NAME {
     struct NAMESPACED(entry) *entries;
 };
 
-void NAMESPACED(clear)(struct NAME *table);
-int NAMESPACED(remove)(struct NAME *table, KEY_TYPE key);
-int NAMESPACED(find)(struct NAME *table, KEY_TYPE key, uint32_t *index_out);
-int NAMESPACED(get)(struct NAME *table, KEY_TYPE key, VALUE_TYPE *value_out);
-void NAMESPACED(put)(struct NAME *table, KEY_TYPE key, VALUE_TYPE value);
-void NAMESPACED(init)(struct NAME *table, uint32_t initial_size);
-void NAMESPACED(free)(struct NAME *table);
+LINKAGE void NAMESPACED(clear)(struct NAME *table);
+LINKAGE int NAMESPACED(remove)(struct NAME *table, KEY_TYPE key);
+LINKAGE int NAMESPACED(find)(struct NAME *table, KEY_TYPE key, uint32_t *index_out);
+LINKAGE int NAMESPACED(get)(struct NAME *table, KEY_TYPE key, VALUE_TYPE *value_out);
+LINKAGE void NAMESPACED(put)(struct NAME *table, KEY_TYPE key, VALUE_TYPE value);
+LINKAGE void NAMESPACED(init)(struct NAME *table, uint32_t initial_size);
+LINKAGE void NAMESPACED(free)(struct NAME *table);
 
 #endif /* EXPAND_INTERFACE */
 
@@ -62,6 +65,15 @@ void NAMESPACED(free)(struct NAME *table);
 
 #include <stdlib.h>
 #include <assert.h>
+
+static uint32_t hashutil_uint32_mix(uint32_t key) {
+    key = (key ^ 61) ^ (key >> 16);
+    key = key + (key << 3);
+    key = key ^ (key >> 4);
+    key = key * 0x27d4eb2d;
+    key = key ^ (key >> 15);
+    return key;
+}
 
 static uint32_t hashutil_ptr_hash(void *ptr) {
     uint32_t val = (uint32_t)(intptr_t)ptr;
@@ -97,7 +109,7 @@ static uint32_t hashutil_dist_to_start(uint32_t table_size, uint32_t hash, uint3
 #endif /* HASH_TABLE_COMMON */
 
 
-void NAMESPACED(clear)(struct NAME *table) {
+LINKAGE void NAMESPACED(clear)(struct NAME *table) {
     for (uint32_t i = 0; i < table->size; ++i) {
         table->entries[i].hash = 0;
     }
@@ -109,7 +121,7 @@ static uint32_t NAMESPACED(calc_hash)(KEY_TYPE key) {
     return hash ? hash : 1;
 }
 
-int NAMESPACED(find)(struct NAME *table, KEY_TYPE key, uint32_t *index_out) {
+LINKAGE int NAMESPACED(find)(struct NAME *table, KEY_TYPE key, uint32_t *index_out) {
     assert(table->used <= table->size);
     if (table->used == 0) {
         return 0;
@@ -160,7 +172,7 @@ static void NAMESPACED(put_entry)(struct NAME *table, struct NAMESPACED(entry) e
     assert(0 && "control flow should not get here");
 }
 
-int NAMESPACED(remove)(struct NAME *table, KEY_TYPE key) {
+LINKAGE int NAMESPACED(remove)(struct NAME *table, KEY_TYPE key) {
     struct NAMESPACED(entry) temp;
     uint32_t index;
     if (!NAMESPACED(find)(table, key, &index)) {
@@ -203,7 +215,7 @@ static void NAMESPACED(resize)(struct NAME *table, uint32_t new_size) {
     }
 }
 
-int NAMESPACED(get)(struct NAME *table, KEY_TYPE key, VALUE_TYPE *value_out) {
+LINKAGE int NAMESPACED(get)(struct NAME *table, KEY_TYPE key, VALUE_TYPE *value_out) {
     uint32_t index;
     if (NAMESPACED(find)(table, key, &index)) {
         *value_out = table->entries[index].value;
@@ -212,7 +224,7 @@ int NAMESPACED(get)(struct NAME *table, KEY_TYPE key, VALUE_TYPE *value_out) {
     return 0;
 }
 
-void NAMESPACED(put)(struct NAME *table, KEY_TYPE key, VALUE_TYPE value) {
+LINKAGE void NAMESPACED(put)(struct NAME *table, KEY_TYPE key, VALUE_TYPE value) {
     struct NAMESPACED(entry) entry;
     if (!table->size || (float)table->used / table->size > 0.85f) {
         NAMESPACED(resize)(table, table->size ? table->size * 2 : 16);
@@ -223,14 +235,14 @@ void NAMESPACED(put)(struct NAME *table, KEY_TYPE key, VALUE_TYPE value) {
     NAMESPACED(put_entry)(table, entry);
 }
 
-void NAMESPACED(init)(struct NAME *table, uint32_t initial_size) {
+LINKAGE void NAMESPACED(init)(struct NAME *table, uint32_t initial_size) {
     table->used = 0;
     table->size = 0;
     table->entries = NULL;
     NAMESPACED(resize)(table, initial_size);
 }
 
-void NAMESPACED(free)(struct NAME *table) {
+LINKAGE void NAMESPACED(free)(struct NAME *table) {
     free(table->entries);
     table->used = 0;
     table->size = 0;
@@ -249,3 +261,4 @@ void NAMESPACED(free)(struct NAME *table) {
 #undef VALUE_TYPE
 #undef HASH_FUNC
 #undef EQUAL_FUNC
+#undef LINKAGE
