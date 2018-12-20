@@ -79,10 +79,6 @@ struct expr_const {
     struct type *type;
     union {
         struct {
-            struct expr *expr;
-            struct expr *next; /* for chaining in the peval scope */
-        } dummy_fun;
-        struct {
             struct function *func;
             struct expr_decl *captured_consts;
         } fun;

@@ -11,7 +11,6 @@
     X(BOOL) \
     X(INT) \
     X(FUN) \
-    X(DUMMY_FUN) \
     X(STRUCT)
 
 #define DECL_TYPE_ENUM(name) TYPE_##name,
@@ -57,6 +56,5 @@ extern struct type type_unit;
 extern struct type type_bool;
 extern struct type type_int;
 extern struct type type_fun; /* TODO: replace with fun types actually having structure, and which are different */
-extern struct type type_dummy_fun;
 
 #endif

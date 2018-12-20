@@ -183,9 +183,6 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         case TYPE_INT:
             print(ctx, "%d", e->u._const.u._int);
             break;
-        case TYPE_DUMMY_FUN:
-            print(ctx, "<dummy_fun:%p>", e);
-            break;
         case TYPE_FUN:
             print(ctx, "<fun:%.*s>", e->u._const.u.fun.func->name.len, e->u._const.u.fun.func->name.ptr);
             break;

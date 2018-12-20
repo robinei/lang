@@ -21,7 +21,6 @@ struct binding {
 };
 
 struct scope {
-    struct expr *pending_dummy_funs;
     struct function *pending_functions;
     struct expr *closure_syms;
 
