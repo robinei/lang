@@ -30,7 +30,6 @@ struct scope {
     struct binding *bindings;
     uint num_bindings;
     uint max_bindings;
-    bool stack_bindings;
 
     uint depth;
     enum scope_kind kind;

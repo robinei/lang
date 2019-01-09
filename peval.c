@@ -27,7 +27,6 @@ static struct function *lookup_func(struct peval_ctx *ctx, slice_t name) {
         struct binding _bindings_storage[STACK_BINDING_COUNT]; \
         _scope.bindings = _bindings_storage; \
         _scope.max_bindings = STACK_BINDING_COUNT; \
-        _scope.stack_bindings = true; \
         _scope.kind = Kind; \
         if (Kind == SCOPE_FUNCTION) { _scope.nearest_function_scope = &_scope; } \
         else if (_prev_scope) { _scope.nearest_function_scope = _prev_scope->nearest_function_scope; } \
@@ -36,7 +35,7 @@ static struct function *lookup_func(struct peval_ctx *ctx, slice_t name) {
         ctx->scope = &_scope;
 
 #define END_SCOPE() \
-        if (!_scope.stack_bindings) { free(_scope.bindings); } \
+        if (_scope.max_bindings > STACK_BINDING_COUNT) { free(_scope.bindings); } \
         ctx->scope = _prev_scope; \
     }
 
@@ -45,16 +44,14 @@ static struct binding *push_binding(struct peval_ctx *ctx, slice_t name, struct 
     assert(scope);
 
     if (scope->num_bindings == scope->max_bindings) {
-        if (scope->stack_bindings) {
-            assert(scope->max_bindings == STACK_BINDING_COUNT);
+        if (scope->max_bindings == STACK_BINDING_COUNT) {
             scope->max_bindings *= 2;
             struct binding *new_bindings = malloc(sizeof(struct binding) * scope->max_bindings);
             memcpy(new_bindings, scope->bindings, sizeof(struct binding) * scope->num_bindings);
             scope->bindings = new_bindings;
-            scope->stack_bindings = false;
         }
         else {
-            scope->max_bindings = scope->max_bindings ? scope->max_bindings * 2 : 16;
+            scope->max_bindings = scope->max_bindings ? scope->max_bindings * 2 : STACK_BINDING_COUNT * 2;
             scope->bindings = realloc(scope->bindings, sizeof(struct binding) * scope->max_bindings);
         }
     }
