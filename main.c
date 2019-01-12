@@ -31,14 +31,6 @@ static char *read_file(const char *filename) {
     return str;
 }
 
-static void peval_module(struct peval_ctx *ctx, struct module_ctx *mod) {
-    ctx->identify_closures = true;
-    peval(ctx, mod->struct_expr);
-    ctx->identify_closures = false;
-
-    mod->struct_expr = peval(ctx, mod->struct_expr);
-}
-
 static void run_tests(char *filename) {
     struct error_ctx err_ctx;
     struct module_ctx mod_ctx;
@@ -71,7 +63,7 @@ static void run_tests(char *filename) {
         return;
     }
 
-    peval_module(&peval_ctx, &mod_ctx);
+    mod_ctx.struct_expr = peval(&peval_ctx, mod_ctx.struct_expr);
 
     printf("running tests...\n");
 
@@ -125,6 +117,5 @@ int main(int argc, char *argv[]) {
         printf("usage: lang test <source_file1>+\n");
     }
     fflush(stdout);
-    fgetc(stdin);
     return 0;
 }

@@ -141,7 +141,7 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
 
     case PRIM_ASSERT:
         PEVAL_ARG(0);
-        if (ARG_CONST(0) && !ctx->identify_closures) {
+        if (ARG_CONST(0)) {
             ++ctx->assert_count;
             if (!bool_value(ctx, ARG(0))) {
                 ++ctx->assert_fails;
@@ -166,9 +166,6 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
         break;
 
     case PRIM_SPLICE:
-        if (ctx->identify_closures) {
-            break;
-        }
         ++ctx->force_full_expansion;
         PEVAL_ARG(0);
         --ctx->force_full_expansion;
@@ -191,10 +188,6 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
         break;
 
     case PRIM_STATIC:
-        if (ctx->identify_closures) {
-            PEVAL_ARG(0);
-            break;
-        }
         ++ctx->force_full_expansion;
         PEVAL_ARG(0);
         --ctx->force_full_expansion;

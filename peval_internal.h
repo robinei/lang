@@ -34,7 +34,7 @@ static struct expr_decl *dup_decl(struct peval_ctx *ctx, struct expr_decl *f) {
     *copy = *f;
     return copy;
 }
-static struct expr_link *dup_arg(struct peval_ctx *ctx, struct expr_link *a) {
+static struct expr_link *dup_link(struct peval_ctx *ctx, struct expr_link *a) {
     struct expr_link *copy = malloc(sizeof(struct expr_link));
     *copy = *a;
     return copy;

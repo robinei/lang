@@ -16,13 +16,16 @@ testUnit = fun(): let x: Unit = () in assert(x == ());
 
 testMutual = fun():
     let
+        odd: static fun(n: Int) Bool; // forward declare must be static
         even = fun(n: Int) Bool: if n == 0: true else odd(n - 1);
-        odd = fun(n: Int) Bool: if n == 0: false else even(n - 1)
+        odd = fun(n): if n == 0: false else even(n - 1)
     in
         assert(even(2))
         assert(!even(5));
 
-exp = fun(x, n: Int) Int: if n == 0: 1 else x * exp(x, n - 1);
+// declare type to allow recursion (top level implicitly static)
+exp: fun(x, n: Int) Int =
+     fun(x, n): if n == 0: 1 else x * exp(x, n - 1);
 pow2 = fun(n: Int) Int: exp(2, n);
 testExp = fun():
     assert(pow2(3) == 8)
@@ -30,23 +33,17 @@ testExp = fun():
 
 testTypeExpr = fun():
     let
+        procType = fun(t: Type) Type: t;
         getType = fun(i: Int) Type: if i == 0: Bool else Int;
-        test = fun(): let x: procType(getType(1)) = 123 in x;
-        procType = fun(t: Type) Type: t
+        test = fun(): let x: procType(getType(1)) = 123 in x
     in
         assert(test() == 123);
 
-fibHelp = fun(a, b, n: Int) Int: if n == 0: a else fibHelp(b, a+b, n-1);
+fibHelp: fun(a, b, n: Int) Int;
+fibHelp = fun(a, b, n): if n == 0: a else fibHelp(b, a+b, n-1);
 fib = fun(n: Int) Int: fibHelp(0, 1, n);
 testFib = fun():
     assert(fib(6) == 8);
-
-testLetOrder = fun():
-    let
-        x = add3(2);
-        add3 = fun(n): n + 3
-    in
-        assert(x == 5);
 
 IntFun: Type = fun() Int;
 testFunReturn = fun():

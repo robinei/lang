@@ -70,6 +70,7 @@ struct expr_decl {
     struct expr *type_expr;
     struct expr *value_expr;
     struct expr_decl *next;
+    uint name_hash;
     bool is_static : 1;
     bool is_mut : 1;
 };
@@ -92,6 +93,7 @@ struct expr_const {
 struct expr_sym {
     slice_t name;
     struct expr *next; /* for chaining closure vars */
+    uint name_hash;
 };
 
 struct expr_fun {
@@ -146,7 +148,6 @@ struct expr {
     struct expr *antecedent;
 
     enum expr_kind expr;
-    bool is_closure_fun;
 };
 
 
@@ -189,12 +190,12 @@ static uint expr_list_length(struct expr_link *link) {
 
 static slice_t expr_source_text(struct expr *e) {
     slice_t empty = { "", 0 };
-    do {
+    while (e) {
         if (e->source_text.ptr) {
             return e->source_text;
         }
         e = e->antecedent;
-    } while (e);
+    }
     return empty;
 }
 

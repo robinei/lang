@@ -80,6 +80,7 @@ static struct expr_decl *parse_decls(struct parse_ctx *ctx) {
 
     f = calloc(1, sizeof(struct expr_decl));
     f->name = ctx->token_text;
+    f->name_hash = slice_hash_fnv1a(f->name);
 
     NEXT_TOKEN();
 
@@ -516,6 +517,7 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
         }
         result = expr_create(ctx, EXPR_SYM, first_token);
         result->u.sym.name = ctx->token_text;
+        result->u.sym.name_hash = slice_hash_fnv1a(result->u.sym.name);
         NEXT_TOKEN();
         break;
     case TOK_PLUS: return parse_unary(ctx, PRIM_PLUS);

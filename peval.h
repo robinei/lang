@@ -11,25 +11,14 @@ enum scope_kind {
     SCOPE_LOCAL
 };
 
-struct binding {
-    slice_t name;
-    struct expr *expr;
-    struct scope *scope;
-    uint name_hash;
-    bool pevaled : 1;
-    bool is_static : 1;
-};
-
 struct scope {
-    struct function *pending_functions;
     struct expr *closure_syms;
 
     struct scope *outer_scope;
     struct scope *nearest_function_scope;
 
-    struct binding *bindings;
-    uint num_bindings;
-    uint max_bindings;
+    struct expr_decl *decls;
+    struct expr_decl **last_decl_ptr;
 
     uint depth;
     enum scope_kind kind;
@@ -41,9 +30,7 @@ struct peval_ctx {
 
     struct scope root_scope;
     struct scope *scope;
-    slice_t closest_name;
 
-    bool identify_closures;
     uint force_full_expansion;
 
     uint assert_count;
