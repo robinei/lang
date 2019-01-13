@@ -438,13 +438,13 @@ static struct expr *peval_struct(struct peval_ctx *ctx, struct expr *e) {
 
     BEGIN_SCOPE(SCOPE_STATIC);
 
-    add_decls_to_scope(ctx, e->_struct.fields);
+    add_decls_to_scope(ctx, e->struc.fields);
 
-    e_new._struct.fields = ctx->scope->decls;
+    e_new.struc.fields = ctx->scope->decls;
 
     END_SCOPE();
 
-    if (e_new._struct.fields != e->_struct.fields) {
+    if (e_new.struc.fields != e->struc.fields) {
         return dup_expr(ctx, &e_new, e);
     }
     return e;

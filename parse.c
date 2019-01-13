@@ -149,7 +149,7 @@ struct expr *do_parse_module(struct parse_ctx *ctx) {
     }
 
     result = expr_create(ctx, EXPR_STRUCT, slice_span(first_token, ctx->prev_token_text));
-    result->_struct.fields = fields;
+    result->struc.fields = fields;
     return result;
 }
 
@@ -171,7 +171,7 @@ struct expr *parse_struct(struct parse_ctx *ctx) {
     }
 
     result = expr_create(ctx, EXPR_STRUCT, slice_span(first_token, ctx->prev_token_text));
-    result->_struct.fields = fields;
+    result->struc.fields = fields;
     return result;
 }
 

@@ -46,7 +46,7 @@ struct type {
     enum type_enum type;
     union {
         struct type_fun fun;
-        struct type_struct _struct;
+        struct type_struct struc;
     } u;
 };
 

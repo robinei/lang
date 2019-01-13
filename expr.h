@@ -114,7 +114,7 @@ struct expr {
 
         struct {
             struct expr_decl *fields;
-        } _struct;
+        } struc;
 
         struct {
             struct expr *cond_expr;

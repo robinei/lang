@@ -68,7 +68,7 @@ static void run_tests(char *filename) {
     printf("running tests...\n");
 
     peval_ctx.force_full_expansion = 1;
-    decls = mod_ctx.struct_expr->_struct.fields;
+    decls = mod_ctx.struct_expr->struc.fields;
     for (; decls; decls = decls->next) {
         struct expr *e = decls->value_expr;
         struct function *func;

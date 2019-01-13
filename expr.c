@@ -85,7 +85,7 @@ void expr_visit_children(struct expr_visit_ctx *ctx, struct expr *e) {
         e->let.body_expr = expr_visit(ctx, e->let.body_expr);
         break;
     case EXPR_STRUCT:
-        e->_struct.fields = expr_decl_visit(ctx, e->_struct.fields);
+        e->struc.fields = expr_decl_visit(ctx, e->struc.fields);
         break;
     case EXPR_IF:
         e->_if.cond_expr = expr_visit(ctx, e->_if.cond_expr);
@@ -240,7 +240,7 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         struct expr_decl *f;
         print(ctx, "struct\n");
         ++ctx->indent;
-        for (f = e->_struct.fields; f; f = f->next) {
+        for (f = e->struc.fields; f; f = f->next) {
             print_indent(ctx);
             print(ctx, "%.*s", f->name.len, f->name.ptr);
             if (f->type_expr) {
