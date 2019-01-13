@@ -11,7 +11,7 @@
 
 static struct expr *expr_create(struct peval_ctx *ctx, uint expr_type, struct expr *antecedent) {
     struct expr *e = calloc(1, sizeof(struct expr));
-    e->expr = expr_type;
+    e->expr_kind = expr_type;
     e->antecedent = antecedent;
     return e;
 }

@@ -75,7 +75,7 @@ static struct expr *peval_type(struct peval_ctx *ctx, struct expr *e) {
     
     struct expr *result = peval_force_expand(ctx, e, true);
 
-    if (result->expr != EXPR_CONST) {
+    if (result->expr_kind != EXPR_CONST) {
         PEVAL_ERR(result, "expected constant type expression");
     }
     if (result->c.type->type != TYPE_TYPE) {
@@ -85,7 +85,7 @@ static struct expr *peval_type(struct peval_ctx *ctx, struct expr *e) {
 }
 
 static void check_type(struct peval_ctx *ctx, struct expr *e, struct expr *e_type) {
-    if (!e || !e_type || e->expr != EXPR_CONST || e_type->expr != EXPR_CONST) {
+    if (!e || !e_type || e->expr_kind != EXPR_CONST || e_type->expr_kind != EXPR_CONST) {
         return;
     }
     assert(e_type->c.type->type == TYPE_TYPE);
@@ -129,7 +129,7 @@ static struct expr_decl *lookup_name_shallow(struct peval_ctx *ctx, slice_t name
 
 
 static bool is_fun_const(struct expr *e) {
-    return e && e->expr == EXPR_CONST && e->c.type->type == TYPE_FUN;
+    return e && e->expr_kind == EXPR_CONST && e->c.type->type == TYPE_FUN;
 }
 static bool is_dummy_fun_const(struct expr *e) {
     return is_fun_const(e) && !e->c.fun.func->fun_expr;
@@ -139,7 +139,7 @@ static void add_single_decl_to_scope(struct peval_ctx *ctx, struct expr_decl *d)
     struct scope *scope = ctx->scope;
     assert(scope);
     assert(d->name_expr);
-    assert(d->name_expr->expr == EXPR_SYM);
+    assert(d->name_expr->expr_kind == EXPR_SYM);
 
     struct expr *type_expr = peval_type(ctx, d->type_expr);
 
@@ -187,7 +187,7 @@ static void add_single_decl_to_scope(struct peval_ctx *ctx, struct expr_decl *d)
             func->name = make_func_name(ctx, d->name_expr->sym.name);
 
             d_new->value_expr = calloc(1, sizeof(struct expr));
-            d_new->value_expr->expr = EXPR_CONST;
+            d_new->value_expr->expr_kind = EXPR_CONST;
             d_new->value_expr->c.type = &type_fun;
             d_new->value_expr->c.fun.func = func;
             
@@ -215,7 +215,7 @@ static void add_consts_to_scope(struct peval_ctx *ctx, struct expr_decl *d) {
     for (; d; d = d->next) {
         assert(!d->type_expr);
         assert(d->value_expr);
-        assert(d->value_expr->expr == EXPR_CONST);
+        assert(d->value_expr->expr_kind == EXPR_CONST);
         add_single_decl_to_scope(ctx, d);
     }
 }
@@ -245,7 +245,7 @@ static struct expr_link *peval_args(struct peval_ctx *ctx, struct expr_link *a) 
 
 static struct expr_link *strip_const_args(struct peval_ctx *ctx, struct expr_link *a) {
     if (a) {
-        if (a->expr->expr == EXPR_CONST) {
+        if (a->expr->expr_kind == EXPR_CONST) {
             return strip_const_args(ctx, a->next);
         }
         else {
@@ -262,7 +262,7 @@ static struct expr_link *strip_const_args(struct peval_ctx *ctx, struct expr_lin
 static struct expr_decl *strip_const_params(struct peval_ctx *ctx, struct expr_decl *p, struct expr_link *a) {
     assert((a && p) || (!a && !p));
     if (p) {
-        if (a->expr->expr == EXPR_CONST) {
+        if (a->expr->expr_kind == EXPR_CONST) {
             return strip_const_params(ctx, p->next, a->next);
         }
         else {
@@ -281,7 +281,7 @@ static struct expr_decl *strip_const_params(struct peval_ctx *ctx, struct expr_d
 static uint hash_const_args(struct expr_decl *p, struct expr_link *a, uint hash) {
     if (a) {
         assert(p);
-        if (a->expr->expr == EXPR_CONST) {
+        if (a->expr->expr_kind == EXPR_CONST) {
             hash = fnv1a((unsigned char *)p->name_expr->sym.name.ptr, p->name_expr->sym.name.len, hash);
             hash = FNV1A(a->expr->c.type->type, hash);
             switch (a->expr->c.type->type) {
@@ -302,7 +302,7 @@ static uint hash_const_args(struct expr_decl *p, struct expr_link *a, uint hash)
 static uint count_const_decls(struct expr_decl *d) {
     uint const_count = 0;
     for (; d; d = d->next) {
-        if (d->value_expr && d->value_expr->expr == EXPR_CONST) {
+        if (d->value_expr && d->value_expr->expr_kind == EXPR_CONST) {
             ++const_count;
         }
     }
@@ -320,7 +320,7 @@ static slice_t function_name_with_hashed_const_args(struct peval_ctx *ctx, struc
 }
 
 static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
-    assert(e->expr == EXPR_CALL);
+    assert(e->expr_kind == EXPR_CALL);
     struct expr e_new = *e;
     e_new.call.callable_expr = peval(ctx, e->call.callable_expr);
     e_new.call.args = peval_args(ctx, e->call.args);
@@ -331,7 +331,7 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
     uint static_param_count = 0;
     struct function *func = NULL;
 
-    if (e_new.call.callable_expr->expr == EXPR_CONST) {
+    if (e_new.call.callable_expr->expr_kind == EXPR_CONST) {
         if (e_new.call.callable_expr->c.type->type != TYPE_FUN) {
             PEVAL_ERR(e_new.call.callable_expr, "expected a function");
         }
@@ -347,12 +347,12 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
             struct expr_link *a = e_new.call.args;
             for (; d; d = d->next, a = a->next) {
                 if (d->is_static) {
-                    if (a->expr->expr != EXPR_CONST) {
+                    if (a->expr->expr_kind != EXPR_CONST) {
                         PEVAL_ERR(a->expr, "argument to static parameter not const");
                     }
                     ++static_param_count;
                 }
-                if (a->expr->expr == EXPR_CONST) {
+                if (a->expr->expr_kind == EXPR_CONST) {
                     ++const_arg_count;
                 }
             }
@@ -408,7 +408,7 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
 }
 
 static struct expr *peval_sym(struct peval_ctx *ctx, struct expr *e) {
-    assert(e->expr == EXPR_SYM);
+    assert(e->expr_kind == EXPR_SYM);
 
     struct expr_decl *d;
     struct scope *scope;
@@ -416,7 +416,7 @@ static struct expr *peval_sym(struct peval_ctx *ctx, struct expr *e) {
         PEVAL_ERR(e, "symbol not in scope");
     }
 
-    if (d->value_expr && d->value_expr->expr == EXPR_CONST) {
+    if (d->value_expr && d->value_expr->expr_kind == EXPR_CONST) {
         return dup_expr(ctx, d->value_expr, e);
     }
 
@@ -437,7 +437,7 @@ static struct expr *peval_sym(struct peval_ctx *ctx, struct expr *e) {
 }
 
 static struct expr *peval_struct(struct peval_ctx *ctx, struct expr *e) {
-    assert(e->expr == EXPR_STRUCT);
+    assert(e->expr_kind == EXPR_STRUCT);
     struct expr e_new = *e;
 
     BEGIN_SCOPE(SCOPE_STATIC);
@@ -455,7 +455,7 @@ static struct expr *peval_struct(struct peval_ctx *ctx, struct expr *e) {
 }
 
 static struct expr *peval_let(struct peval_ctx *ctx, struct expr *e) {
-    assert(e->expr == EXPR_LET);
+    assert(e->expr_kind == EXPR_LET);
     struct expr e_new = *e;
     int changed;
 
@@ -484,7 +484,7 @@ static struct expr *peval_let(struct peval_ctx *ctx, struct expr *e) {
 }
 
 static struct expr *peval_fun(struct peval_ctx *ctx, struct expr *e) {
-    assert(e->expr == EXPR_FUN);
+    assert(e->expr_kind == EXPR_FUN);
     struct expr *result;
 
     if (!e->fun.body_expr) {
@@ -520,7 +520,7 @@ static struct expr *peval_fun(struct peval_ctx *ctx, struct expr *e) {
 
     struct expr_link *sym = scope->closure_syms;
     while (sym) {
-        assert(sym->expr->expr == EXPR_SYM);
+        assert(sym->expr->expr_kind == EXPR_SYM);
         struct expr_link *next = sym->next;
 
         struct expr_decl *d;
@@ -565,7 +565,7 @@ static struct expr *peval_fun(struct peval_ctx *ctx, struct expr *e) {
 }
 
 static struct expr *peval_cap(struct peval_ctx *ctx, struct expr *e) {
-    assert(e->expr == EXPR_CAP);
+    assert(e->expr_kind == EXPR_CAP);
     struct function *func = e->cap.func;
     assert(func);
 
@@ -573,7 +573,7 @@ static struct expr *peval_cap(struct peval_ctx *ctx, struct expr *e) {
     struct expr_link *sym = func->free_var_syms;
     while (sym) {
         struct expr *temp = peval_sym(ctx, sym->expr);
-        if (temp->expr == EXPR_CONST) {
+        if (temp->expr_kind == EXPR_CONST) {
             struct expr_decl *d = calloc(1, sizeof(struct expr_decl));
             d->name_expr = sym->expr;
             d->value_expr = temp;
@@ -599,12 +599,12 @@ static struct expr *peval_cap(struct peval_ctx *ctx, struct expr *e) {
 }
 
 static struct expr *peval_if(struct peval_ctx *ctx, struct expr *e) {
-    assert(e->expr == EXPR_COND);
+    assert(e->expr_kind == EXPR_COND);
     struct expr e_new = *e;
 
     struct expr *pred_expr = e_new.cond.pred_expr = peval(ctx, e->cond.pred_expr);
 
-    if (pred_expr->expr == EXPR_CONST) {
+    if (pred_expr->expr_kind == EXPR_CONST) {
         if (pred_expr->c.type->type != TYPE_BOOL) {
             PEVAL_ERR(pred_expr, "if conditional must be boolean");
         }
@@ -615,7 +615,7 @@ static struct expr *peval_if(struct peval_ctx *ctx, struct expr *e) {
     e_new.cond.then_expr = peval(ctx, e->cond.then_expr);
     e_new.cond.else_expr = peval(ctx, e->cond.else_expr);
 
-    if (e_new.cond.then_expr->expr == EXPR_CONST && e_new.cond.else_expr->expr == EXPR_CONST &&
+    if (e_new.cond.then_expr->expr_kind == EXPR_CONST && e_new.cond.else_expr->expr_kind == EXPR_CONST &&
         (e_new.cond.then_expr->c.type != e_new.cond.else_expr->c.type)) {
         PEVAL_ERR(&e_new, "mismatching types in if arms");
     }
@@ -638,7 +638,7 @@ struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
     
     struct expr *result = e;
 
-    switch (e->expr) {
+    switch (e->expr_kind) {
     case EXPR_SYM:
         result = peval_sym(ctx, e);
         break;
@@ -667,7 +667,7 @@ struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
         break;
     }
 
-    if (ctx->force_full_expansion && result->expr != EXPR_CONST) {
+    if (ctx->force_full_expansion && result->expr_kind != EXPR_CONST) {
         PEVAL_ERR(e, "expected static expression");
     }
     return result;

@@ -71,7 +71,7 @@ static struct expr_link *expr_call_arg_visit(struct expr_visit_ctx *ctx, struct 
 }
 
 void expr_visit_children(struct expr_visit_ctx *ctx, struct expr *e) {
-    switch (e->expr) {
+    switch (e->expr_kind) {
     case EXPR_CONST:
     case EXPR_SYM:
         break;
@@ -153,7 +153,7 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
     if (!e) {
         return;
     }
-    switch (e->expr) {
+    switch (e->expr_kind) {
     case EXPR_CONST:
         switch (e->c.type->type) {
         case TYPE_EXPR:

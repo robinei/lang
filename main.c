@@ -74,12 +74,12 @@ static void run_tests(char *filename) {
         struct function *func;
         struct expr call_expr;
         memset(&call_expr, 0, sizeof(call_expr));
-        call_expr.expr = EXPR_CALL;
+        call_expr.expr_kind = EXPR_CALL;
 
         if (!e) {
             continue;
         }
-        if (e->expr != EXPR_CONST) {
+        if (e->expr_kind != EXPR_CONST) {
             continue;
         }
         if (e->c.type->type != TYPE_FUN) {

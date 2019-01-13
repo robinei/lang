@@ -2,7 +2,7 @@
 #include "peval_internal.h"
 
 static int bool_value(struct peval_ctx *ctx, struct expr *e) {
-    assert(e->expr == EXPR_CONST);
+    assert(e->expr_kind == EXPR_CONST);
     if (e->c.type->type != TYPE_BOOL) {
         PEVAL_ERR(e, "expected bool");
     }
@@ -10,7 +10,7 @@ static int bool_value(struct peval_ctx *ctx, struct expr *e) {
 }
 
 static int int_value(struct peval_ctx *ctx, struct expr *e) {
-    assert(e->expr == EXPR_CONST);
+    assert(e->expr_kind == EXPR_CONST);
     if (e->c.type->type != TYPE_INT) {
         PEVAL_ERR(e, "expected int");
     }
@@ -18,7 +18,7 @@ static int int_value(struct peval_ctx *ctx, struct expr *e) {
 }
 
 static int const_eq(struct peval_ctx *ctx, struct expr *a, struct expr *b) {
-    assert(a->expr == EXPR_CONST && b->expr == EXPR_CONST);
+    assert(a->expr_kind == EXPR_CONST && b->expr_kind == EXPR_CONST);
     if (a->c.type != b->c.type) {
         return 0;
     }
@@ -39,7 +39,7 @@ static int const_eq(struct peval_ctx *ctx, struct expr *a, struct expr *b) {
 
 #define ARG(N) (e_new.prim.arg_exprs[N])
 #define PEVAL_ARG(N) ARG(N) = peval(ctx, ARG(N))
-#define ARG_CONST(N) (ARG(N)->expr == EXPR_CONST)
+#define ARG_CONST(N) (ARG(N)->expr_kind == EXPR_CONST)
 
 #define BINOP(op, value_getter) \
     value_getter(ctx, ARG(0)) op value_getter(ctx, ARG(1))
@@ -69,10 +69,10 @@ static int const_eq(struct peval_ctx *ctx, struct expr *a, struct expr *b) {
 
 
 static void splice_visitor(struct expr_visit_ctx *visit_ctx, struct expr *e) {
-    if (e->expr == EXPR_PRIM && e->prim.prim == PRIM_SPLICE) {
+    if (e->expr_kind == EXPR_PRIM && e->prim.prim == PRIM_SPLICE) {
         struct peval_ctx *ctx = visit_ctx->ctx;
         struct expr *expr = peval(ctx, e->prim.arg_exprs[0]);
-        if (expr->expr != EXPR_CONST) {
+        if (expr->expr_kind != EXPR_CONST) {
             PEVAL_ERR(e, "splice argument not computable at compile time");
         }
         if (expr->c.type->type != TYPE_EXPR) {
@@ -90,7 +90,7 @@ static void splice_visitor(struct expr_visit_ctx *visit_ctx, struct expr *e) {
 struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
     struct expr e_new = *e;
 
-    assert(e_new.expr == EXPR_PRIM);
+    assert(e_new.expr_kind == EXPR_PRIM);
 
     switch (e_new.prim.prim) {
     case PRIM_PLUS: PEVAL_ARG(0); int_value(ctx, ARG(0)); return ARG(0);

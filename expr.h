@@ -134,7 +134,7 @@ struct expr {
     slice_t source_text;
     struct expr *antecedent;
 
-    enum expr_kind expr;
+    enum expr_kind expr_kind;
 };
 
 

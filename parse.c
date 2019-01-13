@@ -27,7 +27,7 @@ static struct expr *parse_atom(struct parse_ctx *ctx);
 
 static struct expr *expr_create(struct parse_ctx *ctx, uint expr_type, slice_t source_text) {
     struct expr *e = calloc(1, sizeof(struct expr));
-    e->expr = expr_type;
+    e->expr_kind = expr_type;
     e->source_text = source_text;
     return e;
 }
