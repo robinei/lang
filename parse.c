@@ -34,7 +34,7 @@ static struct expr *expr_create(struct parse_ctx *ctx, uint expr_type, slice_t s
 static struct expr *bool_create(struct parse_ctx *ctx, uint bool_value, slice_t source_text) {
     struct expr *e = expr_create(ctx, EXPR_CONST, source_text);
     e->c.type = &type_bool;
-    e->c.u._bool = bool_value;
+    e->c._bool = bool_value;
     return e;
 }
 static struct expr *unit_create(struct parse_ctx *ctx, slice_t source_text) {
@@ -407,7 +407,7 @@ static struct expr *parse_single_arg_prim(struct parse_ctx *ctx, int prim) {
 static struct expr *parse_int(struct parse_ctx *ctx, int offset, int base) {
     struct expr *result = expr_create(ctx, EXPR_CONST, ctx->token_text);
     result->c.type = &type_int;
-    result->c.u._int = (int)my_strtoll(ctx->token_text.ptr + offset, NULL, base);
+    result->c._int = (int)my_strtoll(ctx->token_text.ptr + offset, NULL, base);
     NEXT_TOKEN();
     return result;
 }

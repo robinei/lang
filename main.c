@@ -85,7 +85,7 @@ static void run_tests(char *filename) {
         if (e->c.type->type != TYPE_FUN) {
             continue;
         }
-        func = e->c.u.fun.func;
+        func = e->c.fun.func;
         if (func->name.len < 4 || memcmp(func->name.ptr, "test", 4)) {
             continue;
         }

@@ -84,10 +84,10 @@ struct expr_const {
             struct expr_decl *captured_consts;
         } fun;
         struct expr *expr;
-        struct type *type;
+        struct type *typeval;
         int _bool;
         int _int;
-    } u;
+    };
 };
 
 struct expr_sym {

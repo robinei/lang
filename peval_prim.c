@@ -6,7 +6,7 @@ static int bool_value(struct peval_ctx *ctx, struct expr *e) {
     if (e->c.type->type != TYPE_BOOL) {
         PEVAL_ERR(e, "expected bool");
     }
-    return e->c.u._bool;
+    return e->c._bool;
 }
 
 static int int_value(struct peval_ctx *ctx, struct expr *e) {
@@ -14,7 +14,7 @@ static int int_value(struct peval_ctx *ctx, struct expr *e) {
     if (e->c.type->type != TYPE_INT) {
         PEVAL_ERR(e, "expected int");
     }
-    return e->c.u._int;
+    return e->c._int;
 }
 
 static int const_eq(struct peval_ctx *ctx, struct expr *a, struct expr *b) {
@@ -24,13 +24,13 @@ static int const_eq(struct peval_ctx *ctx, struct expr *a, struct expr *b) {
     }
     switch (a->c.type->type) {
     case TYPE_TYPE:
-        return a->c.u.type == b->c.u.type;
+        return a->c.typeval == b->c.typeval;
     case TYPE_UNIT:
         return 1;
     case TYPE_BOOL:
-        return a->c.u._bool == b->c.u._bool;
+        return a->c._bool == b->c._bool;
     case TYPE_INT:
-        return a->c.u._int == b->c.u._int;
+        return a->c._int == b->c._int;
     default:
         PEVAL_ERR(a, "equality not implemented for type");
         return 0;
@@ -50,7 +50,7 @@ static int const_eq(struct peval_ctx *ctx, struct expr *a, struct expr *b) {
     if (ARG_CONST(0)) { \
         struct expr *res = expr_create(ctx, EXPR_CONST, e); \
         res->c.type = type_ptr; \
-        res->c.u.value_field = value_expression; \
+        res->c.value_field = value_expression; \
         return res; \
     } \
     break;
@@ -61,7 +61,7 @@ static int const_eq(struct peval_ctx *ctx, struct expr *a, struct expr *b) {
     if (ARG_CONST(0) && ARG_CONST(1)) { \
         struct expr *res = expr_create(ctx, EXPR_CONST, e); \
         res->c.type = type_ptr; \
-        res->c.u.value_field = value_expression; \
+        res->c.value_field = value_expression; \
         return res; \
     } \
     break;
@@ -78,7 +78,7 @@ static void splice_visitor(struct expr_visit_ctx *visit_ctx, struct expr *e) {
         if (expr->c.type->type != TYPE_EXPR) {
             PEVAL_ERR(e, "can only splice Expr values");
         }
-        *e = *expr->c.u.expr;
+        *e = *expr->c.expr;
     }
     else {
         expr_visit_children(visit_ctx, e);
@@ -160,7 +160,7 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
             visit_ctx.ctx = ctx;
 
             res->c.type = &type_expr;
-            res->c.u.expr = expr_visit(&visit_ctx, ARG(0));
+            res->c.expr = expr_visit(&visit_ctx, ARG(0));
             return res;
         }
         break;
@@ -175,7 +175,7 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
         if (ARG(0)->c.type->type != TYPE_EXPR) {
             PEVAL_ERR(e, "'splice' expected value of type 'Expr'");
         }
-        return peval(ctx, ARG(0)->c.u.expr);
+        return peval(ctx, ARG(0)->c.expr);
 
     case PRIM_PRINT:
         PEVAL_ARG(0);
