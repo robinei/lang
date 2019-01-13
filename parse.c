@@ -31,7 +31,7 @@ static struct expr *expr_create(struct parse_ctx *ctx, uint expr_type, slice_t s
     e->source_text = source_text;
     return e;
 }
-static struct expr *bool_create(struct parse_ctx *ctx, uint bool_value, slice_t source_text) {
+static struct expr *bool_create(struct parse_ctx *ctx, bool bool_value, slice_t source_text) {
     struct expr *e = expr_create(ctx, EXPR_CONST, source_text);
     e->c.tag = &type_bool;
     e->c.boolean = bool_value;
@@ -527,8 +527,8 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
     case TOK_MINUS: return parse_unary(ctx, PRIM_NEGATE);
     case TOK_NOT: return parse_unary(ctx, PRIM_LOGI_NOT);
     case TOK_NOT_BW: return parse_unary(ctx, PRIM_BITWISE_NOT);
-    case TOK_KW_TRUE: NEXT_TOKEN(); return bool_create(ctx, 1, first_token);
-    case TOK_KW_FALSE: NEXT_TOKEN(); return bool_create(ctx, 0, first_token);
+    case TOK_KW_TRUE: NEXT_TOKEN(); return bool_create(ctx, true, first_token);
+    case TOK_KW_FALSE: NEXT_TOKEN(); return bool_create(ctx, false, first_token);
     case TOK_BIN: return parse_int(ctx, 2, 2);
     case TOK_OCT: return parse_int(ctx, 0, 8);
     case TOK_DEC: return parse_int(ctx, 0, 10);

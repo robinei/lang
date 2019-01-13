@@ -84,7 +84,7 @@ struct expr {
                 } fun;
                 struct expr *expr;
                 struct type *type;
-                int boolean;
+                bool boolean;
                 int integer;
             };
             struct type *tag;
