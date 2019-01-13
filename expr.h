@@ -49,7 +49,7 @@ extern const char *prim_names[];
     X(CAP) \
     X(LET) \
     X(STRUCT) \
-    X(IF) \
+    X(COND) \
     X(PRIM) \
     X(CALL)
 
@@ -84,8 +84,8 @@ struct expr {
                 } fun;
                 struct expr *expr;
                 struct type *typeval;
-                int _bool;
-                int _int;
+                int boolean;
+                int integer;
             };
             struct type *type;
         } c; /* const */
@@ -115,10 +115,10 @@ struct expr {
         } struc;
 
         struct {
-            struct expr *cond_expr;
+            struct expr *pred_expr;
             struct expr *then_expr;
             struct expr *else_expr;
-        } _if;
+        } cond;
 
         struct {
             struct expr *arg_exprs[2];

@@ -6,7 +6,7 @@ static int bool_value(struct peval_ctx *ctx, struct expr *e) {
     if (e->c.type->type != TYPE_BOOL) {
         PEVAL_ERR(e, "expected bool");
     }
-    return e->c._bool;
+    return e->c.boolean;
 }
 
 static int int_value(struct peval_ctx *ctx, struct expr *e) {
@@ -14,7 +14,7 @@ static int int_value(struct peval_ctx *ctx, struct expr *e) {
     if (e->c.type->type != TYPE_INT) {
         PEVAL_ERR(e, "expected int");
     }
-    return e->c._int;
+    return e->c.integer;
 }
 
 static int const_eq(struct peval_ctx *ctx, struct expr *a, struct expr *b) {
@@ -28,9 +28,9 @@ static int const_eq(struct peval_ctx *ctx, struct expr *a, struct expr *b) {
     case TYPE_UNIT:
         return 1;
     case TYPE_BOOL:
-        return a->c._bool == b->c._bool;
+        return a->c.boolean == b->c.boolean;
     case TYPE_INT:
-        return a->c._int == b->c._int;
+        return a->c.integer == b->c.integer;
     default:
         PEVAL_ERR(a, "equality not implemented for type");
         return 0;
@@ -94,9 +94,9 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
 
     switch (e_new.prim.prim) {
     case PRIM_PLUS: PEVAL_ARG(0); int_value(ctx, ARG(0)); return ARG(0);
-    case PRIM_NEGATE: HANDLE_UNOP(&type_int, _int, -int_value(ctx, ARG(0)))
-    case PRIM_LOGI_NOT: HANDLE_UNOP(&type_bool, _bool, !bool_value(ctx, ARG(0)))
-    case PRIM_BITWISE_NOT: HANDLE_UNOP(&type_int, _int, ~int_value(ctx, ARG(0)))
+    case PRIM_NEGATE: HANDLE_UNOP(&type_int, integer, -int_value(ctx, ARG(0)))
+    case PRIM_LOGI_NOT: HANDLE_UNOP(&type_bool, boolean, !bool_value(ctx, ARG(0)))
+    case PRIM_BITWISE_NOT: HANDLE_UNOP(&type_int, integer, ~int_value(ctx, ARG(0)))
 
     case PRIM_SEQ:
         PEVAL_ARG(0);
@@ -118,26 +118,26 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
         }
         break;
 
-    case PRIM_BITWISE_OR: HANDLE_BINOP(&type_int, _int, BINOP(|, int_value))
-    case PRIM_BITWISE_XOR: HANDLE_BINOP(&type_int, _int, BINOP(^ , int_value))
-    case PRIM_BITWISE_AND: HANDLE_BINOP(&type_int, _int, BINOP(& , int_value))
+    case PRIM_BITWISE_OR: HANDLE_BINOP(&type_int, integer, BINOP(|, int_value))
+    case PRIM_BITWISE_XOR: HANDLE_BINOP(&type_int, integer, BINOP(^ , int_value))
+    case PRIM_BITWISE_AND: HANDLE_BINOP(&type_int, integer, BINOP(& , int_value))
 
-    case PRIM_EQ: HANDLE_BINOP(&type_bool, _bool, const_eq(ctx, ARG(0), ARG(1)))
-    case PRIM_NEQ: HANDLE_BINOP(&type_bool, _bool, !const_eq(ctx, ARG(0), ARG(1)))
+    case PRIM_EQ: HANDLE_BINOP(&type_bool, boolean, const_eq(ctx, ARG(0), ARG(1)))
+    case PRIM_NEQ: HANDLE_BINOP(&type_bool, boolean, !const_eq(ctx, ARG(0), ARG(1)))
 
-    case PRIM_LT: HANDLE_BINOP(&type_bool, _bool, BINOP(<, int_value))
-    case PRIM_GT: HANDLE_BINOP(&type_bool, _bool, BINOP(>, int_value))
-    case PRIM_LTEQ: HANDLE_BINOP(&type_bool, _bool, BINOP(<=, int_value))
-    case PRIM_GTEQ: HANDLE_BINOP(&type_bool, _bool, BINOP(>=, int_value))
+    case PRIM_LT: HANDLE_BINOP(&type_bool, boolean, BINOP(<, int_value))
+    case PRIM_GT: HANDLE_BINOP(&type_bool, boolean, BINOP(>, int_value))
+    case PRIM_LTEQ: HANDLE_BINOP(&type_bool, boolean, BINOP(<=, int_value))
+    case PRIM_GTEQ: HANDLE_BINOP(&type_bool, boolean, BINOP(>=, int_value))
 
-    case PRIM_BITWISE_LSH: HANDLE_BINOP(&type_int, _int, BINOP(<<, int_value))
-    case PRIM_BITWISE_RSH: HANDLE_BINOP(&type_int, _int, BINOP(>>, int_value))
+    case PRIM_BITWISE_LSH: HANDLE_BINOP(&type_int, integer, BINOP(<<, int_value))
+    case PRIM_BITWISE_RSH: HANDLE_BINOP(&type_int, integer, BINOP(>>, int_value))
 
-    case PRIM_ADD: HANDLE_BINOP(&type_int, _int, BINOP(+, int_value))
-    case PRIM_SUB: HANDLE_BINOP(&type_int, _int, BINOP(-, int_value))
-    case PRIM_MUL: HANDLE_BINOP(&type_int, _int, BINOP(*, int_value))
-    case PRIM_DIV: HANDLE_BINOP(&type_int, _int, BINOP(/ , int_value))
-    case PRIM_MOD: HANDLE_BINOP(&type_int, _int, BINOP(% , int_value))
+    case PRIM_ADD: HANDLE_BINOP(&type_int, integer, BINOP(+, int_value))
+    case PRIM_SUB: HANDLE_BINOP(&type_int, integer, BINOP(-, int_value))
+    case PRIM_MUL: HANDLE_BINOP(&type_int, integer, BINOP(*, int_value))
+    case PRIM_DIV: HANDLE_BINOP(&type_int, integer, BINOP(/ , int_value))
+    case PRIM_MOD: HANDLE_BINOP(&type_int, integer, BINOP(% , int_value))
 
     case PRIM_ASSERT:
         PEVAL_ARG(0);

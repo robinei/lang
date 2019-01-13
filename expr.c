@@ -87,10 +87,10 @@ void expr_visit_children(struct expr_visit_ctx *ctx, struct expr *e) {
     case EXPR_STRUCT:
         e->struc.fields = expr_decl_visit(ctx, e->struc.fields);
         break;
-    case EXPR_IF:
-        e->_if.cond_expr = expr_visit(ctx, e->_if.cond_expr);
-        e->_if.then_expr = expr_visit(ctx, e->_if.then_expr);
-        e->_if.else_expr = expr_visit(ctx, e->_if.else_expr);
+    case EXPR_COND:
+        e->cond.pred_expr = expr_visit(ctx, e->cond.pred_expr);
+        e->cond.then_expr = expr_visit(ctx, e->cond.then_expr);
+        e->cond.else_expr = expr_visit(ctx, e->cond.else_expr);
         break;
     case EXPR_PRIM:
         e->prim.arg_exprs[0] = expr_visit(ctx, e->prim.arg_exprs[0]);
@@ -175,13 +175,13 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
             }
             break;
         case TYPE_BOOL:
-            print(ctx, "%s", e->c._bool ? "true" : "false");
+            print(ctx, "%s", e->c.boolean ? "true" : "false");
             break;
         case TYPE_UNIT:
             print(ctx, "()");
             break;
         case TYPE_INT:
-            print(ctx, "%d", e->c._int);
+            print(ctx, "%d", e->c.integer);
             break;
         case TYPE_FUN:
             print(ctx, "<fun:%.*s>", e->c.fun.func->name.len, e->c.fun.func->name.ptr);
@@ -260,13 +260,13 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         --ctx->indent;
         break;
     }
-    case EXPR_IF: {
+    case EXPR_COND: {
         print(ctx, "if ");
-        print_expr(ctx, e->_if.cond_expr);
+        print_expr(ctx, e->cond.pred_expr);
         print(ctx, ": ");
-        print_expr(ctx, e->_if.then_expr);
+        print_expr(ctx, e->cond.then_expr);
         print(ctx, " else ");
-        print_expr(ctx, e->_if.else_expr);
+        print_expr(ctx, e->cond.else_expr);
         break;
     }
     case EXPR_PRIM: {

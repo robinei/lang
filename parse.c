@@ -34,7 +34,7 @@ static struct expr *expr_create(struct parse_ctx *ctx, uint expr_type, slice_t s
 static struct expr *bool_create(struct parse_ctx *ctx, uint bool_value, slice_t source_text) {
     struct expr *e = expr_create(ctx, EXPR_CONST, source_text);
     e->c.type = &type_bool;
-    e->c._bool = bool_value;
+    e->c.boolean = bool_value;
     return e;
 }
 static struct expr *unit_create(struct parse_ctx *ctx, slice_t source_text) {
@@ -262,13 +262,13 @@ static struct expr *parse_let(struct parse_ctx *ctx) {
 }
 
 static struct expr *parse_if(struct parse_ctx *ctx, int is_elif) {
-    struct expr *result, *cond_expr, *then_expr, *else_expr;
+    struct expr *result, *pred_expr, *then_expr, *else_expr;
     slice_t first_token = ctx->token_text;
 
     assert(is_elif ? ctx->token == TOK_KW_ELIF : ctx->token == TOK_KW_IF);
     NEXT_TOKEN();
 
-    cond_expr = parse_expr(ctx);
+    pred_expr = parse_expr(ctx);
 
     if (ctx->token != TOK_COLON) {
         PARSE_ERR("expected ':' after if condition");
@@ -295,10 +295,10 @@ static struct expr *parse_if(struct parse_ctx *ctx, int is_elif) {
         NEXT_TOKEN();
     }
 
-    result = expr_create(ctx, EXPR_IF, slice_span(first_token, else_expr->source_text));
-    result->_if.cond_expr = cond_expr;
-    result->_if.then_expr = then_expr;
-    result->_if.else_expr = else_expr;
+    result = expr_create(ctx, EXPR_COND, slice_span(first_token, else_expr->source_text));
+    result->cond.pred_expr = pred_expr;
+    result->cond.then_expr = then_expr;
+    result->cond.else_expr = else_expr;
     return result;
 }
 
@@ -413,7 +413,7 @@ static struct expr *parse_single_arg_prim(struct parse_ctx *ctx, int prim) {
 static struct expr *parse_int(struct parse_ctx *ctx, int offset, int base) {
     struct expr *result = expr_create(ctx, EXPR_CONST, ctx->token_text);
     result->c.type = &type_int;
-    result->c._int = (int)my_strtoll(ctx->token_text.ptr + offset, NULL, base);
+    result->c.integer = (int)my_strtoll(ctx->token_text.ptr + offset, NULL, base);
     NEXT_TOKEN();
     return result;
 }

@@ -286,8 +286,8 @@ static uint hash_const_args(struct expr_decl *p, struct expr_link *a, uint hash)
             hash = FNV1A(a->expr->c.type->type, hash);
             switch (a->expr->c.type->type) {
             case TYPE_TYPE: hash = FNV1A(a->expr->c.typeval, hash); break; /* WRONG? */
-            case TYPE_BOOL: hash = FNV1A(a->expr->c._bool, hash); break;
-            case TYPE_INT: hash = FNV1A(a->expr->c._int, hash); break;
+            case TYPE_BOOL: hash = FNV1A(a->expr->c.boolean, hash); break;
+            case TYPE_INT: hash = FNV1A(a->expr->c.integer, hash); break;
             default: assert(0); break;
             }
         }
@@ -599,30 +599,30 @@ static struct expr *peval_cap(struct peval_ctx *ctx, struct expr *e) {
 }
 
 static struct expr *peval_if(struct peval_ctx *ctx, struct expr *e) {
-    assert(e->expr == EXPR_IF);
+    assert(e->expr == EXPR_COND);
     struct expr e_new = *e;
 
-    struct expr *cond_expr = e_new._if.cond_expr = peval(ctx, e->_if.cond_expr);
+    struct expr *pred_expr = e_new.cond.pred_expr = peval(ctx, e->cond.pred_expr);
 
-    if (cond_expr->expr == EXPR_CONST) {
-        if (cond_expr->c.type->type != TYPE_BOOL) {
-            PEVAL_ERR(cond_expr, "if conditional must be boolean");
+    if (pred_expr->expr == EXPR_CONST) {
+        if (pred_expr->c.type->type != TYPE_BOOL) {
+            PEVAL_ERR(pred_expr, "if conditional must be boolean");
         }
-        e_new = *peval(ctx, cond_expr->c._bool ? e->_if.then_expr : e->_if.else_expr);
+        e_new = *peval(ctx, pred_expr->c.boolean ? e->cond.then_expr : e->cond.else_expr);
         return dup_expr(ctx, &e_new, e);
     }
 
-    e_new._if.then_expr = peval(ctx, e->_if.then_expr);
-    e_new._if.else_expr = peval(ctx, e->_if.else_expr);
+    e_new.cond.then_expr = peval(ctx, e->cond.then_expr);
+    e_new.cond.else_expr = peval(ctx, e->cond.else_expr);
 
-    if (e_new._if.then_expr->expr == EXPR_CONST && e_new._if.else_expr->expr == EXPR_CONST &&
-        (e_new._if.then_expr->c.type != e_new._if.else_expr->c.type)) {
+    if (e_new.cond.then_expr->expr == EXPR_CONST && e_new.cond.else_expr->expr == EXPR_CONST &&
+        (e_new.cond.then_expr->c.type != e_new.cond.else_expr->c.type)) {
         PEVAL_ERR(&e_new, "mismatching types in if arms");
     }
 
-    if (e_new._if.cond_expr != e->_if.cond_expr ||
-        e_new._if.then_expr != e->_if.then_expr ||
-        e_new._if.else_expr != e->_if.else_expr) {
+    if (e_new.cond.pred_expr != e->cond.pred_expr ||
+        e_new.cond.then_expr != e->cond.then_expr ||
+        e_new.cond.else_expr != e->cond.else_expr) {
         return dup_expr(ctx, &e_new, e);
     }
     return e;
@@ -660,7 +660,7 @@ struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
     case EXPR_CALL:
         result = peval_call(ctx, e);
         break;
-    case EXPR_IF:
+    case EXPR_COND:
         result = peval_if(ctx, e);
         break;
     default:
