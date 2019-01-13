@@ -111,3 +111,8 @@ testCallArg = fun:
     in
         foo(2, 1);
 
+
+// this will require changes to how functions are handled:
+//testStaticArgAsReturnType = fun:
+//    let test = fun(t: static Type; x: t) t: x
+//    in assert(test(Int, 123) == 123);
