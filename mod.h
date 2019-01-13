@@ -7,8 +7,7 @@
 struct function {
     slice_t name;
     struct expr *fun_expr;
-    struct expr *free_var_syms;
-    struct function *next;
+    struct expr_link *free_var_syms;
 };
 
 struct module_ctx {

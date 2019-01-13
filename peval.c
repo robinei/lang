@@ -427,8 +427,10 @@ static struct expr *peval_sym(struct peval_ctx *ctx, struct expr *e) {
     struct scope *fun_scope = ctx->scope->nearest_function_scope;
     assert(fun_scope);
     if (scope->depth < fun_scope->depth) {
-        e->sym.next = fun_scope->closure_syms;
-        fun_scope->closure_syms = e;
+        struct expr_link *link = calloc(1, sizeof(struct expr_link));
+        link->expr = e;
+        link->next = fun_scope->closure_syms;
+        fun_scope->closure_syms = link;
     }
 
     return e;
@@ -516,26 +518,29 @@ static struct expr *peval_fun(struct peval_ctx *ctx, struct expr *e) {
     struct scope *outer_scope = scope->outer_scope;
     struct scope *outer_fun_scope = outer_scope ? outer_scope->nearest_function_scope : NULL;
 
-    struct expr *sym = scope->closure_syms;
+    struct expr_link *sym = scope->closure_syms;
     while (sym) {
-        assert(sym->expr == EXPR_SYM);
-        struct expr *next = sym->sym.next;
+        assert(sym->expr->expr == EXPR_SYM);
+        struct expr_link *next = sym->next;
 
         struct expr_decl *d;
         struct scope *scope;
-        bool found = lookup_name(ctx, sym->sym.name, sym->sym.name_hash, &d, &scope);
+        bool found = lookup_name(ctx, sym->expr->sym.name, sym->expr->sym.name_hash, &d, &scope);
         assert(found);
 
-        struct expr *new_sym = dup_expr(ctx, sym, sym);
-        new_sym->sym.next = func->free_var_syms;
-        func->free_var_syms = new_sym;
+        struct expr_link *link = calloc(1, sizeof(struct expr_link));
+        link->expr = dup_expr(ctx, sym->expr, sym->expr);
+        link->next = func->free_var_syms;
+        func->free_var_syms = link;
 
         if (outer_fun_scope && scope->depth < outer_fun_scope->depth) {
-            sym->sym.next = outer_fun_scope->closure_syms;
-            outer_fun_scope->closure_syms = sym;
+            struct expr_link *link = calloc(1, sizeof(struct expr_link));
+            link->expr = sym->expr;
+            link->next = outer_fun_scope->closure_syms;
+            outer_fun_scope->closure_syms = link;
         }
         else {
-            sym->sym.next = NULL;
+            sym->next = NULL;
         }
 
         sym = next;
@@ -565,12 +570,12 @@ static struct expr *peval_cap(struct peval_ctx *ctx, struct expr *e) {
     assert(func);
 
     struct expr_decl *captured_consts = NULL;
-    struct expr *sym = func->free_var_syms;
+    struct expr_link *sym = func->free_var_syms;
     while (sym) {
-        struct expr *temp = peval_sym(ctx, sym);
+        struct expr *temp = peval_sym(ctx, sym->expr);
         if (temp->expr == EXPR_CONST) {
             struct expr_decl *d = calloc(1, sizeof(struct expr_decl));
-            d->name_expr = sym;
+            d->name_expr = sym->expr;
             d->value_expr = temp;
             d->next = captured_consts;
             captured_consts = d;
@@ -579,7 +584,7 @@ static struct expr *peval_cap(struct peval_ctx *ctx, struct expr *e) {
             captured_consts = NULL;
             break;
         }
-        sym = sym->sym.next;
+        sym = sym->next;
     }
 
     if (!captured_consts) {

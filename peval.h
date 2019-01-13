@@ -12,7 +12,7 @@ enum scope_kind {
 };
 
 struct scope {
-    struct expr *closure_syms;
+    struct expr_link *closure_syms;
 
     struct scope *outer_scope;
     struct scope *nearest_function_scope;

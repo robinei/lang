@@ -92,7 +92,6 @@ struct expr {
 
         struct {
             slice_t name;
-            struct expr *next; /* for chaining closure vars */
             uint name_hash;
         } sym;
 
