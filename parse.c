@@ -44,7 +44,7 @@ static struct expr *unit_create(struct parse_ctx *ctx, slice_t source_text) {
 }
 static struct expr *prim_create_bin(struct parse_ctx *ctx, int prim, struct expr *arg0, struct expr *arg1) {
     struct expr *e = expr_create(ctx, EXPR_PRIM, slice_span(arg0->source_text, arg1->source_text));
-    e->prim.prim = prim;
+    e->prim.prim_kind = prim;
     e->prim.arg_exprs[0] = arg0;
     e->prim.arg_exprs[1] = arg1;
     return e;
@@ -318,7 +318,7 @@ static struct expr *parse_unary(struct parse_ctx *ctx, int prim) {
     arg = parse_atom(ctx);
 
     result = expr_create(ctx, EXPR_PRIM, slice_span(first_token, arg->source_text));
-    result->prim.prim = prim;
+    result->prim.prim_kind = prim;
     result->prim.arg_exprs[0] = arg;
     return result;
 }
@@ -383,7 +383,7 @@ static struct expr *parse_prim_call(struct parse_ctx *ctx, int prim, uint arg_co
     }
 
     result = expr_create(ctx, EXPR_PRIM, slice_span(name, ctx->prev_token_text));
-    result->prim.prim = prim;
+    result->prim.prim_kind = prim;
     for (i = 0; i < arg_count; ++i, args = args->next) {
         result->prim.arg_exprs[i] = args->expr;
     }
@@ -405,7 +405,7 @@ static struct expr *parse_single_arg_prim(struct parse_ctx *ctx, int prim) {
     }
     NEXT_TOKEN();
     result = expr_create(ctx, EXPR_PRIM, slice_span(first_token, ctx->prev_token_text));
-    result->prim.prim = prim;
+    result->prim.prim_kind = prim;
     result->prim.arg_exprs[0] = e;
     return result;
 }
@@ -476,7 +476,7 @@ static void wrap_args_in_expr(struct parse_ctx *ctx, struct expr_link *arg) {
         return;
     }
     e = expr_create(ctx, EXPR_PRIM, arg->expr->source_text);
-    e->prim.prim = PRIM_QUOTE;
+    e->prim.prim_kind = PRIM_QUOTE;
     e->prim.arg_exprs[0] = arg->expr;
     arg->expr = e;
     wrap_args_in_expr(ctx, arg->next);
@@ -484,7 +484,7 @@ static void wrap_args_in_expr(struct parse_ctx *ctx, struct expr_link *arg) {
 
 static struct expr *macroify(struct parse_ctx *ctx, struct expr *call_expr) {
     struct expr *e = expr_create(ctx, EXPR_PRIM, call_expr->source_text);
-    e->prim.prim = PRIM_SPLICE;
+    e->prim.prim_kind = PRIM_SPLICE;
     e->prim.arg_exprs[0] = call_expr;
     wrap_args_in_expr(ctx, call_expr->call.args);
     return e;

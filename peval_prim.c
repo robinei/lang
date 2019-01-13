@@ -69,7 +69,7 @@ static int const_eq(struct peval_ctx *ctx, struct expr *a, struct expr *b) {
 
 
 static void splice_visitor(struct expr_visit_ctx *visit_ctx, struct expr *e) {
-    if (e->expr_kind == EXPR_PRIM && e->prim.prim == PRIM_SPLICE) {
+    if (e->expr_kind == EXPR_PRIM && e->prim.prim_kind == PRIM_SPLICE) {
         struct peval_ctx *ctx = visit_ctx->ctx;
         struct expr *expr = peval(ctx, e->prim.arg_exprs[0]);
         if (expr->expr_kind != EXPR_CONST) {
@@ -92,7 +92,7 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
 
     assert(e_new.expr_kind == EXPR_PRIM);
 
-    switch (e_new.prim.prim) {
+    switch (e_new.prim.prim_kind) {
     case PRIM_PLUS: PEVAL_ARG(0); int_value(ctx, ARG(0)); return ARG(0);
     case PRIM_NEGATE: HANDLE_UNOP(&type_int, integer, -int_value(ctx, ARG(0)))
     case PRIM_LOGI_NOT: HANDLE_UNOP(&type_bool, boolean, !bool_value(ctx, ARG(0)))

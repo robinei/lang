@@ -36,7 +36,7 @@
     X(STATIC)
 
 #define DECL_PRIM_ENUM(name) PRIM_##name,
-enum prim_kind { FOR_ALL_PRIMS(DECL_PRIM_ENUM) };
+enum { FOR_ALL_PRIMS(DECL_PRIM_ENUM) };
 #undef DECL_PRIM_ENUM
 
 extern const char *prim_names[];
@@ -122,7 +122,7 @@ struct expr {
 
         struct {
             struct expr *arg_exprs[2];
-            enum prim_kind prim;
+            uint prim_kind;
         } prim;
         
         struct {
@@ -176,14 +176,13 @@ static uint expr_list_length(struct expr_link *link) {
 }
 
 static slice_t expr_source_text(struct expr *e) {
-    slice_t empty = { "", 0 };
     while (e) {
         if (e->source_text.ptr) {
             return e->source_text;
         }
         e = e->antecedent;
     }
-    return empty;
+    return (slice_t) { "", 0 };
 }
 
 #endif

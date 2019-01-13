@@ -270,7 +270,7 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         break;
     }
     case EXPR_PRIM: {
-        switch (e->prim.prim) {
+        switch (e->prim.prim_kind) {
         case PRIM_PLUS: print_unop(ctx, "+", e); break;
         case PRIM_NEGATE: print_unop(ctx, "-", e); break;
         case PRIM_LOGI_NOT: print_unop(ctx, "!", e); break;
