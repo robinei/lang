@@ -1,7 +1,7 @@
 rwildcard=$(foreach d,$(wildcard $1*),$(call rwildcard,$d/,$2) $(filter $(subst *,%,$2),$d))
 
 CC=gcc
-CFLAGS=-c -Wall -Wno-unused-function -g
+CFLAGS=-std=c11 -c -Wall -Wno-unused-function -g
 LDFLAGS=
 SOURCES=$(call rwildcard, , *.c)
 OBJECTS=$(SOURCES:.c=.o)

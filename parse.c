@@ -33,20 +33,20 @@ static struct expr *expr_create(struct parse_ctx *ctx, uint expr_type, slice_t s
 }
 static struct expr *bool_create(struct parse_ctx *ctx, uint bool_value, slice_t source_text) {
     struct expr *e = expr_create(ctx, EXPR_CONST, source_text);
-    e->u._const.type = &type_bool;
-    e->u._const.u._bool = bool_value;
+    e->c.type = &type_bool;
+    e->c.u._bool = bool_value;
     return e;
 }
 static struct expr *unit_create(struct parse_ctx *ctx, slice_t source_text) {
     struct expr *e = expr_create(ctx, EXPR_CONST, source_text);
-    e->u._const.type = &type_unit;
+    e->c.type = &type_unit;
     return e;
 }
 static struct expr *prim_create_bin(struct parse_ctx *ctx, int prim, struct expr *arg0, struct expr *arg1) {
     struct expr *e = expr_create(ctx, EXPR_PRIM, slice_span(arg0->source_text, arg1->source_text));
-    e->u.prim.prim = prim;
-    e->u.prim.arg_exprs[0] = arg0;
-    e->u.prim.arg_exprs[1] = arg1;
+    e->prim.prim = prim;
+    e->prim.arg_exprs[0] = arg0;
+    e->prim.arg_exprs[1] = arg1;
     return e;
 }
 
@@ -149,7 +149,7 @@ struct expr *do_parse_module(struct parse_ctx *ctx) {
     }
 
     result = expr_create(ctx, EXPR_STRUCT, slice_span(first_token, ctx->prev_token_text));
-    result->u._struct.fields = fields;
+    result->_struct.fields = fields;
     return result;
 }
 
@@ -171,7 +171,7 @@ struct expr *parse_struct(struct parse_ctx *ctx) {
     }
 
     result = expr_create(ctx, EXPR_STRUCT, slice_span(first_token, ctx->prev_token_text));
-    result->u._struct.fields = fields;
+    result->_struct.fields = fields;
     return result;
 }
 
@@ -222,9 +222,9 @@ static struct expr *parse_fun(struct parse_ctx *ctx) {
     }
 
     result = expr_create(ctx, EXPR_FUN, slice_span(first_token, ctx->prev_token_text));
-    result->u.fun.params = params;
-    result->u.fun.return_type_expr = return_type_expr;
-    result->u.fun.body_expr = body_expr;
+    result->fun.params = params;
+    result->fun.return_type_expr = return_type_expr;
+    result->fun.body_expr = body_expr;
     return result;
 }
 
@@ -250,8 +250,8 @@ static struct expr *parse_let(struct parse_ctx *ctx) {
     }
 
     result = expr_create(ctx, EXPR_LET, slice_span(first_token, body_expr->source_text));
-    result->u.let.bindings = bindings;
-    result->u.let.body_expr = body_expr;
+    result->let.bindings = bindings;
+    result->let.body_expr = body_expr;
     return result;
 }
 
@@ -290,9 +290,9 @@ static struct expr *parse_if(struct parse_ctx *ctx, int is_elif) {
     }
 
     result = expr_create(ctx, EXPR_IF, slice_span(first_token, else_expr->source_text));
-    result->u._if.cond_expr = cond_expr;
-    result->u._if.then_expr = then_expr;
-    result->u._if.else_expr = else_expr;
+    result->_if.cond_expr = cond_expr;
+    result->_if.then_expr = then_expr;
+    result->_if.else_expr = else_expr;
     return result;
 }
 
@@ -312,8 +312,8 @@ static struct expr *parse_unary(struct parse_ctx *ctx, int prim) {
     arg = parse_atom(ctx);
 
     result = expr_create(ctx, EXPR_PRIM, slice_span(first_token, arg->source_text));
-    result->u.prim.prim = prim;
-    result->u.prim.arg_exprs[0] = arg;
+    result->prim.prim = prim;
+    result->prim.arg_exprs[0] = arg;
     return result;
 }
 
@@ -354,8 +354,8 @@ static struct expr *parse_call(struct parse_ctx *ctx, struct expr *callable_expr
     args = parse_args(ctx);
 
     result = expr_create(ctx, EXPR_CALL, slice_span(callable_expr->source_text, ctx->prev_token_text));
-    result->u.call.callable_expr = callable_expr;
-    result->u.call.args = args;
+    result->call.callable_expr = callable_expr;
+    result->call.args = args;
     return result;
 }
 
@@ -377,9 +377,9 @@ static struct expr *parse_prim_call(struct parse_ctx *ctx, int prim, uint arg_co
     }
 
     result = expr_create(ctx, EXPR_PRIM, slice_span(name, ctx->prev_token_text));
-    result->u.prim.prim = prim;
+    result->prim.prim = prim;
     for (i = 0; i < arg_count; ++i, args = args->next) {
-        result->u.prim.arg_exprs[i] = args->expr;
+        result->prim.arg_exprs[i] = args->expr;
     }
 
     return result;
@@ -399,15 +399,15 @@ static struct expr *parse_single_arg_prim(struct parse_ctx *ctx, int prim) {
     }
     NEXT_TOKEN();
     result = expr_create(ctx, EXPR_PRIM, slice_span(first_token, ctx->prev_token_text));
-    result->u.prim.prim = prim;
-    result->u.prim.arg_exprs[0] = e;
+    result->prim.prim = prim;
+    result->prim.arg_exprs[0] = e;
     return result;
 }
 
 static struct expr *parse_int(struct parse_ctx *ctx, int offset, int base) {
     struct expr *result = expr_create(ctx, EXPR_CONST, ctx->token_text);
-    result->u._const.type = &type_int;
-    result->u._const.u._int = (int)my_strtoll(ctx->token_text.ptr + offset, NULL, base);
+    result->c.type = &type_int;
+    result->c.u._int = (int)my_strtoll(ctx->token_text.ptr + offset, NULL, base);
     NEXT_TOKEN();
     return result;
 }
@@ -470,17 +470,17 @@ static void wrap_args_in_expr(struct parse_ctx *ctx, struct expr_link *arg) {
         return;
     }
     e = expr_create(ctx, EXPR_PRIM, arg->expr->source_text);
-    e->u.prim.prim = PRIM_QUOTE;
-    e->u.prim.arg_exprs[0] = arg->expr;
+    e->prim.prim = PRIM_QUOTE;
+    e->prim.arg_exprs[0] = arg->expr;
     arg->expr = e;
     wrap_args_in_expr(ctx, arg->next);
 }
 
 static struct expr *macroify(struct parse_ctx *ctx, struct expr *call_expr) {
     struct expr *e = expr_create(ctx, EXPR_PRIM, call_expr->source_text);
-    e->u.prim.prim = PRIM_SPLICE;
-    e->u.prim.arg_exprs[0] = call_expr;
-    wrap_args_in_expr(ctx, call_expr->u.call.args);
+    e->prim.prim = PRIM_SPLICE;
+    e->prim.arg_exprs[0] = call_expr;
+    wrap_args_in_expr(ctx, call_expr->call.args);
     return e;
 }
 
@@ -516,8 +516,8 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
             return parse_single_arg_prim(ctx, PRIM_PRINT);
         }
         result = expr_create(ctx, EXPR_SYM, first_token);
-        result->u.sym.name = ctx->token_text;
-        result->u.sym.name_hash = slice_hash_fnv1a(result->u.sym.name);
+        result->sym.name = ctx->token_text;
+        result->sym.name_hash = slice_hash_fnv1a(result->sym.name);
         NEXT_TOKEN();
         break;
     case TOK_PLUS: return parse_unary(ctx, PRIM_PLUS);

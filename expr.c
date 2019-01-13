@@ -76,29 +76,29 @@ void expr_visit_children(struct expr_visit_ctx *ctx, struct expr *e) {
     case EXPR_SYM:
         break;
     case EXPR_FUN:
-        e->u.fun.params = expr_decl_visit(ctx, e->u.fun.params);
-        e->u.fun.return_type_expr = expr_visit(ctx, e->u.fun.return_type_expr);
-        e->u.fun.body_expr = expr_visit(ctx, e->u.fun.body_expr);
+        e->fun.params = expr_decl_visit(ctx, e->fun.params);
+        e->fun.return_type_expr = expr_visit(ctx, e->fun.return_type_expr);
+        e->fun.body_expr = expr_visit(ctx, e->fun.body_expr);
         break;
     case EXPR_LET:
-        e->u.let.bindings = expr_decl_visit(ctx, e->u.let.bindings);
-        e->u.let.body_expr = expr_visit(ctx, e->u.let.body_expr);
+        e->let.bindings = expr_decl_visit(ctx, e->let.bindings);
+        e->let.body_expr = expr_visit(ctx, e->let.body_expr);
         break;
     case EXPR_STRUCT:
-        e->u._struct.fields = expr_decl_visit(ctx, e->u._struct.fields);
+        e->_struct.fields = expr_decl_visit(ctx, e->_struct.fields);
         break;
     case EXPR_IF:
-        e->u._if.cond_expr = expr_visit(ctx, e->u._if.cond_expr);
-        e->u._if.then_expr = expr_visit(ctx, e->u._if.then_expr);
-        e->u._if.else_expr = expr_visit(ctx, e->u._if.else_expr);
+        e->_if.cond_expr = expr_visit(ctx, e->_if.cond_expr);
+        e->_if.then_expr = expr_visit(ctx, e->_if.then_expr);
+        e->_if.else_expr = expr_visit(ctx, e->_if.else_expr);
         break;
     case EXPR_PRIM:
-        e->u.prim.arg_exprs[0] = expr_visit(ctx, e->u.prim.arg_exprs[0]);
-        e->u.prim.arg_exprs[1] = expr_visit(ctx, e->u.prim.arg_exprs[1]);
+        e->prim.arg_exprs[0] = expr_visit(ctx, e->prim.arg_exprs[0]);
+        e->prim.arg_exprs[1] = expr_visit(ctx, e->prim.arg_exprs[1]);
         break;
     case EXPR_CALL:
-        e->u.call.callable_expr = expr_visit(ctx, e->u.call.callable_expr);
-        e->u.call.args = expr_call_arg_visit(ctx, e->u.call.args);
+        e->call.callable_expr = expr_visit(ctx, e->call.callable_expr);
+        e->call.args = expr_call_arg_visit(ctx, e->call.args);
         break;
     default:
         assert(NULL && "unexpected expr type");
@@ -123,23 +123,23 @@ static void print_indent(struct print_ctx *ctx) {
 
 static void print_unop(struct print_ctx *ctx, const char *op, struct expr *e) {
     print(ctx, "%s", op);
-    print_expr(ctx, e->u.prim.arg_exprs[0]);
+    print_expr(ctx, e->prim.arg_exprs[0]);
 }
 
 static void print_binop(struct print_ctx *ctx, const char *op, struct expr *e) {
-    print_expr(ctx, e->u.prim.arg_exprs[0]);
+    print_expr(ctx, e->prim.arg_exprs[0]);
     print(ctx, "%s", op);
-    print_expr(ctx, e->u.prim.arg_exprs[1]);
+    print_expr(ctx, e->prim.arg_exprs[1]);
 }
 
 static void print_primcall(struct print_ctx *ctx, const char *name, struct expr *e) {
     print(ctx, "%s(", name);
-    if (e->u.prim.arg_exprs[0]) {
-        print_expr(ctx, e->u.prim.arg_exprs[0]);
+    if (e->prim.arg_exprs[0]) {
+        print_expr(ctx, e->prim.arg_exprs[0]);
     }
-    if (e->u.prim.arg_exprs[1]) {
+    if (e->prim.arg_exprs[1]) {
         print(ctx, ", ");
-        print_expr(ctx, e->u.prim.arg_exprs[1]);
+        print_expr(ctx, e->prim.arg_exprs[1]);
     }
     print(ctx, ")");
 }
@@ -155,14 +155,14 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
     }
     switch (e->expr) {
     case EXPR_CONST:
-        switch (e->u._const.type->type) {
+        switch (e->c.type->type) {
         case TYPE_EXPR:
             printf("Expr<");
-            print_expr(ctx, e->u._const.u.expr);
+            print_expr(ctx, e->c.u.expr);
             printf(">");
             break;
         case TYPE_TYPE:
-            switch (e->u._const.u.type->type) {
+            switch (e->c.u.type->type) {
             case TYPE_EXPR: print(ctx, "<Expr>"); break;
             case TYPE_TYPE: print(ctx, "<Type>"); break;
             case TYPE_UNIT: print(ctx, "<Unit>"); break;
@@ -171,33 +171,33 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
             case TYPE_FUN: print(ctx, "<Fn>"); break;
             case TYPE_STRUCT: print(ctx, "<Struct>"); break;
             default:
-                print(ctx, "<type:%s>", type_names[e->u._const.u.type->type]); break;
+                print(ctx, "<type:%s>", type_names[e->c.u.type->type]); break;
             }
             break;
         case TYPE_BOOL:
-            print(ctx, "%s", e->u._const.u._bool ? "true" : "false");
+            print(ctx, "%s", e->c.u._bool ? "true" : "false");
             break;
         case TYPE_UNIT:
             print(ctx, "()");
             break;
         case TYPE_INT:
-            print(ctx, "%d", e->u._const.u._int);
+            print(ctx, "%d", e->c.u._int);
             break;
         case TYPE_FUN:
-            print(ctx, "<fun:%.*s>", e->u._const.u.fun.func->name.len, e->u._const.u.fun.func->name.ptr);
+            print(ctx, "<fun:%.*s>", e->c.u.fun.func->name.len, e->c.u.fun.func->name.ptr);
             break;
         default:
-            print(ctx, "<const:%s>", type_names[e->u._const.type->type]);
+            print(ctx, "<const:%s>", type_names[e->c.type->type]);
             break;
         }
         break;
     case EXPR_SYM:
-        print(ctx, "%.*s", e->u.sym.name.len, e->u.sym.name.ptr);
+        print(ctx, "%.*s", e->sym.name.len, e->sym.name.ptr);
         break;
     case EXPR_FUN: {
         struct expr_decl *p;
         print(ctx, "fun(");
-        for (p = e->u.fun.params; p; p = p->next) {
+        for (p = e->fun.params; p; p = p->next) {
             print(ctx, "%.*s", p->name.len, p->name.ptr);
             if (p->type_expr) {
                 print(ctx, ": ");
@@ -208,21 +208,21 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
             }
         }
         print(ctx, ")");
-        if (e->u.fun.return_type_expr) {
+        if (e->fun.return_type_expr) {
             print(ctx, " ");
-            print_expr(ctx, e->u.fun.return_type_expr);
+            print_expr(ctx, e->fun.return_type_expr);
         }
         print(ctx, ": ");
-        print_expr(ctx, e->u.fun.body_expr);
+        print_expr(ctx, e->fun.body_expr);
         break;
     }
     case EXPR_CAP:
-        print(ctx, "<cap:%.*s>", e->u.cap.func->name.len, e->u.cap.func->name.ptr);
+        print(ctx, "<cap:%.*s>", e->cap.func->name.len, e->cap.func->name.ptr);
         break;
     case EXPR_LET: {
         struct expr_decl *b;
         print(ctx, "let ");
-        for (b = e->u.let.bindings; b; b = b->next) {
+        for (b = e->let.bindings; b; b = b->next) {
             print(ctx, "%.*s", b->name.len, b->name.ptr);
             if (b->type_expr) {
                 print(ctx, ": ");
@@ -240,7 +240,7 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         struct expr_decl *f;
         print(ctx, "struct\n");
         ++ctx->indent;
-        for (f = e->u._struct.fields; f; f = f->next) {
+        for (f = e->_struct.fields; f; f = f->next) {
             print_indent(ctx);
             print(ctx, "%.*s", f->name.len, f->name.ptr);
             if (f->type_expr) {
@@ -262,15 +262,15 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
     }
     case EXPR_IF: {
         print(ctx, "if ");
-        print_expr(ctx, e->u._if.cond_expr);
+        print_expr(ctx, e->_if.cond_expr);
         print(ctx, ": ");
-        print_expr(ctx, e->u._if.then_expr);
+        print_expr(ctx, e->_if.then_expr);
         print(ctx, " else ");
-        print_expr(ctx, e->u._if.else_expr);
+        print_expr(ctx, e->_if.else_expr);
         break;
     }
     case EXPR_PRIM: {
-        switch (e->u.prim.prim) {
+        switch (e->prim.prim) {
         case PRIM_PLUS: print_unop(ctx, "+", e); break;
         case PRIM_NEGATE: print_unop(ctx, "-", e); break;
         case PRIM_LOGI_NOT: print_unop(ctx, "!", e); break;
@@ -304,9 +304,9 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
     }
     case EXPR_CALL: {
         struct expr_link *arg;
-        print_expr(ctx, e->u.call.callable_expr);
+        print_expr(ctx, e->call.callable_expr);
         print(ctx, "(");
-        for (arg = e->u.call.args; arg; arg = arg->next) {
+        for (arg = e->call.args; arg; arg = arg->next) {
             print_expr(ctx, arg->expr);
             if (arg->next) {
                 print(ctx, ", ");

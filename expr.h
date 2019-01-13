@@ -133,7 +133,7 @@ struct expr_call {
 
 struct expr {
     union {
-        struct expr_const _const;
+        struct expr_const c;
         struct expr_sym sym;
         struct expr_fun fun;
         struct expr_cap cap;
@@ -142,7 +142,7 @@ struct expr {
         struct expr_if _if;
         struct expr_prim prim;
         struct expr_call call;
-    } u;
+    };
 
     slice_t source_text;
     struct expr *antecedent;

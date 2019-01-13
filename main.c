@@ -68,7 +68,7 @@ static void run_tests(char *filename) {
     printf("running tests...\n");
 
     peval_ctx.force_full_expansion = 1;
-    decls = mod_ctx.struct_expr->u._struct.fields;
+    decls = mod_ctx.struct_expr->_struct.fields;
     for (; decls; decls = decls->next) {
         struct expr *e = decls->value_expr;
         struct function *func;
@@ -82,17 +82,17 @@ static void run_tests(char *filename) {
         if (e->expr != EXPR_CONST) {
             continue;
         }
-        if (e->u._const.type->type != TYPE_FUN) {
+        if (e->c.type->type != TYPE_FUN) {
             continue;
         }
-        func = e->u._const.u.fun.func;
+        func = e->c.u.fun.func;
         if (func->name.len < 4 || memcmp(func->name.ptr, "test", 4)) {
             continue;
         }
-        if (func->fun_expr->u.fun.params) {
+        if (func->fun_expr->fun.params) {
             continue;
         }
-        call_expr.u.call.callable_expr = e;
+        call_expr.call.callable_expr = e;
         printf("running test function: %.*s\n", func->name.len, func->name.ptr);
         fflush(stdout);
 
