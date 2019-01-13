@@ -102,10 +102,10 @@ static bool lookup_name(struct peval_ctx *ctx, slice_t name, uint name_hash, str
 
     while (scope) {
         for (struct expr_decl *d = scope->decls; d; d = d->next) {
-            if (d->name_hash != name_hash) {
+            if (d->name_expr->sym.name_hash != name_hash) {
                 continue;
             }
-            if (slice_equals(name, d->name)) {
+            if (slice_equals(name, d->name_expr->sym.name)) {
                 *decl_out = d;
                 *scope_out = scope;
                 return true;
@@ -120,7 +120,7 @@ static bool lookup_name(struct peval_ctx *ctx, slice_t name, uint name_hash, str
 
 static struct expr_decl *lookup_name_shallow(struct peval_ctx *ctx, slice_t name, uint name_hash) {
     for (struct expr_decl *d = ctx->scope->decls; d; d = d->next) {
-        if (d->name_hash == name_hash && slice_equals(name, d->name)) {
+        if (d->name_expr->sym.name_hash == name_hash && slice_equals(name, d->name_expr->sym.name)) {
             return d;
         }
     }
@@ -138,22 +138,24 @@ static bool is_dummy_fun_const(struct expr *e) {
 static void add_single_decl_to_scope(struct peval_ctx *ctx, struct expr_decl *d) {
     struct scope *scope = ctx->scope;
     assert(scope);
+    assert(d->name_expr);
+    assert(d->name_expr->expr == EXPR_SYM);
 
     struct expr *type_expr = peval_type(ctx, d->type_expr);
 
-    struct expr_decl *d_old = lookup_name_shallow(ctx, d->name, d->name_hash);
+    struct expr_decl *d_old = lookup_name_shallow(ctx, d->name_expr->sym.name, d->name_expr->sym.name_hash);
     if (d_old) {
         if (d_old->value_expr && !is_dummy_fun_const(d_old->value_expr)) {
             PEVAL_ERR(d_old->value_expr, "forward declaration cannot have value");
         }
         if (!d_old->type_expr) {
-            PEVAL_ERR(NULL, "forward declaration must have type declaration"); /* TODO: declaration itself should be expr */
+            PEVAL_ERR(d_old->name_expr, "forward declaration must have type declaration");
         }
         if (type_expr) {
             PEVAL_ERR(type_expr, "type of name was already forward declared");
         }
         if (!d->value_expr) {
-            PEVAL_ERR(NULL, "expected value matching forward declaration"); /* TODO: declaration itself should be expr */
+            PEVAL_ERR(d->name_expr, "expected value matching forward declaration");
         }
         struct expr *value_expr = peval_force_expand(ctx, d->value_expr, scope->kind == SCOPE_STATIC || d->is_static);
         check_type(ctx, value_expr, d_old->type_expr);
@@ -182,7 +184,7 @@ static void add_single_decl_to_scope(struct peval_ctx *ctx, struct expr_decl *d)
         if ((scope->kind == SCOPE_STATIC || d->is_static) && type_expr && type_expr->c.typeval->type == TYPE_FUN) {
             /* create a dummy forward declare function */
             struct function *func = calloc(1, sizeof(struct function));
-            func->name = make_func_name(ctx, d->name);
+            func->name = make_func_name(ctx, d->name_expr->sym.name);
 
             d_new->value_expr = calloc(1, sizeof(struct expr));
             d_new->value_expr->expr = EXPR_CONST;
@@ -197,7 +199,7 @@ static void add_single_decl_to_scope(struct peval_ctx *ctx, struct expr_decl *d)
         } else {
             d_new->value_expr = peval_force_expand(ctx, d->value_expr, scope->kind == SCOPE_STATIC || d->is_static);
             if (is_fun_const(d_new->value_expr)) {
-                d_new->value_expr->c.fun.func->name = d->name;
+                d_new->value_expr->c.fun.func->name = d->name_expr->sym.name;
             }
         }
     }
@@ -280,7 +282,7 @@ static uint hash_const_args(struct expr_decl *p, struct expr_link *a, uint hash)
     if (a) {
         assert(p);
         if (a->expr->expr == EXPR_CONST) {
-            hash = fnv1a((unsigned char *)p->name.ptr, p->name.len, hash);
+            hash = fnv1a((unsigned char *)p->name_expr->sym.name.ptr, p->name_expr->sym.name.len, hash);
             hash = FNV1A(a->expr->c.type->type, hash);
             switch (a->expr->c.type->type) {
             case TYPE_TYPE: hash = FNV1A(a->expr->c.typeval, hash); break; /* WRONG? */
@@ -568,8 +570,7 @@ static struct expr *peval_cap(struct peval_ctx *ctx, struct expr *e) {
         struct expr *temp = peval_sym(ctx, sym);
         if (temp->expr == EXPR_CONST) {
             struct expr_decl *d = calloc(1, sizeof(struct expr_decl));
-            d->name = sym->sym.name;
-            d->name_hash = sym->sym.name_hash;
+            d->name_expr = sym;
             d->value_expr = temp;
             d->next = captured_consts;
             captured_consts = d;
@@ -672,10 +673,12 @@ static void bind_type(struct peval_ctx *ctx, char *name_str, struct type *type) 
     e_type->c.type = &type_type;
     e_type->c.typeval = type;
 
-    slice_t name = slice_from_str(name_str);
+    struct expr *name_expr = expr_create(ctx, EXPR_SYM, NULL);
+    name_expr->sym.name = slice_from_str(name_str);
+    name_expr->sym.name_hash = slice_hash_fnv1a(name_expr->sym.name);
+
     struct expr_decl d = {
-        .name = name,
-        .name_hash = slice_hash_fnv1a(name),
+        .name_expr = name_expr,
         .value_expr = e_type
     };
 

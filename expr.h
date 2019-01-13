@@ -66,11 +66,10 @@ struct expr_link {
 };
 
 struct expr_decl {
-    slice_t name;
+    struct expr *name_expr;
     struct expr *type_expr;
     struct expr *value_expr;
     struct expr_decl *next;
-    uint name_hash;
     bool is_static : 1;
     bool is_mut : 1;
 };

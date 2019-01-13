@@ -198,7 +198,7 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         struct expr_decl *p;
         print(ctx, "fun(");
         for (p = e->fun.params; p; p = p->next) {
-            print(ctx, "%.*s", p->name.len, p->name.ptr);
+            print(ctx, "%.*s", p->name_expr->sym.name.len, p->name_expr->sym.name.ptr);
             if (p->type_expr) {
                 print(ctx, ": ");
                 print_expr(ctx, p->type_expr);
@@ -223,7 +223,7 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         struct expr_decl *b;
         print(ctx, "let ");
         for (b = e->let.bindings; b; b = b->next) {
-            print(ctx, "%.*s", b->name.len, b->name.ptr);
+            print(ctx, "%.*s", b->name_expr->sym.name.len, b->name_expr->sym.name.ptr);
             if (b->type_expr) {
                 print(ctx, ": ");
                 print_expr(ctx, b->type_expr);
@@ -242,7 +242,7 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         ++ctx->indent;
         for (f = e->struc.fields; f; f = f->next) {
             print_indent(ctx);
-            print(ctx, "%.*s", f->name.len, f->name.ptr);
+            print(ctx, "%.*s", f->name_expr->sym.name.len, f->name_expr->sym.name.ptr);
             if (f->type_expr) {
                 print(ctx, ": ");
                 print_expr(ctx, f->type_expr);

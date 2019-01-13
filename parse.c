@@ -71,6 +71,15 @@ static int token_ends_expr(int tok) {
     return 0;
 }
 
+static struct expr *parse_symbol(struct parse_ctx *ctx) {
+    assert(ctx->token == TOK_IDENT);
+    struct expr *e = expr_create(ctx, EXPR_SYM, ctx->token_text);
+    e->sym.name = ctx->token_text;
+    e->sym.name_hash = slice_hash_fnv1a(ctx->token_text);
+    NEXT_TOKEN();
+    return e;
+}
+
 static struct expr_decl *parse_decls(struct parse_ctx *ctx) {
     struct expr_decl *d;
 
@@ -79,10 +88,7 @@ static struct expr_decl *parse_decls(struct parse_ctx *ctx) {
     }
 
     d = calloc(1, sizeof(struct expr_decl));
-    d->name = ctx->token_text;
-    d->name_hash = slice_hash_fnv1a(d->name);
-
-    NEXT_TOKEN();
+    d->name_expr = parse_symbol(ctx);
 
     if (ctx->token == TOK_COMMA) {
         NEXT_TOKEN();
@@ -515,10 +521,7 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
         if (!slice_str_cmp(ctx->token_text, "print")) {
             return parse_single_arg_prim(ctx, PRIM_PRINT);
         }
-        result = expr_create(ctx, EXPR_SYM, first_token);
-        result->sym.name = ctx->token_text;
-        result->sym.name_hash = slice_hash_fnv1a(result->sym.name);
-        NEXT_TOKEN();
+        result = parse_symbol(ctx);
         break;
     case TOK_PLUS: return parse_unary(ctx, PRIM_PLUS);
     case TOK_MINUS: return parse_unary(ctx, PRIM_NEGATE);
