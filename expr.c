@@ -155,14 +155,14 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
     }
     switch (e->expr_kind) {
     case EXPR_CONST:
-        switch (e->c.type->type_kind) {
+        switch (e->c.tag->type_kind) {
         case TYPE_EXPR:
             printf("Expr<");
             print_expr(ctx, e->c.expr);
             printf(">");
             break;
         case TYPE_TYPE:
-            switch (e->c.typeval->type_kind) {
+            switch (e->c.type->type_kind) {
             case TYPE_EXPR: print(ctx, "<Expr>"); break;
             case TYPE_TYPE: print(ctx, "<Type>"); break;
             case TYPE_UNIT: print(ctx, "<Unit>"); break;
@@ -171,7 +171,7 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
             case TYPE_FUN: print(ctx, "<Fn>"); break;
             case TYPE_STRUCT: print(ctx, "<Struct>"); break;
             default:
-                print(ctx, "<type:%s>", type_names[e->c.typeval->type_kind]); break;
+                print(ctx, "<type:%s>", type_names[e->c.type->type_kind]); break;
             }
             break;
         case TYPE_BOOL:
@@ -187,7 +187,7 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
             print(ctx, "<fun:%.*s>", e->c.fun.func->name.len, e->c.fun.func->name.ptr);
             break;
         default:
-            print(ctx, "<const:%s>", type_names[e->c.type->type_kind]);
+            print(ctx, "<const:%s>", type_names[e->c.tag->type_kind]);
             break;
         }
         break;

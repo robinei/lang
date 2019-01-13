@@ -33,13 +33,13 @@ static struct expr *expr_create(struct parse_ctx *ctx, uint expr_type, slice_t s
 }
 static struct expr *bool_create(struct parse_ctx *ctx, uint bool_value, slice_t source_text) {
     struct expr *e = expr_create(ctx, EXPR_CONST, source_text);
-    e->c.type = &type_bool;
+    e->c.tag = &type_bool;
     e->c.boolean = bool_value;
     return e;
 }
 static struct expr *unit_create(struct parse_ctx *ctx, slice_t source_text) {
     struct expr *e = expr_create(ctx, EXPR_CONST, source_text);
-    e->c.type = &type_unit;
+    e->c.tag = &type_unit;
     return e;
 }
 static struct expr *prim_create_bin(struct parse_ctx *ctx, int prim, struct expr *arg0, struct expr *arg1) {
@@ -412,7 +412,7 @@ static struct expr *parse_single_arg_prim(struct parse_ctx *ctx, int prim) {
 
 static struct expr *parse_int(struct parse_ctx *ctx, int offset, int base) {
     struct expr *result = expr_create(ctx, EXPR_CONST, ctx->token_text);
-    result->c.type = &type_int;
+    result->c.tag = &type_int;
     result->c.integer = (int)my_strtoll(ctx->token_text.ptr + offset, NULL, base);
     NEXT_TOKEN();
     return result;

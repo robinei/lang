@@ -54,7 +54,7 @@ extern const char *prim_names[];
     X(CALL)
 
 #define DECL_EXPR_ENUM(name) EXPR_##name,
-enum expr_kind { FOR_ALL_EXPRS(DECL_EXPR_ENUM) };
+enum { FOR_ALL_EXPRS(DECL_EXPR_ENUM) };
 #undef DECL_EXPR_ENUM
 
 extern const char *expr_names[];
@@ -83,11 +83,11 @@ struct expr {
                     struct expr_decl *captured_consts;
                 } fun;
                 struct expr *expr;
-                struct type *typeval;
+                struct type *type;
                 int boolean;
                 int integer;
             };
-            struct type *type;
+            struct type *tag;
         } c; /* const */
 
         struct {
@@ -134,7 +134,7 @@ struct expr {
     slice_t source_text;
     struct expr *antecedent;
 
-    enum expr_kind expr_kind;
+    uint expr_kind;
 };
 
 

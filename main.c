@@ -82,7 +82,7 @@ static void run_tests(char *filename) {
         if (e->expr_kind != EXPR_CONST) {
             continue;
         }
-        if (e->c.type->type_kind != TYPE_FUN) {
+        if (e->c.tag->type_kind != TYPE_FUN) {
             continue;
         }
         func = e->c.fun.func;
