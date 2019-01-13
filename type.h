@@ -14,7 +14,7 @@
     X(STRUCT)
 
 #define DECL_TYPE_ENUM(name) TYPE_##name,
-enum type_enum {
+enum type_kind {
     FOR_ALL_TYPES(DECL_TYPE_ENUM)
 };
 #undef DECL_TYPE_ENUM
@@ -43,7 +43,7 @@ struct type_struct_field {
 };
 
 struct type {
-    enum type_enum type;
+    enum type_kind type_kind;
     union {
         struct type_fun fun;
         struct type_struct struc;
