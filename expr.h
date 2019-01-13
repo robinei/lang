@@ -75,73 +75,62 @@ struct expr_decl {
     bool is_mut : 1;
 };
 
-
-struct expr_const {
-    struct type *type;
-    union {
-        struct {
-            struct function *func;
-            struct expr_decl *captured_consts;
-        } fun;
-        struct expr *expr;
-        struct type *typeval;
-        int _bool;
-        int _int;
-    };
-};
-
-struct expr_sym {
-    slice_t name;
-    struct expr *next; /* for chaining closure vars */
-    uint name_hash;
-};
-
-struct expr_fun {
-    struct expr_decl *params;
-    struct expr *return_type_expr;
-    struct expr *body_expr; /* NULL for fun type declaration */
-};
-
-struct expr_cap {
-    struct function *func;
-};
-
-struct expr_let {
-    struct expr_decl *bindings;
-    struct expr *body_expr;
-};
-
-struct expr_struct {
-    struct expr_decl *fields;
-};
-
-struct expr_if {
-    struct expr *cond_expr;
-    struct expr *then_expr;
-    struct expr *else_expr;
-};
-
-struct expr_prim {
-    struct expr *arg_exprs[2];
-    enum prim_kind prim;
-};
-
-struct expr_call {
-    struct expr *callable_expr;
-    struct expr_link *args;
-};
-
 struct expr {
     union {
-        struct expr_const c;
-        struct expr_sym sym;
-        struct expr_fun fun;
-        struct expr_cap cap;
-        struct expr_let let;
-        struct expr_struct _struct;
-        struct expr_if _if;
-        struct expr_prim prim;
-        struct expr_call call;
+        struct {
+            union {
+                struct {
+                    struct function *func;
+                    struct expr_decl *captured_consts;
+                } fun;
+                struct expr *expr;
+                struct type *typeval;
+                int _bool;
+                int _int;
+            };
+            struct type *type;
+        } c; /* const */
+
+        struct {
+            slice_t name;
+            struct expr *next; /* for chaining closure vars */
+            uint name_hash;
+        } sym;
+
+        struct {
+            struct expr_decl *params;
+            struct expr *return_type_expr;
+            struct expr *body_expr; /* NULL for fun type declaration */
+        } fun;
+
+        struct {
+            struct function *func;
+        } cap;
+
+        struct {
+            struct expr_decl *bindings;
+            struct expr *body_expr;
+        } let;
+
+        struct {
+            struct expr_decl *fields;
+        } _struct;
+
+        struct {
+            struct expr *cond_expr;
+            struct expr *then_expr;
+            struct expr *else_expr;
+        } _if;
+
+        struct {
+            struct expr *arg_exprs[2];
+            enum prim_kind prim;
+        } prim;
+        
+        struct {
+            struct expr *callable_expr;
+            struct expr_link *args;
+        } call;
     };
 
     slice_t source_text;
