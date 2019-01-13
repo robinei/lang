@@ -72,15 +72,15 @@ static int token_ends_expr(int tok) {
 }
 
 static struct expr_decl *parse_decls(struct parse_ctx *ctx) {
-    struct expr_decl *f;
+    struct expr_decl *d;
 
     if (ctx->token != TOK_IDENT) {
         return NULL;
     }
 
-    f = calloc(1, sizeof(struct expr_decl));
-    f->name = ctx->token_text;
-    f->name_hash = slice_hash_fnv1a(f->name);
+    d = calloc(1, sizeof(struct expr_decl));
+    d->name = ctx->token_text;
+    d->name_hash = slice_hash_fnv1a(d->name);
 
     NEXT_TOKEN();
 
@@ -89,38 +89,38 @@ static struct expr_decl *parse_decls(struct parse_ctx *ctx) {
         if (ctx->token != TOK_IDENT) {
             PARSE_ERR("unexpected identifier after ',' in declaration");
         }
-        f->next = parse_decls(ctx);
-        f->type_expr = f->next->type_expr;
-        f->value_expr = f->next->value_expr;
-        f->is_static = f->next->is_static;
-        f->is_mut = f->next->is_mut;
+        d->next = parse_decls(ctx);
+        d->type_expr = d->next->type_expr;
+        d->value_expr = d->next->value_expr;
+        d->is_static = d->next->is_static;
+        d->is_mut = d->next->is_mut;
     }
     else {
         if (ctx->token == TOK_COLON) {
             NEXT_TOKEN();
             if (ctx->token == TOK_KW_STATIC) {
-                f->is_static = true;
+                d->is_static = true;
                 NEXT_TOKEN();
             }
             if (ctx->token == TOK_KW_MUT) {
-                f->is_mut = true;
+                d->is_mut = true;
                 NEXT_TOKEN();
             }
-            f->type_expr = parse_expr(ctx);
+            d->type_expr = parse_expr(ctx);
         }
 
         if (ctx->token == TOK_ASSIGN) {
             NEXT_TOKEN();
-            f->value_expr = parse_expr(ctx);
+            d->value_expr = parse_expr(ctx);
         }
 
         if (ctx->token == TOK_SEMICOLON) {
             NEXT_TOKEN();
-            f->next = parse_decls(ctx);
+            d->next = parse_decls(ctx);
         }
     }
 
-    return f;
+    return d;
 }
 
 struct expr *parse_module(char *source_text, struct error_ctx *err_ctx) {

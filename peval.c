@@ -567,12 +567,12 @@ static struct expr *peval_cap(struct peval_ctx *ctx, struct expr *e) {
     while (sym) {
         struct expr *temp = peval_sym(ctx, sym);
         if (temp->expr == EXPR_CONST) {
-            struct expr_decl *decl = calloc(1, sizeof(struct expr_decl));
-            decl->name = sym->sym.name;
-            decl->name_hash = sym->sym.name_hash;
-            decl->value_expr = temp;
-            decl->next = captured_consts;
-            captured_consts = decl;
+            struct expr_decl *d = calloc(1, sizeof(struct expr_decl));
+            d->name = sym->sym.name;
+            d->name_hash = sym->sym.name_hash;
+            d->value_expr = temp;
+            d->next = captured_consts;
+            captured_consts = d;
         }
         else {
             captured_consts = NULL;
