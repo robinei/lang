@@ -14,7 +14,6 @@ struct parse_ctx {
     slice_t token_text;
     slice_t prev_token_text;
 
-    int sync_after_error;
     jmp_buf error_jmp_buf;
 };
 

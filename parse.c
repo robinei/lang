@@ -12,7 +12,6 @@ static struct expr *parse_atom(struct parse_ctx *ctx);
 
 #define PARSE_ERR(...) \
     do { \
-        ctx->sync_after_error = 1; \
         error_emit(ctx->err_ctx, ERROR_CATEGORY_ERROR, ctx->token_text, __VA_ARGS__); \
         longjmp(ctx->error_jmp_buf, 1); \
     } while(0)
@@ -51,7 +50,7 @@ static struct expr *prim_create_bin(struct parse_ctx *ctx, int prim, struct expr
 }
 
 
-static int token_ends_expr(int tok) {
+static bool token_ends_expr(int tok) {
     switch (tok) {
     case TOK_END:
     case TOK_RPAREN:
@@ -66,9 +65,9 @@ static int token_ends_expr(int tok) {
     case TOK_KW_OF:
     case TOK_KW_ELIF:
     case TOK_KW_ELSE:
-        return 1;
+        return true;
     }
-    return 0;
+    return false;
 }
 
 static struct expr *parse_symbol(struct parse_ctx *ctx) {
@@ -261,7 +260,7 @@ static struct expr *parse_let(struct parse_ctx *ctx) {
     return result;
 }
 
-static struct expr *parse_if(struct parse_ctx *ctx, int is_elif) {
+static struct expr *parse_if(struct parse_ctx *ctx, bool is_elif) {
     struct expr *result, *pred_expr, *then_expr, *else_expr;
     slice_t first_token = ctx->token_text;
 
@@ -282,7 +281,7 @@ static struct expr *parse_if(struct parse_ctx *ctx, int is_elif) {
         else_expr = parse_expr(ctx);
     }
     else if (ctx->token == TOK_KW_ELIF) {
-        else_expr = parse_if(ctx, 1);
+        else_expr = parse_if(ctx, true);
     }
     else {
         slice_t text = then_expr->source_text;
@@ -421,7 +420,7 @@ static struct expr *parse_int(struct parse_ctx *ctx, int offset, int base) {
 static struct expr *parse_infix(struct parse_ctx *ctx, int min_precedence) {
     struct expr *lhs = parse_atom(ctx);
 
-    while (1) {
+    while (true) {
         int prim = -1, left_assoc = 1, precedence, next_min_precedence;
         struct expr *rhs;
 
@@ -536,7 +535,7 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
     case TOK_KW_STRUCT: return parse_struct(ctx);
     case TOK_KW_FUN: return parse_fun(ctx);
     case TOK_KW_LET: return parse_let(ctx);
-    case TOK_KW_IF: return parse_if(ctx, 0);
+    case TOK_KW_IF: return parse_if(ctx, false);
     case TOK_KW_WHILE: return parse_while(ctx);
     case TOK_KW_STATIC: return parse_single_arg_prim(ctx, PRIM_STATIC);
     default:
