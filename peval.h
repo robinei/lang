@@ -12,15 +12,12 @@ enum scope_kind {
 };
 
 struct scope {
-    struct expr_link *closure_syms;
-
     struct scope *outer_scope;
-    struct scope *nearest_function_scope;
 
     struct expr_decl *decls;
     struct expr_decl **last_decl_ptr;
 
-    uint depth;
+    uint free_var_count;
     enum scope_kind kind;
 };
 

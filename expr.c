@@ -71,7 +71,7 @@ static struct expr_link *expr_call_arg_visit(struct expr_visit_ctx *ctx, struct 
 }
 
 void expr_visit_children(struct expr_visit_ctx *ctx, struct expr *e) {
-    switch (e->expr_kind) {
+    switch (e->kind) {
     case EXPR_CONST:
     case EXPR_SYM:
         break;
@@ -153,16 +153,16 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
     if (!e) {
         return;
     }
-    switch (e->expr_kind) {
+    switch (e->kind) {
     case EXPR_CONST:
-        switch (e->c.tag->type_kind) {
+        switch (e->c.tag->kind) {
         case TYPE_EXPR:
             printf("Expr<");
             print_expr(ctx, e->c.expr);
             printf(">");
             break;
         case TYPE_TYPE:
-            switch (e->c.type->type_kind) {
+            switch (e->c.type->kind) {
             case TYPE_EXPR: print(ctx, "<Expr>"); break;
             case TYPE_TYPE: print(ctx, "<Type>"); break;
             case TYPE_UNIT: print(ctx, "<Unit>"); break;
@@ -171,7 +171,7 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
             case TYPE_FUN: print(ctx, "<Fn>"); break;
             case TYPE_STRUCT: print(ctx, "<Struct>"); break;
             default:
-                print(ctx, "<type:%s>", type_names[e->c.type->type_kind]); break;
+                print(ctx, "<type:%s>", type_names[e->c.type->kind]); break;
             }
             break;
         case TYPE_BOOL:
@@ -187,7 +187,7 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
             print(ctx, "<fun:%.*s>", e->c.fun.func->name.len, e->c.fun.func->name.ptr);
             break;
         default:
-            print(ctx, "<const:%s>", type_names[e->c.tag->type_kind]);
+            print(ctx, "<const:%s>", type_names[e->c.tag->kind]);
             break;
         }
         break;
@@ -216,9 +216,6 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         print_expr(ctx, e->fun.body_expr);
         break;
     }
-    case EXPR_CAP:
-        print(ctx, "<cap:%.*s>", e->cap.func->name.len, e->cap.func->name.ptr);
-        break;
     case EXPR_LET: {
         struct expr_decl *b;
         print(ctx, "let ");
@@ -270,7 +267,7 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         break;
     }
     case EXPR_PRIM: {
-        switch (e->prim.prim_kind) {
+        switch (e->prim.kind) {
         case PRIM_PLUS: print_unop(ctx, "+", e); break;
         case PRIM_NEGATE: print_unop(ctx, "-", e); break;
         case PRIM_LOGI_NOT: print_unop(ctx, "!", e); break;

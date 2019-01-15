@@ -36,7 +36,7 @@
     X(STATIC)
 
 #define DECL_PRIM_ENUM(name) PRIM_##name,
-enum { FOR_ALL_PRIMS(DECL_PRIM_ENUM) };
+enum prim_kind { FOR_ALL_PRIMS(DECL_PRIM_ENUM) };
 #undef DECL_PRIM_ENUM
 
 extern const char *prim_names[];
@@ -46,7 +46,6 @@ extern const char *prim_names[];
     X(CONST) \
     X(SYM) \
     X(FUN) \
-    X(CAP) \
     X(LET) \
     X(STRUCT) \
     X(COND) \
@@ -54,7 +53,7 @@ extern const char *prim_names[];
     X(CALL)
 
 #define DECL_EXPR_ENUM(name) EXPR_##name,
-enum { FOR_ALL_EXPRS(DECL_EXPR_ENUM) };
+enum expr_kind { FOR_ALL_EXPRS(DECL_EXPR_ENUM) };
 #undef DECL_EXPR_ENUM
 
 extern const char *expr_names[];
@@ -80,7 +79,6 @@ struct expr {
             union {
                 struct {
                     struct function *func;
-                    struct expr_decl *captured_consts;
                 } fun;
                 struct expr *expr;
                 struct type *type;
@@ -102,10 +100,6 @@ struct expr {
         } fun;
 
         struct {
-            struct function *func;
-        } cap;
-
-        struct {
             struct expr_decl *bindings;
             struct expr *body_expr;
         } let;
@@ -122,7 +116,7 @@ struct expr {
 
         struct {
             struct expr *arg_exprs[2];
-            uint prim_kind;
+            enum prim_kind kind;
         } prim;
         
         struct {
@@ -134,7 +128,7 @@ struct expr {
     slice_t source_text;
     struct expr *antecedent;
 
-    uint expr_kind;
+    enum expr_kind kind;
 };
 
 

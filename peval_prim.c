@@ -2,27 +2,27 @@
 #include "peval_internal.h"
 
 static int bool_value(struct peval_ctx *ctx, struct expr *e) {
-    assert(e->expr_kind == EXPR_CONST);
-    if (e->c.tag->type_kind != TYPE_BOOL) {
+    assert(e->kind == EXPR_CONST);
+    if (e->c.tag->kind != TYPE_BOOL) {
         PEVAL_ERR(e, "expected bool");
     }
     return e->c.boolean;
 }
 
 static int int_value(struct peval_ctx *ctx, struct expr *e) {
-    assert(e->expr_kind == EXPR_CONST);
-    if (e->c.tag->type_kind != TYPE_INT) {
+    assert(e->kind == EXPR_CONST);
+    if (e->c.tag->kind != TYPE_INT) {
         PEVAL_ERR(e, "expected int");
     }
     return e->c.integer;
 }
 
 static int const_eq(struct peval_ctx *ctx, struct expr *a, struct expr *b) {
-    assert(a->expr_kind == EXPR_CONST && b->expr_kind == EXPR_CONST);
+    assert(a->kind == EXPR_CONST && b->kind == EXPR_CONST);
     if (a->c.tag != b->c.tag) {
         return 0;
     }
-    switch (a->c.tag->type_kind) {
+    switch (a->c.tag->kind) {
     case TYPE_TYPE:
         return a->c.type == b->c.type;
     case TYPE_UNIT:
@@ -39,7 +39,7 @@ static int const_eq(struct peval_ctx *ctx, struct expr *a, struct expr *b) {
 
 #define ARG(N) (e_new.prim.arg_exprs[N])
 #define PEVAL_ARG(N) ARG(N) = peval(ctx, ARG(N))
-#define ARG_CONST(N) (ARG(N)->expr_kind == EXPR_CONST)
+#define ARG_CONST(N) (ARG(N)->kind == EXPR_CONST)
 
 #define BINOP(op, value_getter) \
     value_getter(ctx, ARG(0)) op value_getter(ctx, ARG(1))
@@ -69,13 +69,13 @@ static int const_eq(struct peval_ctx *ctx, struct expr *a, struct expr *b) {
 
 
 static void splice_visitor(struct expr_visit_ctx *visit_ctx, struct expr *e) {
-    if (e->expr_kind == EXPR_PRIM && e->prim.prim_kind == PRIM_SPLICE) {
+    if (e->kind == EXPR_PRIM && e->prim.kind == PRIM_SPLICE) {
         struct peval_ctx *ctx = visit_ctx->ctx;
         struct expr *expr = peval(ctx, e->prim.arg_exprs[0]);
-        if (expr->expr_kind != EXPR_CONST) {
+        if (expr->kind != EXPR_CONST) {
             PEVAL_ERR(e, "splice argument not computable at compile time");
         }
-        if (expr->c.tag->type_kind != TYPE_EXPR) {
+        if (expr->c.tag->kind != TYPE_EXPR) {
             PEVAL_ERR(e, "can only splice Expr values");
         }
         *e = *expr->c.expr;
@@ -90,9 +90,9 @@ static void splice_visitor(struct expr_visit_ctx *visit_ctx, struct expr *e) {
 struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
     struct expr e_new = *e;
 
-    assert(e_new.expr_kind == EXPR_PRIM);
+    assert(e_new.kind == EXPR_PRIM);
 
-    switch (e_new.prim.prim_kind) {
+    switch (e_new.prim.kind) {
     case PRIM_PLUS: PEVAL_ARG(0); int_value(ctx, ARG(0)); return ARG(0);
     case PRIM_NEGATE: HANDLE_UNOP(&type_int, integer, -int_value(ctx, ARG(0)))
     case PRIM_LOGI_NOT: HANDLE_UNOP(&type_bool, boolean, !bool_value(ctx, ARG(0)))
@@ -172,7 +172,7 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
         if (!ARG_CONST(0)) {
             PEVAL_ERR(e, "'splice' expected compile-time computable argument");
         }
-        if (ARG(0)->c.tag->type_kind != TYPE_EXPR) {
+        if (ARG(0)->c.tag->kind != TYPE_EXPR) {
             PEVAL_ERR(e, "'splice' expected value of type 'Expr'");
         }
         return peval(ctx, ARG(0)->c.expr);
