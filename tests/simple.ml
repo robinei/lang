@@ -12,6 +12,18 @@ testOnlyOneIfBranchEvaled = fun -> begin
     if false then assert(false) else () end;
 end;
 
+testIfWithManyStatements = fun ->
+    if false then
+        assert(false);
+        assert(false)
+    elif true then
+        assert(true);
+        assert(true);
+    else
+        assert(false);
+        assert(false);
+    end;
+
 testUnit = fun -> let x: Unit = () in assert(x == ());
 
 testMutual = fun ->

@@ -264,14 +264,14 @@ static struct expr *parse_let(struct parse_ctx *ctx) {
 }
 
 static struct expr *parse_block(struct parse_ctx *ctx) {
-    if (ctx->token == TOK_KW_END || ctx->token == TOK_KW_ELIF || ctx->token == TOK_KW_ELSE) {
-        return NULL;
-    }
     struct expr *first = parse_expr(ctx);
     if (ctx->token != TOK_SEMICOLON) {
         return first;
     }
     NEXT_TOKEN();
+    if (ctx->token == TOK_KW_END || ctx->token == TOK_KW_ELIF || ctx->token == TOK_KW_ELSE) {
+        return NULL;
+    }
     struct expr *second = parse_block(ctx);
     if (!second) {
         return first;
@@ -293,27 +293,25 @@ static struct expr *parse_if(struct parse_ctx *ctx, bool is_elif) {
     }
     NEXT_TOKEN();
 
-    then_expr = parse_expr(ctx);
+    then_expr = parse_block(ctx);
 
     if (ctx->token == TOK_KW_ELSE) {
         NEXT_TOKEN();
-        else_expr = parse_expr(ctx);
-    }
-    else if (ctx->token == TOK_KW_ELIF) {
-        else_expr = parse_if(ctx, true);
-    }
-    else {
-        slice_t text = then_expr->source_text;
-        text.ptr += text.len;
-        text.len = 0;
-        else_expr = unit_create(ctx, text);
-    }
-
-    if (!is_elif) {
+        else_expr = parse_block(ctx);
         if (ctx->token != TOK_KW_END) {
             PARSE_ERR("expected 'end' to terminate 'if'");
         }
         NEXT_TOKEN();
+    } else if (ctx->token == TOK_KW_ELIF) {
+        else_expr = parse_if(ctx, true);
+    } else if (ctx->token == TOK_KW_END) {
+        NEXT_TOKEN();
+        slice_t text = then_expr->source_text;
+        text.ptr += text.len;
+        text.len = 0;
+        else_expr = unit_create(ctx, text);
+    } else {
+        PARSE_ERR("expected 'elif', 'else' or 'end' to terminate");
     }
 
     result = expr_create(ctx, EXPR_COND, slice_span(first_token, else_expr->source_text));
