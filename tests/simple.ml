@@ -2,15 +2,15 @@
 
 testAssert = fun() -> assert(true);
 
-testShortCircuit = fun ->
-    assert(!(false && assert(false)))
+testShortCircuit = fun -> begin
+    assert(!(false && assert(false)));
     assert(true || assert(false));
+end;
 
-testOnlyOneIfBranchEvaled = fun ->
-    if true then () else assert(false) end
+testOnlyOneIfBranchEvaled = fun -> begin
+    if true then () else assert(false) end;
     if false then assert(false) else () end;
-
-testSeq = fun -> assert(1 2 3 == 3);
+end;
 
 testUnit = fun -> let x: Unit = () in assert(x == ());
 
@@ -19,17 +19,19 @@ testMutual = fun ->
         odd: static fun(n: Int): Bool; // forward declare must be static
         even = fun(n: Int): Bool -> if n == 0 then true else odd(n - 1) end;
         odd = fun(n) -> if n == 0 then false else even(n - 1) end
-    in
-        assert(even(2))
+    in begin
+        assert(even(2));
         assert(!even(5));
+    end;
 
 // declare type to allow recursion (top level implicitly static)
 exp: fun(x, n: Int): Int =
      fun(x, n) -> if n == 0 then 1 else x * exp(x, n - 1) end;
 pow2 = fun(n: Int): Int -> exp(2, n);
-testExp = fun ->
-    assert(pow2(3) == 8)
+testExp = fun -> begin
+    assert(pow2(3) == 8);
     assert(exp(3, 3) == 27);
+end;
 
 testTypeExpr = fun ->
     let
@@ -48,42 +50,44 @@ testFib = fun ->
 IntFun: Type = fun(): Int;
 testFunReturn = fun ->
     let getAdder = fun(n: Int): IntFun -> fun -> 99 + n
-    in  assert(getAdder(700)() == 799)
+    in begin
+        assert(getAdder(700)() == 799);
         assert(getAdder(1)() == 100);
+    end;
 
 testFnReturn2 = fun ->
     assert((fun(x) -> fun(y) -> fun(z) -> x * y + z)(100)(2)(3) == 203);
         
 //vec2 = struct x, y: Int end;
 
-testOps = fun ->
-    assert(1 == 1)
-    assert(1 != 2)
-    assert(1 < 2)
-    assert(2 > 1)
-    assert(2 <= 2)
-    assert(1 <= 2)
-    assert(2 >= 2)
-    assert(2 >= 1)
-    assert(1 + 2 == 3)
-    assert(3 - 2 == 1)
-    assert(2 - 3 == -1)
-    assert(+1 == 1)
-    assert(3 * 2 == 6)
-    assert(12 / 3 == 4)
-    assert(15 % 10 == 5)
-    assert(!true == false)
-    assert(!false == true)
-    assert(~0 == -1)
-    assert(false || true)
-    assert(true && true)
-    assert((1 | 2) == 3)
-    assert((3 & 2) == 2)
-    assert((123 ^ 123) == 0)
-    assert((1 ^ 0) == 1)
-    assert(1 << 5 == 32)
-    assert(32 >> 4 == 2)
-    ;
+testOps = fun -> begin
+    assert(1 == 1);
+    assert(1 != 2);
+    assert(1 < 2);
+    assert(2 > 1);
+    assert(2 <= 2);
+    assert(1 <= 2);
+    assert(2 >= 2);
+    assert(2 >= 1);
+    assert(1 + 2 == 3);
+    assert(3 - 2 == 1);
+    assert(2 - 3 == -1);
+    assert(+1 == 1);
+    assert(3 * 2 == 6);
+    assert(12 / 3 == 4);
+    assert(15 % 10 == 5);
+    assert(!true == false);
+    assert(!false == true);
+    assert(~0 == -1);
+    assert(false || true);
+    assert(true && true);
+    assert((1 | 2) == 3);
+    assert((3 & 2) == 2);
+    assert((123 ^ 123) == 0);
+    assert((1 ^ 0) == 1);
+    assert(1 << 5 == 32);
+    assert(32 >> 4 == 2);
+end;
 
 
 
@@ -93,8 +97,10 @@ when = fun(cond, body: Expr): Expr ->
 testWhenRaw = fun -> splice(when(quote(1 == 1), quote(assert(true))));
 
 testWhenWithSugar = fun -> when!(1 == 1,
-                            assert(true)
-                            when!(1 == 1, assert(true)));
+                            begin
+                                assert(true);
+                                when!(1 == 1, assert(true))
+                            end);
 
 testStatic = fun -> let x = static(pow2(5)) in assert(x == 32);
 

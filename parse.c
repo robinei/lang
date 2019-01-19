@@ -263,6 +263,22 @@ static struct expr *parse_let(struct parse_ctx *ctx) {
     return result;
 }
 
+static struct expr *parse_block(struct parse_ctx *ctx) {
+    if (ctx->token == TOK_KW_END || ctx->token == TOK_KW_ELIF || ctx->token == TOK_KW_ELSE) {
+        return NULL;
+    }
+    struct expr *first = parse_expr(ctx);
+    if (ctx->token != TOK_SEMICOLON) {
+        return first;
+    }
+    NEXT_TOKEN();
+    struct expr *second = parse_block(ctx);
+    if (!second) {
+        return first;
+    }
+    return prim_create_bin(ctx, PRIM_SEQ, first, second);
+}
+
 static struct expr *parse_if(struct parse_ctx *ctx, bool is_elif) {
     struct expr *result, *pred_expr, *then_expr, *else_expr;
     slice_t first_token = ctx->token_text;
@@ -495,6 +511,7 @@ static struct expr *macroify(struct parse_ctx *ctx, struct expr *call_expr) {
     return e;
 }
 
+
 static struct expr *parse_atom(struct parse_ctx *ctx) {
     struct expr *result;
     slice_t first_token = ctx->token_text;
@@ -544,6 +561,15 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
     case TOK_KW_IF: return parse_if(ctx, false);
     case TOK_KW_WHILE: return parse_while(ctx);
     case TOK_KW_STATIC: return parse_single_arg_prim(ctx, PRIM_STATIC);
+    case TOK_KW_BEGIN: {
+        NEXT_TOKEN();
+        result = parse_block(ctx);
+        if (ctx->token != TOK_KW_END) {
+            PARSE_ERR("expected 'end' after 'begin' block");
+        }
+        NEXT_TOKEN();
+        return result;
+    }
     default:
         PARSE_ERR("unexpected token in expression");
     }
@@ -565,15 +591,5 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
 }
 
 static struct expr *parse_expr(struct parse_ctx *ctx) {
-    struct expr *first, *second;
-
-    first = parse_infix(ctx, 1);
-
-    if (token_ends_expr(ctx->token)) {
-        return first;
-    }
-
-    second = parse_expr(ctx);
-
-    return prim_create_bin(ctx, PRIM_SEQ, first, second);
+    return parse_infix(ctx, 1);
 }
