@@ -60,6 +60,7 @@ static bool token_ends_expr(int tok) {
     case TOK_COLON:
     case TOK_COMMA:
     case TOK_ASSIGN:
+    case TOK_RARROW:
     case TOK_KW_END:
     case TOK_KW_IN:
     case TOK_KW_OF:
@@ -202,17 +203,18 @@ static struct expr *parse_fun(struct parse_ctx *ctx) {
         }
     }
 
-    if (ctx->token != TOK_COLON && !token_ends_expr(ctx->token)) {
+    if (ctx->token == TOK_COLON) {
+        NEXT_TOKEN();
         return_type_expr = parse_expr(ctx);
     }
 
-    if (ctx->token == TOK_COLON) {
+    if (ctx->token == TOK_RARROW) {
         NEXT_TOKEN();
         body_expr = parse_expr(ctx);
-    }
 
-    if (ctx->token == TOK_KW_END) {
-        NEXT_TOKEN();
+        if (ctx->token == TOK_KW_END) {
+            NEXT_TOKEN();
+        }
     }
 
     if (!body_expr) {
