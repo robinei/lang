@@ -46,7 +46,8 @@ extern const char *prim_names[];
     X(CONST) \
     X(SYM) \
     X(FUN) \
-    X(LET) \
+    X(DEF) \
+    X(BLOCK) \
     X(STRUCT) \
     X(COND) \
     X(PRIM) \
@@ -100,9 +101,14 @@ struct expr {
         } fun;
 
         struct {
-            struct expr_decl *bindings;
             struct expr *body_expr;
-        } let;
+        } block;
+
+        struct {
+            struct expr *name_expr;
+            struct expr *type_expr;
+            struct expr *value_expr;
+        } def;
 
         struct {
             struct expr_decl *fields;
@@ -128,7 +134,9 @@ struct expr {
     slice_t source_text;
     struct expr *antecedent;
 
-    enum expr_kind kind;
+    enum expr_kind kind: 16;
+    bool is_static : 1;
+    bool is_mut : 1;
 };
 
 

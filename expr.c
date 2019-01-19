@@ -80,9 +80,12 @@ void expr_visit_children(struct expr_visit_ctx *ctx, struct expr *e) {
         e->fun.return_type_expr = expr_visit(ctx, e->fun.return_type_expr);
         e->fun.body_expr = expr_visit(ctx, e->fun.body_expr);
         break;
-    case EXPR_LET:
-        e->let.bindings = expr_decl_visit(ctx, e->let.bindings);
-        e->let.body_expr = expr_visit(ctx, e->let.body_expr);
+    case EXPR_BLOCK:
+        e->block.body_expr = expr_visit(ctx, e->block.body_expr);
+        break;
+    case EXPR_DEF:
+        e->def.type_expr = expr_visit(ctx, e->def.type_expr);
+        e->def.value_expr = expr_visit(ctx, e->def.value_expr);
         break;
     case EXPR_STRUCT:
         e->struc.fields = expr_decl_visit(ctx, e->struc.fields);
@@ -142,6 +145,30 @@ static void print_primcall(struct print_ctx *ctx, const char *name, struct expr 
         print_expr(ctx, e->prim.arg_exprs[1]);
     }
     print(ctx, ")");
+}
+
+static void print_cond(struct print_ctx *ctx, struct expr *e, bool is_elif) {
+    print(ctx, is_elif ? "elif " : "if ");
+    print_expr(ctx, e->cond.pred_expr);
+    print(ctx, " then\n");
+    ++ctx->indent;
+    print_indent(ctx);
+    print_expr(ctx, e->cond.then_expr);
+    --ctx->indent;
+    print(ctx, "\n");
+    print_indent(ctx);
+    if (e->cond.else_expr->kind == EXPR_COND) {
+        print_cond(ctx, e->cond.else_expr, true);
+    } else {
+        print(ctx, "else\n");
+        ++ctx->indent;
+        print_indent(ctx);
+        print_expr(ctx, e->cond.else_expr);
+        --ctx->indent;
+        print(ctx, "\n");
+        print_indent(ctx);
+        print(ctx, "end");
+    }
 }
 
 void print_expr(struct print_ctx *ctx, struct expr *e) {
@@ -209,30 +236,37 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         }
         print(ctx, ")");
         if (e->fun.return_type_expr) {
-            print(ctx, " ");
+            print(ctx, ": ");
             print_expr(ctx, e->fun.return_type_expr);
         }
-        print(ctx, ": ");
-        print_expr(ctx, e->fun.body_expr);
-        break;
-    }
-    case EXPR_LET: {
-        struct expr_decl *b;
-        print(ctx, "let ");
-        for (b = e->let.bindings; b; b = b->next) {
-            print(ctx, "%.*s", b->name_expr->sym.name.len, b->name_expr->sym.name.ptr);
-            if (b->type_expr) {
-                print(ctx, ": ");
-                print_expr(ctx, b->type_expr);
-            }
-            print(ctx, " = ");
-            print_expr(ctx, b->value_expr);
-            if (b->next) {
-                print(ctx, "; ");
-            }
+        if (e->fun.body_expr) {
+            print(ctx, " -> ");
+            print_expr(ctx, e->fun.body_expr);
         }
         break;
     }
+    case EXPR_BLOCK:
+        print(ctx, "begin\n");
+        ++ctx->indent;
+        print_indent(ctx);
+        print_expr(ctx, e->block.body_expr);
+        print(ctx, "\n");
+        --ctx->indent;
+        print_indent(ctx);
+        print(ctx, "end");
+        break;
+    case EXPR_DEF:
+        print(ctx, "def ");
+        print_expr(ctx, e->def.name_expr);
+        if (e->def.type_expr) {
+            print(ctx, ": ");
+            print_expr(ctx, e->def.type_expr);
+        }
+        if (e->def.value_expr) {
+            print(ctx, " = ");
+            print_expr(ctx, e->def.value_expr);
+        }
+        break;
     case EXPR_STRUCT: {
         struct expr_decl *f;
         print(ctx, "struct\n");
@@ -257,22 +291,21 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         --ctx->indent;
         break;
     }
-    case EXPR_COND: {
-        print(ctx, "if ");
-        print_expr(ctx, e->cond.pred_expr);
-        print(ctx, ": ");
-        print_expr(ctx, e->cond.then_expr);
-        print(ctx, " else ");
-        print_expr(ctx, e->cond.else_expr);
+    case EXPR_COND:
+        print_cond(ctx, e, false);
         break;
-    }
-    case EXPR_PRIM: {
+    case EXPR_PRIM:
         switch (e->prim.kind) {
         case PRIM_PLUS: print_unop(ctx, "+", e); break;
         case PRIM_NEGATE: print_unop(ctx, "-", e); break;
         case PRIM_LOGI_NOT: print_unop(ctx, "!", e); break;
         case PRIM_BITWISE_NOT: print_unop(ctx, "~", e); break;
-        case PRIM_SEQ: print_binop(ctx, " ", e); break;
+        case PRIM_SEQ:
+            print_expr(ctx, e->prim.arg_exprs[0]);
+            print(ctx, ";\n");
+            print_indent(ctx);
+            print_expr(ctx, e->prim.arg_exprs[1]);
+            break;
         case PRIM_LOGI_OR: print_binop(ctx, " || ", e); break;
         case PRIM_LOGI_AND: print_binop(ctx, " && ", e); break;
         case PRIM_BITWISE_OR: print_binop(ctx, " | ", e); break;
@@ -298,7 +331,6 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         case PRIM_STATIC: print_primcall(ctx, "static", e); break;
         }
         break;
-    }
     case EXPR_CALL: {
         struct expr_link *arg;
         print_expr(ctx, e->call.callable_expr);

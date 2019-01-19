@@ -63,6 +63,13 @@ static void run_tests(char *filename) {
         return;
     }
 
+    {
+        printf("module:\n");
+        struct print_ctx print_ctx = { 0, };
+        print_expr(&print_ctx, mod_ctx.struct_expr);
+        printf("\n");
+    }
+
     mod_ctx.struct_expr = peval(&peval_ctx, mod_ctx.struct_expr);
 
     printf("running tests...\n");

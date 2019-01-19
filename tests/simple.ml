@@ -24,17 +24,18 @@ testIfWithManyStatements = fun ->
         assert(false);
     end;
 
-testUnit = fun -> let x: Unit = () in assert(x == ());
+testUnit = fun -> begin
+    def x: Unit = ();
+    assert(x == ());
+end;
 
-testMutual = fun ->
-    let
-        odd: static fun(n: Int): Bool; // forward declare must be static
-        even = fun(n: Int): Bool -> if n == 0 then true else odd(n - 1) end;
-        odd = fun(n) -> if n == 0 then false else even(n - 1) end
-    in begin
-        assert(even(2));
-        assert(!even(5));
-    end;
+testMutual = fun -> begin
+    def static odd: fun(n: Int): Bool; // forward declare must be static
+    def even = fun(n: Int): Bool -> if n == 0 then true else odd(n - 1) end;
+    def odd = fun(n) -> if n == 0 then false else even(n - 1) end;
+    assert(even(2));
+    assert(!even(5));
+end;
 
 // declare type to allow recursion (top level implicitly static)
 exp: fun(x, n: Int): Int =
@@ -45,13 +46,16 @@ testExp = fun -> begin
     assert(exp(3, 3) == 27);
 end;
 
-testTypeExpr = fun ->
-    let
-        procType = fun(t: Type): Type -> t;
-        getType = fun(i: Int): Type -> if i == 0 then Bool else Int end;
-        test = fun -> let x: procType(getType(1)) = 123 in x
-    in
-        assert(test() == 123);
+testTypeExpr = fun -> begin
+    def procType = fun(t: Type): Type -> t;
+    def getType = fun(i: Int): Type ->
+        if i == 0 then Bool else Int end;
+    def test = fun -> begin
+        def x: procType(getType(1)) = 123;
+        x
+    end;
+    assert(test() == 123);
+end;
 
 fibHelp: fun(a, b, n: Int): Int;
 fibHelp = fun(a, b, n) -> if n == 0 then a else fibHelp(b, a+b, n-1) end;
@@ -60,12 +64,11 @@ testFib = fun ->
     assert(fib(6) == 8);
 
 IntFun: Type = fun(): Int;
-testFunReturn = fun ->
-    let getAdder = fun(n: Int): IntFun -> fun -> 99 + n
-    in begin
-        assert(getAdder(700)() == 799);
-        assert(getAdder(1)() == 100);
-    end;
+testFunReturn = fun -> begin
+    def getAdder = fun(n: Int): IntFun -> fun -> 99 + n;
+    assert(getAdder(700)() == 799);
+    assert(getAdder(1)() == 100);
+end;
 
 testFnReturn2 = fun ->
     assert((fun(x) -> fun(y) -> fun(z) -> x * y + z)(100)(2)(3) == 203);
@@ -114,23 +117,31 @@ testWhenWithSugar = fun -> when!(1 == 1,
                                 when!(1 == 1, assert(true))
                             end);
 
-testStatic = fun -> let x = static(pow2(5)) in assert(x == 32);
+testStatic = fun -> begin
+    def x = static(pow2(5));
+    assert(x == 32);
+end;
 
-testStatic2 = fun -> let x = static((fun(x) -> x + 100)(3)) in assert(x == 103);
+testStatic2 = fun -> begin
+    def x = static((fun(x) -> x + 100)(3));
+    assert(x == 103);
+end;
 
 
 staticFoo = fun(x: static Int): Int -> x * x;
 testStaticFoo = fun -> assert(staticFoo(2) == 4);
 
-testCallArg = fun ->
-    let foo = fun(y, x) ->
-        let bar = fun(x, y) -> x in
-        assert(bar(y, x) == 2)
-    in
-        foo(2, 1);
+testCallArg = fun -> begin
+    def foo = fun(y, x) -> begin
+        def bar = fun(x, y) -> x;
+        assert(bar(y, x) == 2);
+    end;
+    foo(2, 1);
+end;
 
 
 // this will require changes to how functions are handled:
-//testStaticArgAsReturnType = fun ->
-//    let test = fun(t: static Type; x: t): t -> x
-//    in assert(test(Int, 123) == 123);
+//testStaticArgAsReturnType = fun -> begin
+//    def test = fun(t: static Type; x: t): t -> x;
+//    assert(test(Int, 123) == 123);
+//end;

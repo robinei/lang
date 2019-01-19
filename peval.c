@@ -110,7 +110,7 @@ static bool is_dummy_fun_const(struct expr *e) {
     return is_fun_const(e) && !e->c.fun.func->fun_expr;
 }
 
-static void add_single_decl_to_scope(struct peval_ctx *ctx, struct expr_decl *d) {
+static struct expr_decl *add_single_decl_to_scope(struct peval_ctx *ctx, struct expr_decl *d) {
     struct scope *scope = ctx->scope;
     assert(scope);
     assert(d->name_expr);
@@ -143,6 +143,7 @@ static void add_single_decl_to_scope(struct peval_ctx *ctx, struct expr_decl *d)
             struct function *new_func = value_expr->c.fun.func;
             old_func->fun_expr = new_func->fun_expr;
         }
+        return d_old;
     } else {
         check_type(ctx, d->value_expr, type_expr);
 
@@ -177,6 +178,7 @@ static void add_single_decl_to_scope(struct peval_ctx *ctx, struct expr_decl *d)
                 }
             }
         }
+        return d_new;
     }
 }
 
@@ -416,25 +418,51 @@ static struct expr *peval_struct(struct peval_ctx *ctx, struct expr *e) {
     return e;
 }
 
-static struct expr *peval_let(struct peval_ctx *ctx, struct expr *e) {
-    assert(e->kind == EXPR_LET);
+static struct expr *peval_def(struct peval_ctx *ctx, struct expr *e) {
+    assert(e->kind == EXPR_DEF);
+    struct expr e_new;
+    bool changed;
+
+    struct expr_decl d = {
+        .name_expr = e->def.name_expr,
+        .type_expr = e->def.type_expr,
+        .value_expr = e->def.value_expr,
+        .is_static = e->is_static,
+        .is_mut = e->is_mut
+    };
+    struct expr_decl *d_new = add_single_decl_to_scope(ctx, &d);
+    if (d_new->value_expr && d_new->value_expr->kind == EXPR_CONST) {
+        memset(&e_new, 0, sizeof(e_new));
+        e_new.kind = EXPR_CONST;
+        e_new.c.tag = &type_unit;
+        changed = true;
+    } else {
+        e_new = *e;
+        e_new.def.type_expr = d_new->type_expr;
+        e_new.def.value_expr = d_new->value_expr;
+        changed = e_new.def.type_expr != e->def.type_expr || e_new.def.value_expr != e->def.value_expr;
+    }
+
+    if (changed) {
+        return dup_expr(ctx, &e_new, e);
+    }
+    return e;
+}
+
+static struct expr *peval_block(struct peval_ctx *ctx, struct expr *e) {
+    assert(e->kind == EXPR_BLOCK);
+
     struct expr e_new = *e;
-    int changed;
+    bool changed;
 
     BEGIN_SCOPE(SCOPE_LOCAL);
 
-    add_decls_to_scope(ctx, e->let.bindings);
-
-    e_new.let.bindings = ctx->scope->decls;
-    changed = e_new.let.bindings != e->let.bindings;
-
-    if (count_const_decls(e_new.let.bindings) == decl_list_length(e_new.let.bindings)) {
-        e_new = *peval(ctx, e->let.body_expr);
-        changed = 1;
-    }
-    else {
-        e_new.let.body_expr = peval(ctx, e->let.body_expr);
-        changed = changed || e_new.let.body_expr != e->let.body_expr;
+    e_new.block.body_expr = peval(ctx, e_new.block.body_expr);
+    if (e_new.block.body_expr->kind != EXPR_PRIM || e_new.block.body_expr->prim.kind != PRIM_SEQ) {
+        e_new = *e_new.block.body_expr;
+        changed = true;
+    } else {
+        changed = e_new.block.body_expr != e->block.body_expr;
     }
 
     END_SCOPE();
@@ -539,8 +567,11 @@ struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
     case EXPR_FUN:
         result = peval_fun(ctx, e);
         break;
-    case EXPR_LET:
-        result = peval_let(ctx, e);
+    case EXPR_BLOCK:
+        result = peval_block(ctx, e);
+        break;
+    case EXPR_DEF:
+        result = peval_def(ctx, e);
         break;
     case EXPR_PRIM:
         result = peval_prim(ctx, e);
