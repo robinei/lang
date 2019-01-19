@@ -64,6 +64,7 @@ static bool token_ends_expr(int tok) {
     case TOK_KW_END:
     case TOK_KW_IN:
     case TOK_KW_OF:
+    case TOK_KW_THEN:
     case TOK_KW_ELIF:
     case TOK_KW_ELSE:
         return true;
@@ -271,8 +272,8 @@ static struct expr *parse_if(struct parse_ctx *ctx, bool is_elif) {
 
     pred_expr = parse_expr(ctx);
 
-    if (ctx->token != TOK_COLON) {
-        PARSE_ERR("expected ':' after if condition");
+    if (ctx->token != TOK_KW_THEN) {
+        PARSE_ERR("expected 'then' after if condition");
     }
     NEXT_TOKEN();
 
@@ -292,7 +293,10 @@ static struct expr *parse_if(struct parse_ctx *ctx, bool is_elif) {
         else_expr = unit_create(ctx, text);
     }
 
-    if (!is_elif && ctx->token == TOK_KW_END) {
+    if (!is_elif) {
+        if (ctx->token != TOK_KW_END) {
+            PARSE_ERR("expected 'end' to terminate 'if'");
+        }
         NEXT_TOKEN();
     }
 

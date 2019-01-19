@@ -7,8 +7,8 @@ testShortCircuit = fun ->
     assert(true || assert(false));
 
 testOnlyOneIfBranchEvaled = fun ->
-    if true: () else assert(false) end
-    if false: assert(false) else ();
+    if true then () else assert(false) end
+    if false then assert(false) else () end;
 
 testSeq = fun -> assert(1 2 3 == 3);
 
@@ -17,15 +17,15 @@ testUnit = fun -> let x: Unit = () in assert(x == ());
 testMutual = fun ->
     let
         odd: static fun(n: Int): Bool; // forward declare must be static
-        even = fun(n: Int): Bool -> if n == 0: true else odd(n - 1);
-        odd = fun(n) -> if n == 0: false else even(n - 1)
+        even = fun(n: Int): Bool -> if n == 0 then true else odd(n - 1) end;
+        odd = fun(n) -> if n == 0 then false else even(n - 1) end
     in
         assert(even(2))
         assert(!even(5));
 
 // declare type to allow recursion (top level implicitly static)
 exp: fun(x, n: Int): Int =
-     fun(x, n) -> if n == 0: 1 else x * exp(x, n - 1);
+     fun(x, n) -> if n == 0 then 1 else x * exp(x, n - 1) end;
 pow2 = fun(n: Int): Int -> exp(2, n);
 testExp = fun ->
     assert(pow2(3) == 8)
@@ -34,13 +34,13 @@ testExp = fun ->
 testTypeExpr = fun ->
     let
         procType = fun(t: Type): Type -> t;
-        getType = fun(i: Int): Type -> if i == 0: Bool else Int;
+        getType = fun(i: Int): Type -> if i == 0 then Bool else Int end;
         test = fun -> let x: procType(getType(1)) = 123 in x
     in
         assert(test() == 123);
 
 fibHelp: fun(a, b, n: Int): Int;
-fibHelp = fun(a, b, n) -> if n == 0: a else fibHelp(b, a+b, n-1);
+fibHelp = fun(a, b, n) -> if n == 0 then a else fibHelp(b, a+b, n-1) end;
 fib = fun(n: Int): Int -> fibHelp(0, 1, n);
 testFib = fun ->
     assert(fib(6) == 8);
@@ -88,7 +88,7 @@ testOps = fun ->
 
 
 when = fun(cond, body: Expr): Expr ->
-    quote(if splice(cond): splice(body) else ());
+    quote(if splice(cond) then splice(body) else () end);
 
 testWhenRaw = fun -> splice(when(quote(1 == 1), quote(assert(true))));
 
