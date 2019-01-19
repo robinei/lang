@@ -34,18 +34,25 @@
     X(RBRACKET) \
     X(LBRACE) \
     X(RBRACE) \
+    X(RARROW) \
+    X(LARROW) \
+    X(KW_BEGIN) \
     X(KW_END) \
     X(KW_MODULE) \
     X(KW_IMPORT) \
     X(KW_STRUCT) \
     X(KW_FUN) \
+    X(KW_DEF) \
     X(KW_LET) \
     X(KW_IN) \
     X(KW_IF) \
+    X(KW_THEN) \
     X(KW_ELIF) \
     X(KW_ELSE) \
     X(KW_CASE) \
     X(KW_OF) \
+    X(KW_DO) \
+    X(KW_FOR) \
     X(KW_WHILE) \
     X(KW_MUT) \
     X(KW_STATIC) \

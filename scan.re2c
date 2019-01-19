@@ -67,21 +67,28 @@ next_token_start:;
     "]"     { TOK(RBRACKET); }
     "{"     { TOK(LBRACE); }
     "}"     { TOK(RBRACE); }
-    "end"    { TOK(KW_END); }
+    "->"    { TOK(RARROW); }
+    "<-"    { TOK(LARROW); }
+    "begin" { TOK(KW_BEGIN); }
+    "end"   { TOK(KW_END); }
     "module"    { TOK(KW_MODULE); }
     "import"    { TOK(KW_IMPORT); }
     "struct"    { TOK(KW_STRUCT); }
-    "fun"    { TOK(KW_FUN); }
+    "fun"   { TOK(KW_FUN); }
+    "def"   { TOK(KW_DEF); }
     "let"   { TOK(KW_LET); }
     "in"    { TOK(KW_IN); }
     "if"    { TOK(KW_IF); }
+    "then"  { TOK(KW_THEN); }
     "elif"  { TOK(KW_ELIF); }
     "else"  { TOK(KW_ELSE); }
     "case"  { TOK(KW_CASE); }
     "of"    { TOK(KW_OF); }
+    "do"    { TOK(KW_DO); }
+    "for"   { TOK(KW_FOR); }
     "while" { TOK(KW_WHILE); }
     "var"   { TOK(KW_MUT); }
-    "static" { TOK(KW_STATIC); }
+    "static"    { TOK(KW_STATIC); }
     "pure"  { TOK(KW_PURE); }
     "true"  { TOK(KW_TRUE); }
     "false" { TOK(KW_FALSE); }
