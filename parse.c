@@ -449,9 +449,9 @@ static struct expr *parse_infix(struct parse_ctx *ctx, int min_precedence) {
         struct expr *rhs;
 
         switch (ctx->token) {
-        case TOK_OR:        prim = PRIM_LOGI_OR;     precedence = 1; break;
+        case TOK_KW_OR:     prim = PRIM_LOGI_OR;     precedence = 1; break;
 
-        case TOK_AND:       prim = PRIM_LOGI_AND;    precedence = 2; break;
+        case TOK_KW_AND:    prim = PRIM_LOGI_AND;    precedence = 2; break;
 
         case TOK_OR_BW:     prim = PRIM_BITWISE_OR;  precedence = 3; break;
 
@@ -549,7 +549,7 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
         break;
     case TOK_PLUS: return parse_unary(ctx, PRIM_PLUS);
     case TOK_MINUS: return parse_unary(ctx, PRIM_NEGATE);
-    case TOK_NOT: return parse_unary(ctx, PRIM_LOGI_NOT);
+    case TOK_KW_NOT: return parse_unary(ctx, PRIM_LOGI_NOT);
     case TOK_NOT_BW: return parse_unary(ctx, PRIM_BITWISE_NOT);
     case TOK_KW_TRUE: NEXT_TOKEN(); return bool_create(ctx, true, first_token);
     case TOK_KW_FALSE: NEXT_TOKEN(); return bool_create(ctx, false, first_token);

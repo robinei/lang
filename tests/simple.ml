@@ -3,8 +3,8 @@
 testAssert = fun() -> assert(true);
 
 testShortCircuit = fun -> begin
-    assert(!(false && assert(false)));
-    assert(true || assert(false));
+    assert(not (false and assert(false)));
+    assert(true or assert(false));
 end;
 
 testOnlyOneIfBranchEvaled = fun -> begin
@@ -34,7 +34,7 @@ testMutual = fun -> begin
     def even = fun(n: Int): Bool -> if n == 0 then true else odd(n - 1) end;
     def odd = fun(n) -> if n == 0 then false else even(n - 1) end;
     assert(even(2));
-    assert(!even(5));
+    assert(not even(5));
 end;
 
 // declare type to allow recursion (top level implicitly static)
@@ -91,11 +91,11 @@ testOps = fun -> begin
     assert(3 * 2 == 6);
     assert(12 / 3 == 4);
     assert(15 % 10 == 5);
-    assert(!true == false);
-    assert(!false == true);
+    assert(not true == false);
+    assert(not false == true);
     assert(~0 == -1);
-    assert(false || true);
-    assert(true && true);
+    assert(false or true);
+    assert(true and true);
     assert((1 | 2) == 3);
     assert((3 & 2) == 2);
     assert((123 ^ 123) == 0);

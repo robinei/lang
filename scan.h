@@ -18,9 +18,7 @@
     X(MOD) \
     X(LSH) \
     X(RSH) \
-    X(AND) \
     X(AND_BW) \
-    X(OR) \
     X(OR_BW) \
     X(XOR_BW) \
     X(NOT) \
@@ -59,6 +57,9 @@
     X(KW_PURE) \
     X(KW_TRUE) \
     X(KW_FALSE) \
+    X(KW_AND) \
+    X(KW_OR) \
+    X(KW_NOT) \
     X(IDENT) \
     X(BIN) \
     X(OCT) \

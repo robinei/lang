@@ -51,9 +51,7 @@ next_token_start:;
     "%"     { TOK(MOD); }
     "<<"    { TOK(LSH); }
     ">>"    { TOK(RSH); }
-    "&&"    { TOK(AND); }
     "&"     { TOK(AND_BW); }
-    "||"    { TOK(OR); }
     "|"     { TOK(OR_BW); }
     "^"     { TOK(XOR_BW); }
     "!"     { TOK(NOT); }
@@ -92,6 +90,9 @@ next_token_start:;
     "pure"  { TOK(KW_PURE); }
     "true"  { TOK(KW_TRUE); }
     "false" { TOK(KW_FALSE); }
+    "and"   { TOK(KW_AND); }
+    "or"    { TOK(KW_OR); }
+    "not"   { TOK(KW_NOT); }
     
     [a-zA-Z_][a-zA-Z_0-9]* { TOK(IDENT); }
     bin { TOK(BIN); }
