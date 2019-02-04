@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 #include "parse.h"
 #include "peval.h"
 #include "error.h"
@@ -31,12 +32,15 @@ static char *read_file(const char *filename) {
     return str;
 }
 
+static void dummy_visitor(struct expr_visit_ctx *ctx, struct expr *e) {
+
+}
+
 static void run_tests(char *filename) {
     struct error_ctx err_ctx;
     struct module_ctx mod_ctx;
     struct peval_ctx peval_ctx;
     struct expr *mod_struct;
-    struct expr_decl *decls;
 
     char *source_text = read_file(filename);
     if (!source_text) {
@@ -52,6 +56,17 @@ static void run_tests(char *filename) {
         print_errors(&err_ctx);
         return;
     }
+    printf("parsed module:\n");
+    pretty_print(mod_struct);
+
+    {
+        /* just test that the visitor can traverse the whole module, and leaves it unchanged */
+        struct expr_visit_ctx visit_ctx = {
+            .visitor = dummy_visitor
+        };
+        struct expr *e = expr_visit(&visit_ctx, mod_struct);
+        assert(e == mod_struct);
+    }
 
     module_ctx_init(&mod_ctx, mod_struct);
 
@@ -63,56 +78,58 @@ static void run_tests(char *filename) {
         return;
     }
 
-    {
-        printf("module:\n");
-        struct print_ctx print_ctx = { 0, };
-        print_expr(&print_ctx, mod_ctx.struct_expr);
-        printf("\n");
-    }
-
-    mod_ctx.struct_expr = peval(&peval_ctx, mod_ctx.struct_expr);
-
-    printf("running tests...\n");
-
     peval_ctx.force_full_expansion = 1;
-    decls = mod_ctx.struct_expr->struc.fields;
-    for (; decls; decls = decls->next) {
-        struct expr *e = decls->value_expr;
-        struct function *func;
-        struct expr call_expr;
-        memset(&call_expr, 0, sizeof(call_expr));
-        call_expr.kind = EXPR_CALL;
 
+    struct expr *struct_expr = peval(&peval_ctx, mod_ctx.struct_expr);
+    if (struct_expr->kind != EXPR_CONST || struct_expr->c.tag != &type_type || struct_expr->c.type->kind != TYPE_STRUCT) {
+        printf("expected struct expr to become a type\n");
+        return;
+    }
+    mod_ctx.module_type = struct_expr->c.type;
+    struct type *t = mod_ctx.module_type;
+
+    printf("\nrunning tests...\n");
+
+    for (uint i = 0; i < t->struc.field_count; ++i) {
+        struct struct_field *f = t->struc.fields + i;
+        struct expr *e = f->value_expr;
+
+        if (f->name.len < 4 || memcmp(f->name.ptr, "test", 4)) {
+            printf("\n(skip) name doesn't start with test: %.*s\n", f->name.len, f->name.ptr);
+            continue;
+        }
         if (!e) {
+            printf("\n(skip) missing value expression: %.*s\n", f->name.len, f->name.ptr);
             continue;
         }
         if (e->kind != EXPR_CONST) {
+            printf("\n(skip) value not const: %.*s\n", f->name.len, f->name.ptr);
             continue;
         }
         if (e->c.tag->kind != TYPE_FUN) {
+            printf("\n(skip) value not a function: %.*s\n", f->name.len, f->name.ptr);
             continue;
         }
-        func = e->c.fun.func;
-        if (func->name.len < 4 || memcmp(func->name.ptr, "test", 4)) {
-            continue;
-        }
+        struct function *func = e->c.fun.func;
         if (func->fun_expr->fun.params) {
+            printf("\n(skip) function is not zero argument: %.*s\n", f->name.len, f->name.ptr);
             continue;
         }
-        call_expr.call.callable_expr = e;
-        printf("running test function: %.*s\n", func->name.len, func->name.ptr);
-        fflush(stdout);
 
-        struct print_ctx print_ctx = { 0, };
-        print_expr(&print_ctx, func->fun_expr);
-        printf("\n\n");
+        struct expr call_expr = {
+            .kind = EXPR_CALL,
+            .call.callable_expr = e
+        };
+        printf("\nrunning test function: %.*s\n", func->name.len, func->name.ptr);
+        fflush(stdout);
+        pretty_print_indented(func->fun_expr, 1);
 
         if (setjmp(peval_ctx.error_jmp_buf)) {
             break;
         }
         peval(&peval_ctx, &call_expr);
     }
-    printf("%u/%u asserts passed\n", peval_ctx.assert_count - peval_ctx.assert_fails, peval_ctx.assert_count);
+    printf("\n%u/%u asserts passed\n", peval_ctx.assert_count - peval_ctx.assert_fails, peval_ctx.assert_count);
     print_errors(&err_ctx);
 }
 

@@ -180,9 +180,7 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
     case PRIM_PRINT:
         PEVAL_ARG(0);
         if (ctx->force_full_expansion) {
-            struct print_ctx print_ctx = { 0, };
-            print_expr(&print_ctx, ARG(0));
-            printf("\n");
+            pretty_print(ARG(0));
             return unit_create(ctx, e);
         }
         break;

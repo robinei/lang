@@ -88,7 +88,7 @@ void expr_visit_children(struct expr_visit_ctx *ctx, struct expr *e) {
         e->def.value_expr = expr_visit(ctx, e->def.value_expr);
         break;
     case EXPR_STRUCT:
-        e->struc.fields = expr_decl_visit(ctx, e->struc.fields);
+        e->struc.body_expr = expr_visit(ctx, e->struc.body_expr);
         break;
     case EXPR_COND:
         e->cond.pred_expr = expr_visit(ctx, e->cond.pred_expr);
@@ -110,9 +110,55 @@ void expr_visit_children(struct expr_visit_ctx *ctx, struct expr *e) {
 }
 
 
+
+
+struct print_ctx {
+    uint indent;
+};
+
+void print_expr(struct print_ctx *ctx, struct expr *e);
+
+#define COLOR_NORMAL    "\x1B[0m"
+#define COLOR_RED       "\x1B[31m"
+#define COLOR_GREEN     "\x1B[32m"
+#define COLOR_YELLOW    "\x1B[33m"
+#define COLOR_BLUE      "\x1B[34m"
+#define COLOR_MAGENTA   "\x1B[35m"
+#define COLOR_CYAN      "\x1B[36m"
+#define COLOR_WHITE     "\x1B[37m"
+
+#define PAREN_COLOR     COLOR_CYAN
+#define KEYWORD_COLOR   COLOR_YELLOW
+#define DESTRUCTIVE_OP_COLOR COLOR_YELLOW
+#define OPERATOR_COLOR  COLOR_YELLOW
+#define STRING_COLOR    COLOR_RED
+#define NUMBER_COLOR    COLOR_MAGENTA
+#define BOOL_COLOR      COLOR_MAGENTA
+#define TYPE_COLOR      COLOR_GREEN
+#define SYMBOL_COLOR    COLOR_NORMAL
+
+static const char *curr_color = COLOR_NORMAL;
+
+static void set_color(const char *color) {
+#ifndef _WIN32
+    if (strcmp(curr_color, color)) {
+        printf("%s", color);
+        curr_color = color;
+    }
+#endif
+}
+
 static void print(struct print_ctx *ctx, const char *format, ...) {
     va_list args;
     va_start(args, format);
+    vprintf(format, args);
+    va_end(args);
+}
+
+static void print_colored(struct print_ctx *ctx, const char *color, const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+    set_color(color);
     vprintf(format, args);
     va_end(args);
 }
@@ -125,32 +171,33 @@ static void print_indent(struct print_ctx *ctx) {
 }
 
 static void print_unop(struct print_ctx *ctx, const char *op, struct expr *e) {
-    print(ctx, "%s", op);
+    print_colored(ctx, OPERATOR_COLOR, "%s", op);
     print_expr(ctx, e->prim.arg_exprs[0]);
 }
 
 static void print_binop(struct print_ctx *ctx, const char *op, struct expr *e) {
     print_expr(ctx, e->prim.arg_exprs[0]);
-    print(ctx, "%s", op);
+    print_colored(ctx, OPERATOR_COLOR, "%s", op);
     print_expr(ctx, e->prim.arg_exprs[1]);
 }
 
 static void print_primcall(struct print_ctx *ctx, const char *name, struct expr *e) {
-    print(ctx, "%s(", name);
+    print_colored(ctx, SYMBOL_COLOR, "%s", name);
+    print_colored(ctx, PAREN_COLOR, "(", name);
     if (e->prim.arg_exprs[0]) {
         print_expr(ctx, e->prim.arg_exprs[0]);
     }
     if (e->prim.arg_exprs[1]) {
-        print(ctx, ", ");
+        print_colored(ctx, OPERATOR_COLOR, ", ");
         print_expr(ctx, e->prim.arg_exprs[1]);
     }
-    print(ctx, ")");
+    print_colored(ctx, PAREN_COLOR, ")");
 }
 
 static void print_cond(struct print_ctx *ctx, struct expr *e, bool is_elif) {
-    print(ctx, is_elif ? "elif " : "if ");
+    print_colored(ctx, KEYWORD_COLOR, is_elif ? "elif " : "if ");
     print_expr(ctx, e->cond.pred_expr);
-    print(ctx, " then\n");
+    print_colored(ctx, KEYWORD_COLOR, " then\n");
     ++ctx->indent;
     print_indent(ctx);
     print_expr(ctx, e->cond.then_expr);
@@ -159,24 +206,21 @@ static void print_cond(struct print_ctx *ctx, struct expr *e, bool is_elif) {
     print_indent(ctx);
     if (e->cond.else_expr->kind == EXPR_COND) {
         print_cond(ctx, e->cond.else_expr, true);
+    } else if (e->cond.else_expr->kind == EXPR_CONST && e->cond.else_expr->c.tag == &type_unit) {
+        print_colored(ctx, KEYWORD_COLOR, "end");
     } else {
-        print(ctx, "else\n");
+        print_colored(ctx, KEYWORD_COLOR, "else\n");
         ++ctx->indent;
         print_indent(ctx);
         print_expr(ctx, e->cond.else_expr);
         --ctx->indent;
         print(ctx, "\n");
         print_indent(ctx);
-        print(ctx, "end");
+        print_colored(ctx, KEYWORD_COLOR, "end");
     }
 }
 
 void print_expr(struct print_ctx *ctx, struct expr *e) {
-    struct print_ctx ctx_storage;
-    if (!ctx) {
-        ctx = &ctx_storage;
-        ctx->indent = 0;
-    }
     if (!e) {
         return;
     }
@@ -184,113 +228,109 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
     case EXPR_CONST:
         switch (e->c.tag->kind) {
         case TYPE_EXPR:
-            printf("Expr<");
+            print_colored(ctx, COLOR_NORMAL, "Expr<");
             print_expr(ctx, e->c.expr);
-            printf(">");
+            print_colored(ctx, COLOR_NORMAL, ">");
             break;
         case TYPE_TYPE:
             switch (e->c.type->kind) {
-            case TYPE_EXPR: print(ctx, "<Expr>"); break;
-            case TYPE_TYPE: print(ctx, "<Type>"); break;
-            case TYPE_UNIT: print(ctx, "<Unit>"); break;
-            case TYPE_BOOL: print(ctx, "<Bool>"); break;
-            case TYPE_INT: print(ctx, "<Int>"); break;
-            case TYPE_FUN: print(ctx, "<Fn>"); break;
-            case TYPE_STRUCT: print(ctx, "<Struct>"); break;
+            case TYPE_EXPR: print_colored(ctx, COLOR_NORMAL, "<Expr>"); break;
+            case TYPE_TYPE: print_colored(ctx, COLOR_NORMAL, "<Type>"); break;
+            case TYPE_UNIT: print_colored(ctx, COLOR_NORMAL, "<Unit>"); break;
+            case TYPE_BOOL: print_colored(ctx, COLOR_NORMAL, "<Bool>"); break;
+            case TYPE_INT: print_colored(ctx, COLOR_NORMAL, "<Int>"); break;
+            case TYPE_FUN: print_colored(ctx, COLOR_NORMAL, "<Fn>"); break;
+            case TYPE_STRUCT: print_colored(ctx, COLOR_NORMAL, "<Struct>"); break;
             default:
-                print(ctx, "<type:%s>", type_names[e->c.type->kind]); break;
+                print_colored(ctx, COLOR_NORMAL, "<type:%s>", type_names[e->c.type->kind]); break;
             }
             break;
         case TYPE_BOOL:
-            print(ctx, "%s", e->c.boolean ? "true" : "false");
+            print_colored(ctx, BOOL_COLOR, "%s", e->c.boolean ? "true" : "false");
             break;
         case TYPE_UNIT:
-            print(ctx, "()");
+            print_colored(ctx, PAREN_COLOR, "()");
             break;
         case TYPE_INT:
-            print(ctx, "%d", e->c.integer);
+            print_colored(ctx, NUMBER_COLOR, "%d", e->c.integer);
             break;
         case TYPE_FUN:
-            print(ctx, "<fun:%.*s>", e->c.fun.func->name.len, e->c.fun.func->name.ptr);
+            print_colored(ctx, COLOR_NORMAL, "<fun:%.*s>", e->c.fun.func->name.len, e->c.fun.func->name.ptr);
             break;
         default:
-            print(ctx, "<const:%s>", type_names[e->c.tag->kind]);
+            print_colored(ctx, COLOR_NORMAL, "<const:%s>", type_names[e->c.tag->kind]);
             break;
         }
         break;
     case EXPR_SYM:
-        print(ctx, "%.*s", e->sym.name.len, e->sym.name.ptr);
+        print_colored(ctx, SYMBOL_COLOR, "%.*s", e->sym.name.len, e->sym.name.ptr);
         break;
-    case EXPR_FUN: {
-        struct expr_decl *p;
-        print(ctx, "fun(");
-        for (p = e->fun.params; p; p = p->next) {
-            print(ctx, "%.*s", p->name_expr->sym.name.len, p->name_expr->sym.name.ptr);
-            if (p->type_expr) {
-                print(ctx, ": ");
-                print_expr(ctx, p->type_expr);
+    case EXPR_FUN:
+        print_colored(ctx, KEYWORD_COLOR, "fun");
+        if (e->fun.params) {
+            print_colored(ctx, PAREN_COLOR, "(");
+            for (struct expr_decl *p = e->fun.params; p; p = p->next) {
+                print_colored(ctx, SYMBOL_COLOR, "%.*s", p->name_expr->sym.name.len, p->name_expr->sym.name.ptr);
+                if (p->type_expr) {
+                    print_colored(ctx, OPERATOR_COLOR, ": ");
+                    if (p->is_static) {
+                        print_colored(ctx, KEYWORD_COLOR, "static ");
+                    }
+                    print_expr(ctx, p->type_expr);
+                }
+                if (p->next) {
+                    print_colored(ctx, OPERATOR_COLOR, "; ");
+                }
             }
-            if (p->next) {
-                print(ctx, "; ");
-            }
+            print_colored(ctx, PAREN_COLOR, ")");
         }
-        print(ctx, ")");
         if (e->fun.return_type_expr) {
-            print(ctx, ": ");
+            print_colored(ctx, OPERATOR_COLOR, ": ");
             print_expr(ctx, e->fun.return_type_expr);
         }
         if (e->fun.body_expr) {
-            print(ctx, " -> ");
+            print_colored(ctx, OPERATOR_COLOR, " ->\n");
+            ++ctx->indent;
+            print_indent(ctx);
             print_expr(ctx, e->fun.body_expr);
+            --ctx->indent;
         }
         break;
-    }
+    case EXPR_STRUCT:
+        print_colored(ctx, KEYWORD_COLOR, "struct\n");
+        ++ctx->indent;
+        print_indent(ctx);
+        print_expr(ctx, e->struc.body_expr);
+        print(ctx, "\n");
+        --ctx->indent;
+        print_indent(ctx);
+        print_colored(ctx, KEYWORD_COLOR, "end");
+        break;
     case EXPR_BLOCK:
-        print(ctx, "begin\n");
+        print_colored(ctx, KEYWORD_COLOR, "begin\n");
         ++ctx->indent;
         print_indent(ctx);
         print_expr(ctx, e->block.body_expr);
         print(ctx, "\n");
         --ctx->indent;
         print_indent(ctx);
-        print(ctx, "end");
+        print_colored(ctx, KEYWORD_COLOR, "end");
         break;
     case EXPR_DEF:
-        print(ctx, "def ");
+        print_colored(ctx, KEYWORD_COLOR, "def ");
+        if (e->is_static) {
+            print_colored(ctx, KEYWORD_COLOR, "static ");
+        }
         print_expr(ctx, e->def.name_expr);
         if (e->def.type_expr) {
-            print(ctx, ": ");
+            print_colored(ctx, OPERATOR_COLOR, ": ");
             print_expr(ctx, e->def.type_expr);
         }
         if (e->def.value_expr) {
-            print(ctx, " = ");
+            print_colored(ctx, OPERATOR_COLOR, " = ");
             print_expr(ctx, e->def.value_expr);
         }
         break;
-    case EXPR_STRUCT: {
-        struct expr_decl *f;
-        print(ctx, "struct\n");
-        ++ctx->indent;
-        for (f = e->struc.fields; f; f = f->next) {
-            print_indent(ctx);
-            print(ctx, "%.*s", f->name_expr->sym.name.len, f->name_expr->sym.name.ptr);
-            if (f->type_expr) {
-                print(ctx, ": ");
-                print_expr(ctx, f->type_expr);
-            }
-            if (f->value_expr) {
-                print(ctx, " = ");
-                print_expr(ctx, f->value_expr);
-            }
-            print(ctx, ";");
-            if (f->next) {
-                print(ctx, "\n");
-            }
-        }
-        print(ctx, ";");
-        --ctx->indent;
-        break;
-    }
     case EXPR_COND:
         print_cond(ctx, e, false);
         break;
@@ -298,16 +338,16 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         switch (e->prim.kind) {
         case PRIM_PLUS: print_unop(ctx, "+", e); break;
         case PRIM_NEGATE: print_unop(ctx, "-", e); break;
-        case PRIM_LOGI_NOT: print_unop(ctx, "!", e); break;
+        case PRIM_LOGI_NOT: print_unop(ctx, "not ", e); break;
         case PRIM_BITWISE_NOT: print_unop(ctx, "~", e); break;
         case PRIM_SEQ:
             print_expr(ctx, e->prim.arg_exprs[0]);
-            print(ctx, ";\n");
+            print_colored(ctx, OPERATOR_COLOR, ";\n");
             print_indent(ctx);
             print_expr(ctx, e->prim.arg_exprs[1]);
             break;
-        case PRIM_LOGI_OR: print_binop(ctx, " || ", e); break;
-        case PRIM_LOGI_AND: print_binop(ctx, " && ", e); break;
+        case PRIM_LOGI_OR: print_binop(ctx, " or ", e); break;
+        case PRIM_LOGI_AND: print_binop(ctx, " and ", e); break;
         case PRIM_BITWISE_OR: print_binop(ctx, " | ", e); break;
         case PRIM_BITWISE_XOR: print_binop(ctx, " ^ ", e); break;
         case PRIM_BITWISE_AND: print_binop(ctx, " & ", e); break;
@@ -334,15 +374,28 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
     case EXPR_CALL: {
         struct expr_link *arg;
         print_expr(ctx, e->call.callable_expr);
-        print(ctx, "(");
+        print_colored(ctx, PAREN_COLOR, "(");
         for (arg = e->call.args; arg; arg = arg->next) {
             print_expr(ctx, arg->expr);
             if (arg->next) {
-                print(ctx, ", ");
+                print_colored(ctx, OPERATOR_COLOR, ", ");
             }
         }
-        print(ctx, ")");
+        print_colored(ctx, PAREN_COLOR, ")");
         break;
     }
     }
+}
+
+
+void pretty_print_indented(struct expr *e, uint indent) {
+    struct print_ctx print_ctx = { indent, };
+    print_indent(&print_ctx);
+    print_expr(&print_ctx, e);
+    set_color(COLOR_NORMAL);
+    printf("\n");
+}
+
+void pretty_print(struct expr *e) {
+    pretty_print_indented(e, 0);
 }

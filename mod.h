@@ -13,6 +13,7 @@ struct module_ctx {
     struct error_ctx *err_ctx;
     struct slice_table functions;
     struct expr *struct_expr;
+    struct type *module_type;
 };
 
 void module_ctx_init(struct module_ctx *ctx, struct expr *struct_expr);

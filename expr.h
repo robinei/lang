@@ -111,7 +111,7 @@ struct expr {
         } def;
 
         struct {
-            struct expr_decl *fields;
+            struct expr *body_expr;
         } struc;
 
         struct {
@@ -151,12 +151,8 @@ struct expr *expr_visit(struct expr_visit_ctx *ctx, struct expr *e);
 void expr_visit_children(struct expr_visit_ctx *ctx, struct expr *e);
 
 
-
-struct print_ctx {
-    uint indent;
-};
-
-void print_expr(struct print_ctx *ctx, struct expr *e);
+void pretty_print_indented(struct expr *e, uint indent);
+void pretty_print(struct expr *e);
 
 
 static uint decl_list_length(struct expr_decl *decl) {

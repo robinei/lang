@@ -65,7 +65,7 @@ static struct expr *parse_block(struct parse_ctx *ctx) {
         return first;
     }
     NEXT_TOKEN();
-    if (ctx->token == TOK_KW_END || ctx->token == TOK_KW_ELIF || ctx->token == TOK_KW_ELSE) {
+    if (ctx->token == TOK_KW_END || ctx->token == TOK_KW_ELIF || ctx->token == TOK_KW_ELSE || ctx->token == TOK_END) {
         return first;
     }
     struct expr *second = parse_block(ctx);
@@ -187,8 +187,6 @@ struct expr *parse_module(char *source_text, struct error_ctx *err_ctx) {
 }
 
 struct expr *do_parse_module(struct parse_ctx *ctx) {
-    struct expr *result;
-    struct expr_decl *fields;
     slice_t first_token;
 
     if (setjmp(ctx->error_jmp_buf)) {
@@ -198,34 +196,32 @@ struct expr *do_parse_module(struct parse_ctx *ctx) {
     NEXT_TOKEN();
     first_token = ctx->token_text;
 
-    fields = parse_decls(ctx);
+    struct expr *body = parse_block(ctx);
 
     if (ctx->token != TOK_END) {
         PARSE_ERR("unexpected token in module");
     }
 
-    result = expr_create(ctx, EXPR_STRUCT, slice_span(first_token, ctx->prev_token_text));
-    result->struc.fields = fields;
+    struct expr *result = expr_create(ctx, EXPR_STRUCT, slice_span(first_token, ctx->prev_token_text));
+    result->struc.body_expr = body;
     return result;
 }
 
 struct expr *parse_struct(struct parse_ctx *ctx) {
-    struct expr *result;
-    struct expr_decl *fields;
     slice_t first_token = ctx->token_text;
     
     assert(ctx->token == TOK_KW_STRUCT);
     NEXT_TOKEN();
 
-    fields = parse_decls(ctx);
+    struct expr *body = parse_block(ctx);
 
     if (ctx->token != TOK_KW_END) {
         PARSE_ERR("expected 'end' after struct definition");
     }
     NEXT_TOKEN();
 
-    result = expr_create(ctx, EXPR_STRUCT, slice_span(first_token, ctx->prev_token_text));
-    result->struc.fields = fields;
+    struct expr *result = expr_create(ctx, EXPR_STRUCT, slice_span(first_token, ctx->prev_token_text));
+    result->struc.body_expr = body;
     return result;
 }
 

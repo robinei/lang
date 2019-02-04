@@ -402,20 +402,43 @@ static struct expr *peval_sym(struct peval_ctx *ctx, struct expr *e) {
 
 static struct expr *peval_struct(struct peval_ctx *ctx, struct expr *e) {
     assert(e->kind == EXPR_STRUCT);
-    struct expr e_new = *e;
+    struct expr *result = e;
 
     BEGIN_SCOPE(SCOPE_STATIC);
 
-    add_decls_to_scope(ctx, e->struc.fields);
+    struct expr *body = peval(ctx, e->struc.body_expr);
+    
+    if (body->kind == EXPR_CONST) {
+        /* discard body and return type with names from scope */
+        uint field_count = decl_list_length(ctx->scope->decls);
+        struct type *t = create_struct_type(field_count);
 
-    e_new.struc.fields = ctx->scope->decls;
+        uint i = 0;
+        struct expr_decl *d = ctx->scope->decls;
+        for (; d; d = d->next, ++i) {
+            struct struct_field *f = t->struc.fields + i;
+            
+            assert(d->name_expr && d->name_expr->kind == EXPR_SYM);
+            f->name = d->name_expr->sym.name;
+
+            if (d->value_expr && d->value_expr->kind == EXPR_CONST) {
+                f->type = d->value_expr->c.tag;
+                f->value_expr = d->value_expr;
+            } else if (d->type_expr) {
+                PEVAL_ERR(d->name_expr, "non-static struct fields still unsupported");
+            } else {
+                PEVAL_ERR(d->name_expr, "struct field must have type or static value");
+            }
+        }
+
+        result = expr_create(ctx, EXPR_CONST, e);
+        result->c.tag = &type_type;
+        result->c.type = t;
+    }
 
     END_SCOPE();
 
-    if (e_new.struc.fields != e->struc.fields) {
-        return dup_expr(ctx, &e_new, e);
-    }
-    return e;
+    return result;
 }
 
 static struct expr *peval_def(struct peval_ctx *ctx, struct expr *e) {
@@ -585,6 +608,8 @@ struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
     default:
         break;
     }
+
+    assert(expr_source_text(result).ptr);
 
     if (ctx->force_full_expansion && result->kind != EXPR_CONST) {
         PEVAL_ERR(e, "expected static expression");
