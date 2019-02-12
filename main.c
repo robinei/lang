@@ -32,8 +32,11 @@ static char *read_file(const char *filename) {
     return str;
 }
 
-static void dummy_visitor(struct expr_visit_ctx *ctx, struct expr *e) {
-
+static void count_asserts(struct expr_visit_ctx *ctx, struct expr *e) {
+    if (e->kind == EXPR_PRIM && e->prim.kind == PRIM_ASSERT) {
+        ++*(uint *)(ctx->ctx);
+    }
+    expr_visit_children(ctx, e);
 }
 
 static void run_tests(char *filename) {
@@ -59,10 +62,11 @@ static void run_tests(char *filename) {
     printf("parsed module:\n");
     pretty_print(mod_struct);
 
+    uint assert_count = 0;
     {
-        /* just test that the visitor can traverse the whole module, and leaves it unchanged */
         struct expr_visit_ctx visit_ctx = {
-            .visitor = dummy_visitor
+            .visitor = count_asserts,
+            .ctx = &assert_count
         };
         struct expr *e = expr_visit(&visit_ctx, mod_struct);
         assert(e == mod_struct);
@@ -129,7 +133,7 @@ static void run_tests(char *filename) {
         }
         peval(&peval_ctx, &call_expr);
     }
-    printf("\n%u/%u asserts passed\n", peval_ctx.assert_count - peval_ctx.assert_fails, peval_ctx.assert_count);
+    printf("\n%u/%u(%u) asserts passed\n", peval_ctx.assert_count - peval_ctx.assert_fails, peval_ctx.assert_count, assert_count);
     print_errors(&err_ctx);
 }
 

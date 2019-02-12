@@ -19,11 +19,10 @@ const char *expr_names[] = {
 
 
 struct expr *expr_visit(struct expr_visit_ctx *ctx, struct expr *e) {
-    struct expr e_new;
     if (!e) {
         return NULL;
     }
-    e_new = *e;
+    struct expr e_new = *e;
     ctx->visitor(ctx, &e_new);
     if (memcmp(e, &e_new, sizeof(e_new))) {
         /* TODO: don't duplicate this (from dup_expr) */
