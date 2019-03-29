@@ -41,6 +41,9 @@
     X(KW_STRUCT) \
     X(KW_FUN) \
     X(KW_DEF) \
+    X(KW_PUB) \
+    X(KW_CONST) \
+    X(KW_VAR) \
     X(KW_LET) \
     X(KW_IN) \
     X(KW_IF) \
@@ -52,7 +55,6 @@
     X(KW_DO) \
     X(KW_FOR) \
     X(KW_WHILE) \
-    X(KW_MUT) \
     X(KW_STATIC) \
     X(KW_PURE) \
     X(KW_TRUE) \

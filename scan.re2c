@@ -74,6 +74,9 @@ next_token_start:;
     "struct"    { TOK(KW_STRUCT); }
     "fun"   { TOK(KW_FUN); }
     "def"   { TOK(KW_DEF); }
+    "pub"   { TOK(KW_PUB); }
+    "const" { TOK(KW_CONST); }
+    "var"   { TOK(KW_VAR); }
     "let"   { TOK(KW_LET); }
     "in"    { TOK(KW_IN); }
     "if"    { TOK(KW_IF); }
@@ -85,7 +88,6 @@ next_token_start:;
     "do"    { TOK(KW_DO); }
     "for"   { TOK(KW_FOR); }
     "while" { TOK(KW_WHILE); }
-    "var"   { TOK(KW_MUT); }
     "static"    { TOK(KW_STATIC); }
     "pure"  { TOK(KW_PURE); }
     "true"  { TOK(KW_TRUE); }

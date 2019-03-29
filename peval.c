@@ -450,8 +450,7 @@ static struct expr *peval_def(struct peval_ctx *ctx, struct expr *e) {
         .name_expr = e->def.name_expr,
         .type_expr = e->def.type_expr,
         .value_expr = e->def.value_expr,
-        .is_static = e->is_static,
-        .is_mut = e->is_mut
+        .is_static = (e->flags & EXPR_FLAG_DEF_STATIC) != 0
     };
     struct expr_decl *d_new = add_single_decl_to_scope(ctx, &d);
     if (d_new->value_expr && d_new->value_expr->kind == EXPR_CONST) {

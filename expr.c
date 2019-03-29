@@ -316,8 +316,14 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         print_colored(ctx, KEYWORD_COLOR, "end");
         break;
     case EXPR_DEF:
-        print_colored(ctx, KEYWORD_COLOR, "def ");
-        if (e->is_static) {
+        if (e->flags & EXPR_FLAG_DEF_PUB) {
+            print_colored(ctx, KEYWORD_COLOR, "pub ");
+        } else if (e->flags & EXPR_FLAG_DEF_VAR) {
+            print_colored(ctx, KEYWORD_COLOR, "var ");
+        } else {
+            print_colored(ctx, KEYWORD_COLOR, "const ");
+        }
+        if (e->flags & EXPR_FLAG_DEF_STATIC) {
             print_colored(ctx, KEYWORD_COLOR, "static ");
         }
         print_expr(ctx, e->def.name_expr);

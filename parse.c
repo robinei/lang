@@ -90,22 +90,23 @@ static struct expr *parse_begin(struct parse_ctx *ctx) {
 }
 
 static struct expr *parse_def(struct parse_ctx *ctx) {
-    assert(ctx->token == TOK_KW_DEF);
+    assert(ctx->token == TOK_KW_PUB || ctx->token == TOK_KW_CONST || ctx->token == TOK_KW_VAR);
+    unsigned int flags = 0;
+    if (ctx->token == TOK_KW_PUB) {
+        flags |= EXPR_FLAG_DEF_PUB;
+    } else if (ctx->token == TOK_KW_VAR) {
+        flags |= EXPR_FLAG_DEF_VAR;
+    }
+
     slice_t first_token = ctx->token_text;
     NEXT_TOKEN();
     
-    bool is_static = false;
-    bool is_mut = false;
     struct expr *name_expr;
     struct expr *type_expr = NULL;
     struct expr *value_expr = NULL;
 
     if (ctx->token == TOK_KW_STATIC) {
-        is_static = true;
-        NEXT_TOKEN();
-    }
-    if (ctx->token == TOK_KW_MUT) {
-        is_mut = true;
+        flags |= EXPR_FLAG_DEF_STATIC;
         NEXT_TOKEN();
     }
     if (ctx->token != TOK_IDENT) {
@@ -122,8 +123,7 @@ static struct expr *parse_def(struct parse_ctx *ctx) {
     }
 
     struct expr *e = expr_create(ctx, EXPR_DEF, slice_span(first_token, ctx->prev_token_text));
-    e->is_static = is_static;
-    e->is_mut = is_mut;
+    e->flags = flags;
     e->def.name_expr = name_expr;
     e->def.type_expr = type_expr;
     e->def.value_expr = value_expr;
@@ -149,17 +149,12 @@ static struct expr_decl *parse_decls(struct parse_ctx *ctx) {
         d->type_expr = d->next->type_expr;
         d->value_expr = d->next->value_expr;
         d->is_static = d->next->is_static;
-        d->is_mut = d->next->is_mut;
     }
     else {
         if (ctx->token == TOK_COLON) {
             NEXT_TOKEN();
             if (ctx->token == TOK_KW_STATIC) {
                 d->is_static = true;
-                NEXT_TOKEN();
-            }
-            if (ctx->token == TOK_KW_MUT) {
-                d->is_mut = true;
                 NEXT_TOKEN();
             }
             d->type_expr = parse_expr(ctx);
@@ -555,7 +550,9 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
     case TOK_HEX: return parse_int(ctx, 2, 16);
     case TOK_KW_STRUCT: return parse_struct(ctx);
     case TOK_KW_FUN: return parse_fun(ctx);
-    case TOK_KW_DEF: return parse_def(ctx);
+    case TOK_KW_PUB:
+    case TOK_KW_CONST:
+    case TOK_KW_VAR: return parse_def(ctx);
     case TOK_KW_IF: return parse_if(ctx, false);
     case TOK_KW_WHILE: return parse_while(ctx);
     case TOK_KW_STATIC: return parse_single_arg_prim(ctx, PRIM_STATIC);
