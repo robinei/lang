@@ -6,8 +6,8 @@
 long long int my_strtoll(const char *nptr, const char **endptr, int base);
 double my_strtod(const char *string, const char **endPtr);
 
-static struct expr *parse_expr(struct parse_ctx *ctx);
 static struct expr *parse_atom(struct parse_ctx *ctx);
+static struct expr *parse_infix(struct parse_ctx *ctx, int min_precedence);
 
 
 #define PARSE_ERR(...) \
@@ -50,17 +50,16 @@ static struct expr *prim_create_bin(struct parse_ctx *ctx, int prim, struct expr
 }
 
 
-static struct expr *parse_symbol(struct parse_ctx *ctx) {
-    assert(ctx->token == TOK_IDENT);
-    struct expr *e = expr_create(ctx, EXPR_SYM, ctx->token_text);
-    e->sym.name = ctx->token_text;
-    e->sym.name_hash = slice_hash_fnv1a(ctx->token_text);
-    NEXT_TOKEN();
-    return e;
+static struct expr *parse_expr(struct parse_ctx *ctx) {
+    return parse_infix(ctx, 2); // disallow '=' operator
+}
+
+static struct expr *parse_block_level_expr(struct parse_ctx *ctx) {
+    return parse_infix(ctx, 1); // allow '=' operator
 }
 
 static struct expr *parse_block(struct parse_ctx *ctx) {
-    struct expr *first = parse_expr(ctx);
+    struct expr *first = parse_block_level_expr(ctx);
     if (ctx->token != TOK_SEMICOLON) {
         return first;
     }
@@ -89,12 +88,19 @@ static struct expr *parse_begin(struct parse_ctx *ctx) {
     return e;
 }
 
+static struct expr *parse_symbol(struct parse_ctx *ctx) {
+    assert(ctx->token == TOK_IDENT);
+    struct expr *e = expr_create(ctx, EXPR_SYM, ctx->token_text);
+    e->sym.name = ctx->token_text;
+    e->sym.name_hash = slice_hash_fnv1a(ctx->token_text);
+    NEXT_TOKEN();
+    return e;
+}
+
 static struct expr *parse_def(struct parse_ctx *ctx) {
-    assert(ctx->token == TOK_KW_PUB || ctx->token == TOK_KW_CONST || ctx->token == TOK_KW_VAR);
+    assert(ctx->token == TOK_KW_CONST || ctx->token == TOK_KW_VAR);
     unsigned int flags = 0;
-    if (ctx->token == TOK_KW_PUB) {
-        flags |= EXPR_FLAG_DEF_PUB;
-    } else if (ctx->token == TOK_KW_VAR) {
+    if (ctx->token == TOK_KW_VAR) {
         flags |= EXPR_FLAG_DEF_VAR;
     }
 
@@ -440,33 +446,39 @@ static struct expr *parse_infix(struct parse_ctx *ctx, int min_precedence) {
         struct expr *rhs;
 
         switch (ctx->token) {
-        case TOK_KW_OR:     prim = PRIM_LOGI_OR;     precedence = 1; break;
+        case TOK_ASSIGN:    prim = PRIM_ASSIGN;      precedence = 1; break;
 
-        case TOK_KW_AND:    prim = PRIM_LOGI_AND;    precedence = 2; break;
+        case TOK_KW_OR:     prim = PRIM_LOGI_OR;     precedence = 2; break;
 
-        case TOK_OR_BW:     prim = PRIM_BITWISE_OR;  precedence = 3; break;
+        case TOK_KW_AND:    prim = PRIM_LOGI_AND;    precedence = 3; break;
 
-        case TOK_XOR_BW:    prim = PRIM_BITWISE_XOR; precedence = 4; break;
+        case TOK_OR_BW:     prim = PRIM_BITWISE_OR;  precedence = 4; break;
 
-        case TOK_AND_BW:    prim = PRIM_BITWISE_AND; precedence = 5; break;
+        case TOK_XOR_BW:    prim = PRIM_BITWISE_XOR; precedence = 5; break;
 
-        case TOK_EQ:        prim = PRIM_EQ;          precedence = 6; break;
-        case TOK_NEQ:       prim = PRIM_NEQ;         precedence = 6; break;
+        case TOK_AND_BW:    prim = PRIM_BITWISE_AND; precedence = 6; break;
 
-        case TOK_LT:        prim = PRIM_LT;          precedence = 7; break;
-        case TOK_GT:        prim = PRIM_GT;          precedence = 7; break;
-        case TOK_LTEQ:      prim = PRIM_LTEQ;        precedence = 7; break;
-        case TOK_GTEQ:      prim = PRIM_GTEQ;        precedence = 7; break;
+        case TOK_EQ:        prim = PRIM_EQ;          precedence = 7; break;
+        case TOK_NEQ:       prim = PRIM_NEQ;         precedence = 7; break;
 
-        case TOK_LSH:       prim = PRIM_BITWISE_LSH; precedence = 8; break;
-        case TOK_RSH:       prim = PRIM_BITWISE_RSH; precedence = 8; break;
+        case TOK_LT:        prim = PRIM_LT;          precedence = 8; break;
+        case TOK_GT:        prim = PRIM_GT;          precedence = 8; break;
+        case TOK_LTEQ:      prim = PRIM_LTEQ;        precedence = 8; break;
+        case TOK_GTEQ:      prim = PRIM_GTEQ;        precedence = 8; break;
 
-        case TOK_PLUS:      prim = PRIM_ADD;         precedence = 9; break;
-        case TOK_MINUS:     prim = PRIM_SUB;         precedence = 9; break;
+        case TOK_LSH:       prim = PRIM_BITWISE_LSH; precedence = 9; break;
+        case TOK_RSH:       prim = PRIM_BITWISE_RSH; precedence = 9; break;
 
-        case TOK_MUL:       prim = PRIM_MUL;         precedence = 10; break;
-        case TOK_DIV:       prim = PRIM_DIV;         precedence = 10; break;
-        case TOK_MOD:       prim = PRIM_MOD;         precedence = 10; break;
+        case TOK_PLUS:      prim = PRIM_ADD;         precedence = 10; break;
+        case TOK_MINUS:     prim = PRIM_SUB;         precedence = 10; break;
+
+        case TOK_MUL:       prim = PRIM_MUL;         precedence = 11; break;
+        case TOK_DIV:       prim = PRIM_DIV;         precedence = 11; break;
+        case TOK_MOD:       prim = PRIM_MOD;         precedence = 11; break;
+
+        case TOK_PERIOD:    prim = PRIM_DOT;         precedence = 12; break;
+
+        default: break;
         }
 
         if (prim < 0 || precedence < min_precedence) {
@@ -549,8 +561,8 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
     case TOK_DEC: return parse_int(ctx, 0, 10);
     case TOK_HEX: return parse_int(ctx, 2, 16);
     case TOK_KW_STRUCT: return parse_struct(ctx);
+    case TOK_KW_SELF: NEXT_TOKEN(); return expr_create(ctx, EXPR_SELF, first_token);
     case TOK_KW_FUN: return parse_fun(ctx);
-    case TOK_KW_PUB:
     case TOK_KW_CONST:
     case TOK_KW_VAR: return parse_def(ctx);
     case TOK_KW_IF: return parse_if(ctx, false);
@@ -575,8 +587,4 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
     }
 
     return result;
-}
-
-static struct expr *parse_expr(struct parse_ctx *ctx) {
-    return parse_infix(ctx, 1);
 }

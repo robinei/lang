@@ -10,7 +10,7 @@ struct parse_ctx {
     struct scan_ctx scan_ctx;
     struct error_ctx *err_ctx;
 
-    int token;
+    enum token_kind token;
     slice_t token_text;
     slice_t prev_token_text;
 

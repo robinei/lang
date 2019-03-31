@@ -394,6 +394,14 @@ static struct expr *peval_sym(struct peval_ctx *ctx, struct expr *e) {
                 return e;
             }
         }
+        if (scope->self) {
+            for (struct type_attr *a = scope->self->attrs; a; a = a->next) {
+                if (a->name_hash == e->sym.name_hash && slice_equals(e->sym.name, a->name)) {
+                    assert(a->value_expr && a->value_expr->kind == EXPR_CONST);
+                    return dup_expr(ctx, a->value_expr, e);
+                }
+            }
+        }
         scope = scope->outer_scope;
     }
 
@@ -406,38 +414,37 @@ static struct expr *peval_struct(struct peval_ctx *ctx, struct expr *e) {
 
     BEGIN_SCOPE(SCOPE_STATIC);
 
+    struct type *self = calloc(1, sizeof(struct type));
+    self->kind = TYPE_STRUCT;
+    ctx->scope->self = self;
+
     struct expr *body = peval(ctx, e->struc.body_expr);
     
     if (body->kind == EXPR_CONST) {
-        /* discard body and return type with names from scope */
-        uint field_count = decl_list_length(ctx->scope->decls);
-        struct type *t = create_struct_type(field_count);
-
-        uint i = 0;
-        struct expr_decl *d = ctx->scope->decls;
-        for (; d; d = d->next, ++i) {
-            struct struct_field *f = t->struc.fields + i;
-            
-            assert(d->name_expr && d->name_expr->kind == EXPR_SYM);
-            f->name = d->name_expr->sym.name;
-
-            if (d->value_expr && d->value_expr->kind == EXPR_CONST) {
-                f->type = d->value_expr->c.tag;
-                f->value_expr = d->value_expr;
-            } else if (d->type_expr) {
-                PEVAL_ERR(d->name_expr, "non-static struct fields still unsupported");
-            } else {
-                PEVAL_ERR(d->name_expr, "struct field must have type or static value");
-            }
-        }
-
         result = expr_create(ctx, EXPR_CONST, e);
         result->c.tag = &type_type;
-        result->c.type = t;
+        result->c.type = self;
     }
 
     END_SCOPE();
 
+    return result;
+}
+
+static struct expr *peval_self(struct peval_ctx *ctx, struct expr *e) {
+    assert(e->kind == EXPR_SELF);
+    assert(ctx->scope);
+    struct type *self = NULL;
+    for (struct scope *scope = ctx->scope; scope; scope = scope->outer_scope) {
+        if (scope->self) {
+            self = scope->self;
+            break;
+        }
+    }
+    assert(self);
+    struct expr *result = expr_create(ctx, EXPR_CONST, e);
+    result->c.tag = &type_type;
+    result->c.type = ctx->scope->self;
     return result;
 }
 
@@ -500,6 +507,7 @@ static struct expr *peval_fun(struct peval_ctx *ctx, struct expr *e) {
     struct expr *result;
 
     if (!e->fun.body_expr) {
+        struct expr *return_type_expr = peval_type(ctx, e->fun.return_type_expr);
         /* this is a function type expression */
         result = expr_create(ctx, EXPR_CONST, e);
         result->c.tag = &type_type;
@@ -585,6 +593,9 @@ struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
         break;
     case EXPR_STRUCT:
         result = peval_struct(ctx, e);
+        break;
+    case EXPR_SELF:
+        result = peval_self(ctx, e);
         break;
     case EXPR_FUN:
         result = peval_fun(ctx, e);

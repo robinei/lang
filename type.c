@@ -12,11 +12,3 @@ struct type type_fun = { .kind = TYPE_FUN };
 const char *type_names[] = {
     FOR_ALL_TYPES(DECL_TYPE_NAME)
 };
-
-struct type *create_struct_type(uint field_count) {
-    struct type *type = calloc(1, sizeof(struct type));
-    type->kind = TYPE_STRUCT;
-    type->struc.field_count = field_count;
-    type->struc.fields = calloc(1, sizeof(struct struct_field) * field_count);
-    return type;
-}

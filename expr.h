@@ -11,6 +11,7 @@
     X(LOGI_NOT) \
     X(BITWISE_NOT) \
     X(SEQ) \
+    X(ASSIGN) \
     X(LOGI_OR) \
     X(LOGI_AND) \
     X(BITWISE_OR) \
@@ -29,6 +30,7 @@
     X(MUL) \
     X(DIV) \
     X(MOD) \
+    X(DOT) \
     X(ASSERT) \
     X(QUOTE) \
     X(SPLICE) \
@@ -49,6 +51,7 @@ extern const char *prim_names[];
     X(DEF) \
     X(BLOCK) \
     X(STRUCT) \
+    X(SELF) \
     X(COND) \
     X(PRIM) \
     X(CALL)
@@ -75,8 +78,7 @@ struct expr_decl {
 
 enum {
     EXPR_FLAG_DEF_STATIC = 1,
-    EXPR_FLAG_DEF_PUB = 2,
-    EXPR_FLAG_DEF_VAR = 4,
+    EXPR_FLAG_DEF_VAR = 2,
 };
 
 struct expr {

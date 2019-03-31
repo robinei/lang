@@ -24,6 +24,7 @@
     X(NOT) \
     X(NOT_BW) \
     X(COMMA) \
+    X(PERIOD) \
     X(COLON) \
     X(SEMICOLON) \
     X(LPAREN) \
@@ -39,6 +40,7 @@
     X(KW_MODULE) \
     X(KW_IMPORT) \
     X(KW_STRUCT) \
+    X(KW_SELF) \
     X(KW_FUN) \
     X(KW_DEF) \
     X(KW_PUB) \
@@ -69,7 +71,7 @@
     X(HEX)
 
 #define DECL_TOK_ENUM(Tok) TOK_##Tok,
-enum { FOR_ALL_TOKENS(DECL_TOK_ENUM) };
+enum token_kind { FOR_ALL_TOKENS(DECL_TOK_ENUM) };
 #undef DECL_TOK_ENUM
 
 extern const char *token_strings[];

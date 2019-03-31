@@ -69,7 +69,7 @@ slice_t error_line_text(struct error_ctx *ctx, struct error_entry *entry) {
 uint error_line_num(struct error_ctx *ctx, struct error_entry *entry) {
     uint line = 0;
     char *buf_start = ctx->source_buf.ptr;
-    char *ch = entry->location.ptr--;
+    char *ch = entry->location.ptr - 1;
     for (; ch >= buf_start; --ch) {
         if (*ch == '\n') {
             ++line;
@@ -81,7 +81,7 @@ uint error_line_num(struct error_ctx *ctx, struct error_entry *entry) {
 uint error_col_num(struct error_ctx *ctx, struct error_entry *entry) {
     uint col = 0;
     char *buf_start = ctx->source_buf.ptr;
-    char *ch = entry->location.ptr--;
+    char *ch = entry->location.ptr - 1;
     for (; ch >= buf_start && *ch != '\n'; --ch) {
         ++col;
     }

@@ -89,6 +89,8 @@ void expr_visit_children(struct expr_visit_ctx *ctx, struct expr *e) {
     case EXPR_STRUCT:
         e->struc.body_expr = expr_visit(ctx, e->struc.body_expr);
         break;
+    case EXPR_SELF:
+        break;
     case EXPR_COND:
         e->cond.pred_expr = expr_visit(ctx, e->cond.pred_expr);
         e->cond.then_expr = expr_visit(ctx, e->cond.then_expr);
@@ -305,6 +307,9 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         print_indent(ctx);
         print_colored(ctx, KEYWORD_COLOR, "end");
         break;
+    case EXPR_SELF:
+        print_colored(ctx, KEYWORD_COLOR, "self");
+        break;
     case EXPR_BLOCK:
         print_colored(ctx, KEYWORD_COLOR, "begin\n");
         ++ctx->indent;
@@ -316,9 +321,7 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         print_colored(ctx, KEYWORD_COLOR, "end");
         break;
     case EXPR_DEF:
-        if (e->flags & EXPR_FLAG_DEF_PUB) {
-            print_colored(ctx, KEYWORD_COLOR, "pub ");
-        } else if (e->flags & EXPR_FLAG_DEF_VAR) {
+        if (e->flags & EXPR_FLAG_DEF_VAR) {
             print_colored(ctx, KEYWORD_COLOR, "var ");
         } else {
             print_colored(ctx, KEYWORD_COLOR, "const ");
@@ -351,6 +354,7 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
             print_indent(ctx);
             print_expr(ctx, e->prim.arg_exprs[1]);
             break;
+        case PRIM_ASSIGN: print_binop(ctx, " = ", e); break;
         case PRIM_LOGI_OR: print_binop(ctx, " or ", e); break;
         case PRIM_LOGI_AND: print_binop(ctx, " and ", e); break;
         case PRIM_BITWISE_OR: print_binop(ctx, " | ", e); break;
@@ -369,6 +373,7 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         case PRIM_MUL: print_binop(ctx, " * ", e); break;
         case PRIM_DIV: print_binop(ctx, " / ", e); break;
         case PRIM_MOD: print_binop(ctx, " % ", e); break;
+        case PRIM_DOT: print_binop(ctx, ".", e); break;
         case PRIM_ASSERT: print_primcall(ctx, "assert", e); break;
         case PRIM_QUOTE: print_primcall(ctx, "quote", e); break;
         case PRIM_SPLICE: print_primcall(ctx, "splice", e); break;

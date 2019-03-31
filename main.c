@@ -94,8 +94,7 @@ static void run_tests(char *filename) {
 
     printf("\nrunning tests...\n");
 
-    for (uint i = 0; i < t->struc.field_count; ++i) {
-        struct struct_field *f = t->struc.fields + i;
+    for (struct type_attr *f = t->attrs; f; f = f->next) {
         struct expr *e = f->value_expr;
 
         if (f->name.len < 4 || memcmp(f->name.ptr, "test", 4)) {

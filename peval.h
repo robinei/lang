@@ -17,6 +17,8 @@ struct scope {
     struct expr_decl *decls;
     struct expr_decl **last_decl_ptr;
 
+    struct type *self;
+
     uint free_var_count;
     enum scope_kind kind;
 };

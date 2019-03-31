@@ -21,29 +21,15 @@ enum type_kind {
 
 extern const char *type_names[];
 
-struct fun_param {
+struct type_attr {
     slice_t name;
-    struct type *type;
-};
-
-struct struct_field {
-    slice_t name;
-    struct type *type;
+    uint name_hash;
     struct expr *value_expr;
+    struct type_attr *next;
 };
 
 struct type {
-    union {
-        struct {
-            struct type *return_type;
-            struct fun_param *params;
-            uint param_count;
-        } fun;
-        struct {
-            struct struct_field *fields;
-            uint field_count;
-        } struc;
-    };
+    struct type_attr *attrs;
     enum type_kind kind;
 };
 
@@ -53,7 +39,5 @@ extern struct type type_unit;
 extern struct type type_bool;
 extern struct type type_int;
 extern struct type type_fun; /* TODO: replace with fun types actually having structure, and which are different */
-
-struct type *create_struct_type(uint field_count);
 
 #endif

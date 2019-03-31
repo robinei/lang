@@ -105,6 +105,35 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
             return ARG(1);
         }
         break;
+
+    case PRIM_ASSIGN: {
+        PEVAL_ARG(1);
+        if (ARG_CONST(1)) {
+            if (ARG(0)->kind != EXPR_PRIM || ARG(0)->prim.kind != PRIM_DOT) {
+                PEVAL_ERR(ARG(0), "invalid assignment target");
+            }
+            struct expr *field = ARG(0)->prim.arg_exprs[1];
+            if (field->kind != EXPR_SYM) {
+                PEVAL_ERR(field, "expected symbol");
+            }
+            struct expr *target = peval(ctx, ARG(0)->prim.arg_exprs[0]);
+            if (target->kind != EXPR_CONST || target->c.tag != &type_type || target->c.type->kind != TYPE_STRUCT) {
+                PEVAL_ERR(field, "invalid assignment target");
+            }
+            struct type *type = target->c.type;
+            struct type_attr **last = &type->attrs;
+            while (*last) {
+                last = &((*last)->next);
+            }
+            *last = calloc(1, sizeof(struct type_attr));
+            (*last)->name = field->sym.name;
+            (*last)->name_hash = field->sym.name_hash;
+            (*last)->value_expr = ARG(1);
+            return unit_create(ctx, e);
+        }
+        break;
+    }
+
     case PRIM_LOGI_OR:
         PEVAL_ARG(0);
         if (ARG_CONST(0)) {

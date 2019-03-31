@@ -57,6 +57,7 @@ next_token_start:;
     "!"     { TOK(NOT); }
     "~"     { TOK(NOT_BW); }
     ","     { TOK(COMMA); }
+    "."     { TOK(PERIOD); }
     ":"     { TOK(COLON); }
     ";"     { TOK(SEMICOLON); }
     "("     { TOK(LPAREN); }
@@ -72,6 +73,7 @@ next_token_start:;
     "module"    { TOK(KW_MODULE); }
     "import"    { TOK(KW_IMPORT); }
     "struct"    { TOK(KW_STRUCT); }
+    "self"  { TOK(KW_SELF); }
     "fun"   { TOK(KW_FUN); }
     "def"   { TOK(KW_DEF); }
     "pub"   { TOK(KW_PUB); }
