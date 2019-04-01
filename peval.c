@@ -132,7 +132,7 @@ static struct expr_decl *add_single_decl_to_scope(struct peval_ctx *ctx, struct 
         if (!d->value_expr) {
             PEVAL_ERR(d->name_expr, "expected value matching forward declaration");
         }
-        struct expr *value_expr = peval_force_expand(ctx, d->value_expr, scope->kind == SCOPE_STATIC || d->is_static);
+        struct expr *value_expr = peval_force_expand(ctx, d->value_expr, scope->kind == SCOPE_STRUCT || d->is_static);
         check_type(ctx, value_expr, d_old->type_expr);
         
         if (!d_old->value_expr) {
@@ -154,7 +154,7 @@ static struct expr_decl *add_single_decl_to_scope(struct peval_ctx *ctx, struct 
         *scope->last_decl_ptr = d_new;
         scope->last_decl_ptr = &d_new->next;
 
-        if ((scope->kind == SCOPE_STATIC || d->is_static) && type_expr && type_expr->c.type->kind == TYPE_FUN) {
+        if ((scope->kind == SCOPE_STRUCT || d->is_static) && type_expr && type_expr->c.type->kind == TYPE_FUN) {
             /* create a dummy forward declare function */
             struct function *func = calloc(1, sizeof(struct function));
             func->name = make_func_name(ctx, d->name_expr->sym.name);
@@ -170,7 +170,7 @@ static struct expr_decl *add_single_decl_to_scope(struct peval_ctx *ctx, struct 
                 func->fun_expr = func_expr->c.fun.func->fun_expr;
             }
         } else {
-            d_new->value_expr = peval_force_expand(ctx, d->value_expr, scope->kind == SCOPE_STATIC || d->is_static);
+            d_new->value_expr = peval_force_expand(ctx, d->value_expr, scope->kind == SCOPE_STRUCT || d->is_static);
             if (is_fun_const(d_new->value_expr)) {
                 struct function *func = d_new->value_expr->c.fun.func;
                 if (slice_str_cmp(func->name, "lambda") == 0) {
@@ -412,7 +412,7 @@ static struct expr *peval_struct(struct peval_ctx *ctx, struct expr *e) {
     assert(e->kind == EXPR_STRUCT);
     struct expr *result = e;
 
-    BEGIN_SCOPE(SCOPE_STATIC);
+    BEGIN_SCOPE(SCOPE_STRUCT);
 
     struct type *self = calloc(1, sizeof(struct type));
     self->kind = TYPE_STRUCT;
@@ -484,7 +484,7 @@ static struct expr *peval_block(struct peval_ctx *ctx, struct expr *e) {
     struct expr e_new = *e;
     bool changed;
 
-    BEGIN_SCOPE(SCOPE_LOCAL);
+    BEGIN_SCOPE(SCOPE_BLOCK);
 
     e_new.block.body_expr = peval(ctx, e_new.block.body_expr);
     if (e_new.block.body_expr->kind != EXPR_PRIM || e_new.block.body_expr->prim.kind != PRIM_SEQ) {
@@ -507,7 +507,7 @@ static struct expr *peval_fun(struct peval_ctx *ctx, struct expr *e) {
     struct expr *result;
 
     if (!e->fun.body_expr) {
-        struct expr *return_type_expr = peval_type(ctx, e->fun.return_type_expr);
+        peval_type(ctx, e->fun.return_type_expr);
         /* this is a function type expression */
         result = expr_create(ctx, EXPR_CONST, e);
         result->c.tag = &type_type;

@@ -6,9 +6,9 @@
 #include <setjmp.h>
 
 enum scope_kind {
-    SCOPE_STATIC,
+    SCOPE_STRUCT,
     SCOPE_FUNCTION,
-    SCOPE_LOCAL
+    SCOPE_BLOCK
 };
 
 struct scope {

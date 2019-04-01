@@ -168,6 +168,30 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
     case PRIM_DIV: HANDLE_BINOP(&type_int, integer, BINOP(/ , int_value))
     case PRIM_MOD: HANDLE_BINOP(&type_int, integer, BINOP(% , int_value))
 
+    case PRIM_DOT: {
+        if (ARG(1)->kind != EXPR_SYM) {
+            PEVAL_ERR(ARG(1), "expected symbol");
+        }
+        PEVAL_ARG(0);
+        if (ARG_CONST(0)) {
+            if (ARG(0)->c.tag != &type_type) {
+                PEVAL_ERR(ARG(0), "expected type");
+            }
+            struct expr *sym = ARG(1);
+            struct type *type = ARG(0)->c.type;
+            for (struct type_attr *a = type->attrs; a; a = a->next) {
+                if (a->name_hash == sym->sym.name_hash && slice_equals(a->name, sym->sym.name)) {
+                    struct expr *res = expr_create(ctx, EXPR_CONST, e);
+                    res->c = a->value_expr->c;
+                    return res;
+                }
+            }
+
+            PEVAL_ERR(sym, "non-existing attribute: %.*s", sym->sym.name.len, sym->sym.name.ptr);
+        }
+        break;
+    }
+
     case PRIM_ASSERT:
         PEVAL_ARG(0);
         if (ARG_CONST(0)) {

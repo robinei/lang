@@ -2,6 +2,20 @@
 
 self.testAssert = fun() -> assert(true);
 
+self.number = 123;
+assert(self.number == 123);
+
+const Foo = struct
+    self.x = 10;
+    self.y = 20;
+    self.Bar = struct
+        self.z = 5;
+        self.calcSum = fun -> x + y + z;
+    end;
+end;
+assert(Foo.x + Foo.y + Foo.Bar.z == 35);
+assert(Foo.Bar.calcSum() == 35);
+
 self.testShortCircuit = fun -> begin
     assert(not (false and assert(false)));
     assert(true or assert(false));
@@ -71,11 +85,6 @@ end;
 
 self.testFnReturn2 = fun ->
     assert((fun(x) -> fun(y) -> fun(z) -> x * y + z)(100)(2)(3) == 203);
-
-const Vec2 = struct
-    self.x = 0;
-    self.y = 1;
-end;
 
 self.testOps = fun -> begin
     assert(1 == 1);
