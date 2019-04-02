@@ -26,7 +26,7 @@ static struct expr *parse_infix(struct parse_ctx *ctx, int min_precedence);
 
 
 static struct expr *expr_create(struct parse_ctx *ctx, uint expr_type, slice_t source_text) {
-    struct expr *e = calloc(1, sizeof(struct expr));
+    struct expr *e = arena_alloc(ctx->arena, sizeof(struct expr));
     e->kind = expr_type;
     e->source_text = source_text;
     return e;
@@ -104,7 +104,7 @@ static struct expr *parse_block(struct parse_ctx *ctx) {
 static struct expr *parse_symbol(struct parse_ctx *ctx) {
     assert(ctx->token == TOK_IDENT);
     struct expr *e = expr_create(ctx, EXPR_SYM, ctx->token_text);
-    e->sym = intern_slice(ctx->mod_ctx, ctx->token_text);
+    e->sym = intern_slice(&ctx->mod_ctx->symbol_table, ctx->token_text);
     NEXT_TOKEN();
     return e;
 }
@@ -155,7 +155,7 @@ static struct expr_decl *parse_decls(struct parse_ctx *ctx) {
         return NULL;
     }
 
-    d = calloc(1, sizeof(struct expr_decl));
+    d = arena_alloc(ctx->arena, sizeof(struct expr_decl));
     d->name_expr = parse_symbol(ctx);
 
     if (ctx->token == TOK_COMMA) {
@@ -192,15 +192,7 @@ static struct expr_decl *parse_decls(struct parse_ctx *ctx) {
     return d;
 }
 
-struct expr *parse_module(struct module_ctx *mod_ctx, char *source_text) {
-    struct parse_ctx parse_ctx = { { 0 }, };
-    parse_ctx.scan_ctx.cursor = source_text;
-    parse_ctx.mod_ctx = mod_ctx;
-    parse_ctx.err_ctx = mod_ctx->err_ctx;
-    return do_parse_module(&parse_ctx);
-}
-
-struct expr *do_parse_module(struct parse_ctx *ctx) {
+static struct expr *do_parse_module(struct parse_ctx *ctx) {
     slice_t first_token;
 
     if (setjmp(ctx->error_jmp_buf)) {
@@ -219,6 +211,15 @@ struct expr *do_parse_module(struct parse_ctx *ctx) {
     struct expr *result = expr_create(ctx, EXPR_STRUCT, slice_span(first_token, ctx->prev_token_text));
     result->struc.body_expr = body;
     return result;
+}
+
+struct expr *parse_module(struct module_ctx *mod_ctx, char *source_text) {
+    struct parse_ctx parse_ctx = {0};
+    parse_ctx.arena = &mod_ctx->arena;
+    parse_ctx.scan_ctx.cursor = source_text;
+    parse_ctx.mod_ctx = mod_ctx;
+    parse_ctx.err_ctx = mod_ctx->err_ctx;
+    return do_parse_module(&parse_ctx);
 }
 
 struct expr *parse_struct(struct parse_ctx *ctx) {
@@ -348,7 +349,7 @@ static struct expr_link *parse_args(struct parse_ctx *ctx) {
         return NULL;
     }
 
-    a = calloc(1, sizeof(struct expr_link));
+    a = arena_alloc(ctx->arena, sizeof(struct expr_link));
     a->expr = parse_expr(ctx);
 
     if (ctx->token == TOK_COMMA) {

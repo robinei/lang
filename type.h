@@ -1,8 +1,7 @@
 #ifndef TYPE_H
 #define TYPE_H
 
-#include "defs.h"
-#include "slice.h"
+#include "sym.h"
 
 #define FOR_ALL_TYPES(X) \
     X(EXPR) \
@@ -28,11 +27,6 @@ extern const char *type_names[];
 #include "hashtable.h"
 
 struct expr;
-
-struct symbol {
-    uint length;
-    char data[0];
-};
 
 struct type {
     struct pointer_table attrs;

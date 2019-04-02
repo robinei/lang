@@ -44,6 +44,7 @@ static void run_tests(char *filename) {
     struct module_ctx mod_ctx;
     struct peval_ctx peval_ctx;
     struct expr *mod_struct;
+    struct arena global_arena = {0};
 
     char *source_text = read_file(filename);
     if (!source_text) {
@@ -51,7 +52,7 @@ static void run_tests(char *filename) {
         return;
     }
 
-    error_ctx_init(&err_ctx, filename, source_text);
+    error_ctx_init(&err_ctx, filename, source_text, &global_arena);
     module_ctx_init(&mod_ctx, &err_ctx);
 
     mod_struct = parse_module(&mod_ctx, source_text);
@@ -64,16 +65,12 @@ static void run_tests(char *filename) {
     pretty_print(mod_struct);
     uint assert_count = 0;
     {
-        struct expr_visit_ctx visit_ctx = {
-            .visitor = count_asserts,
-            .ctx = &assert_count
-        };
-        struct expr *e = expr_visit(&visit_ctx, mod_struct);
+        struct expr *e = expr_run_visitor(mod_struct, count_asserts, &assert_count, &mod_ctx.arena);
         assert(e == mod_struct);
     }
     mod_ctx.struct_expr = mod_struct;
 
-    peval_ctx_init(&peval_ctx, &mod_ctx, &err_ctx);
+    peval_ctx_init(&peval_ctx, &mod_ctx);
 
     if (setjmp(peval_ctx.error_jmp_buf)) {
         printf("error partially evaluating test module\n");

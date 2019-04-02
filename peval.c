@@ -24,7 +24,7 @@ static struct symbol *make_func_name(struct peval_ctx *ctx, struct symbol *base_
     assert(base_name->length + 16 < sizeof(buf));
     memcpy(buf, base_name->data, base_name->length + 1);
     while (1) {
-        struct symbol *fun_name = intern_string(ctx->mod_ctx, buf);
+        struct symbol *fun_name = intern_string(&ctx->mod_ctx->symbol_table, buf);
         if (!lookup_func(ctx, fun_name)) {
             return fun_name;
         }
@@ -146,7 +146,7 @@ static struct expr_decl *add_single_decl_to_scope(struct peval_ctx *ctx, struct 
     } else {
         check_type(ctx, d->value_expr, type_expr);
 
-        struct expr_decl *d_new = calloc(1, sizeof(struct expr_decl));
+        struct expr_decl *d_new = arena_alloc(ctx->arena, sizeof(struct expr_decl));
         *d_new = *d;
         d_new->next = NULL;
         d_new->type_expr = type_expr;
@@ -155,10 +155,10 @@ static struct expr_decl *add_single_decl_to_scope(struct peval_ctx *ctx, struct 
 
         if ((scope->kind == SCOPE_STRUCT || d->is_static) && type_expr && type_expr->c.type->kind == TYPE_FUN) {
             /* create a dummy forward declare function */
-            struct function *func = calloc(1, sizeof(struct function));
+            struct function *func = arena_alloc(ctx->arena, sizeof(struct function));
             func->name = make_func_name(ctx, d->name_expr->sym);
 
-            d_new->value_expr = calloc(1, sizeof(struct expr));
+            d_new->value_expr = arena_alloc(ctx->arena, sizeof(struct expr));
             d_new->value_expr->kind = EXPR_CONST;
             d_new->value_expr->c.tag = &type_fun;
             d_new->value_expr->c.fun.func = func;
@@ -282,7 +282,7 @@ static struct symbol *function_name_with_hashed_const_args(struct peval_ctx *ctx
     assert(func->name->length + 16 < sizeof(buf));
     memcpy(buf, func->name->data, func->name->length + 1);
     snprintf(buf + func->name->length, 16, "_%u", hash);
-    return intern_string(ctx->mod_ctx, buf);
+    return intern_string(&ctx->mod_ctx->symbol_table, buf);
 }
 
 static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
@@ -349,7 +349,7 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
         struct symbol *func_name_new = function_name_with_hashed_const_args(ctx, func, e_new.call.args);
         struct function *new_func = lookup_func(ctx, func_name_new);
         if (!new_func) {
-            new_func = calloc(1, sizeof(struct function));
+            new_func = arena_alloc(ctx->arena, sizeof(struct function));
             *new_func = *func;
             new_func->name = func_name_new;
             new_func->fun_expr = expr_create(ctx, EXPR_FUN, func->fun_expr);
@@ -410,7 +410,7 @@ static struct expr *peval_struct(struct peval_ctx *ctx, struct expr *e) {
 
     BEGIN_SCOPE(SCOPE_STRUCT);
 
-    struct type *self = calloc(1, sizeof(struct type));
+    struct type *self = arena_alloc(ctx->arena, sizeof(struct type));
     self->kind = TYPE_STRUCT;
     ctx->scope->self = self;
 
@@ -530,7 +530,7 @@ static struct expr *peval_fun(struct peval_ctx *ctx, struct expr *e) {
     }
 
     if (ctx->scope->free_var_count == 0) {
-        struct function *func = calloc(1, sizeof(struct function));
+        struct function *func = arena_alloc(ctx->arena, sizeof(struct function));
         func->name = ctx->sym_lambda;
         func->fun_expr = result;
 
@@ -629,7 +629,7 @@ static void bind_type(struct peval_ctx *ctx, char *name_str, struct type *type) 
     e_type->c.type = type;
 
     struct expr *name_expr = expr_create(ctx, EXPR_SYM, NULL);
-    name_expr->sym = intern_string(ctx->mod_ctx, name_str);
+    name_expr->sym = intern_string(&ctx->mod_ctx->symbol_table, name_str);
 
     struct expr_decl d = {
         .name_expr = name_expr,
@@ -639,14 +639,15 @@ static void bind_type(struct peval_ctx *ctx, char *name_str, struct type *type) 
     add_single_decl_to_scope(ctx, &d);
 }
 
-void peval_ctx_init(struct peval_ctx *ctx, struct module_ctx *mod_ctx, struct error_ctx *err_ctx) {
+void peval_ctx_init(struct peval_ctx *ctx, struct module_ctx *mod_ctx) {
     memset(ctx, 0, sizeof(*ctx));
 
-    ctx->err_ctx = err_ctx;
+    ctx->arena = &mod_ctx->arena;
+    ctx->err_ctx = mod_ctx->err_ctx;
     ctx->mod_ctx = mod_ctx;
     ctx->scope = &ctx->root_scope;
     ctx->scope->last_decl_ptr = &ctx->scope->decls;
-    ctx->sym_lambda = intern_string(mod_ctx, "lambda");
+    ctx->sym_lambda = intern_string(&mod_ctx->symbol_table, "lambda");
 
     bind_type(ctx, "Expr", &type_expr);
     bind_type(ctx, "Type", &type_type);

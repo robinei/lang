@@ -3,8 +3,9 @@
 #include <string.h>
 #include <stdarg.h>
 
-void error_ctx_init(struct error_ctx *ctx, char *filename, char *source_text) {
+void error_ctx_init(struct error_ctx *ctx, char *filename, char *source_text, struct arena *arena) {
     memset(ctx, 0, sizeof(*ctx));
+    ctx->arena = arena;
     ctx->source_buf = slice_from_str(source_text);
     strncpy(ctx->filename, filename, ERROR_FILENAME_BUF_SIZE - 1);
     ctx->filename[ERROR_FILENAME_BUF_SIZE - 1] = '\0';
@@ -32,7 +33,7 @@ void error_emit(struct error_ctx *ctx, enum error_category category, slice_t loc
     }
     ctx->msg_buf[len] = '\0';
 
-    entry = malloc(sizeof(struct error_entry) + len);
+    entry = arena_alloc(ctx->arena, sizeof(struct error_entry) + len + 1);
     entry->next = NULL;
     entry->category = category;
     entry->location = location;

@@ -11,15 +11,14 @@ struct function {
 };
 
 struct module_ctx {
+    struct arena arena;
     struct error_ctx *err_ctx;
     struct pointer_table functions;
-    struct slice_table symbol_table;
+    struct symbol_table symbol_table;
     struct expr *struct_expr;
     struct type *module_type;
 };
 
 void module_ctx_init(struct module_ctx *ctx, struct error_ctx *err_ctx);
-struct symbol *intern_slice(struct module_ctx *ctx, slice_t name);
-struct symbol *intern_string(struct module_ctx *ctx, char *str);
 
 #endif

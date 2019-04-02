@@ -26,7 +26,7 @@ struct expr *expr_visit(struct expr_visit_ctx *ctx, struct expr *e) {
     ctx->visitor(ctx, &e_new);
     if (memcmp(e, &e_new, sizeof(e_new))) {
         /* TODO: don't duplicate this (from dup_expr) */
-        struct expr *e_copy = malloc(sizeof(struct expr));
+        struct expr *e_copy = arena_alloc(ctx->arena, sizeof(struct expr));
         *e_copy = e_new;
         e_copy->antecedent = e;
         e_copy->source_text.ptr = NULL;
@@ -46,7 +46,7 @@ static struct expr_decl *expr_decl_visit(struct expr_visit_ctx *ctx, struct expr
     decl_new.type_expr = expr_visit(ctx, decl_new.type_expr);
     decl_new.value_expr = expr_visit(ctx, decl_new.value_expr);
     if (memcmp(&decl_new, decl, sizeof(decl_new))) {
-        struct expr_decl *decl_copy = malloc(sizeof(struct expr_decl));
+        struct expr_decl *decl_copy = arena_alloc(ctx->arena, sizeof(struct expr_decl));
         *decl_copy = decl_new;
         return decl_copy;
     }
@@ -62,7 +62,7 @@ static struct expr_link *expr_call_arg_visit(struct expr_visit_ctx *ctx, struct 
     arg_new.next = expr_call_arg_visit(ctx, arg_new.next);
     arg_new.expr = expr_visit(ctx, arg_new.expr);
     if (memcmp(&arg_new, arg, sizeof(arg_new))) {
-        struct expr_link *arg_copy = malloc(sizeof(struct expr_link));
+        struct expr_link *arg_copy = arena_alloc(ctx->arena, sizeof(struct expr_link));
         *arg_copy = arg_new;
         return arg_copy;
     }
@@ -108,6 +108,15 @@ void expr_visit_children(struct expr_visit_ctx *ctx, struct expr *e) {
         assert(NULL && "unexpected expr type");
         break;
     }
+}
+
+struct expr *expr_run_visitor(struct expr *e, expr_visitor_t visitor, void *ctx, struct arena *arena) {
+    struct expr_visit_ctx visit_ctx = {
+        .visitor = visitor,
+        .ctx = ctx,
+        .arena = arena
+    };
+    return expr_visit(&visit_ctx, e);
 }
 
 

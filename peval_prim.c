@@ -194,13 +194,8 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
     case PRIM_QUOTE:
         if (ctx->force_full_expansion) {
             struct expr *res = expr_create(ctx, EXPR_CONST, e);
-
-            struct expr_visit_ctx visit_ctx;
-            visit_ctx.visitor = splice_visitor;
-            visit_ctx.ctx = ctx;
-
             res->c.tag = &type_expr;
-            res->c.expr = expr_visit(&visit_ctx, ARG(0));
+            res->c.expr = expr_run_visitor(ARG(0), splice_visitor, ctx, ctx->arena);
             return res;
         }
         break;

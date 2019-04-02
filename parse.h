@@ -6,6 +6,7 @@
 #include <setjmp.h>
 
 struct parse_ctx {
+    struct arena *arena;
     struct scan_ctx scan_ctx;
     struct module_ctx *mod_ctx;
     struct error_ctx *err_ctx;
@@ -17,7 +18,6 @@ struct parse_ctx {
     jmp_buf error_jmp_buf;
 };
 
-struct expr *parse_module(struct module_ctx *err_ctx, char *source_text);
-struct expr *do_parse_module(struct parse_ctx *ctx);
+struct expr *parse_module(struct module_ctx *mod_ctx, char *source_text);
 
 #endif

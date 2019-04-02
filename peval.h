@@ -24,6 +24,7 @@ struct scope {
 };
 
 struct peval_ctx {
+    struct arena *arena;
     struct error_ctx *err_ctx;
     struct module_ctx *mod_ctx;
 
@@ -39,7 +40,7 @@ struct peval_ctx {
     struct symbol *sym_lambda;
 };
 
-void peval_ctx_init(struct peval_ctx *ctx, struct module_ctx *mod_ctx, struct error_ctx *err_ctx);
+void peval_ctx_init(struct peval_ctx *ctx, struct module_ctx *mod_ctx);
 
 struct expr *peval(struct peval_ctx *ctx, struct expr *e);
 
