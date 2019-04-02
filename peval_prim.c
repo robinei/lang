@@ -126,8 +126,7 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
                 last = &((*last)->next);
             }
             *last = calloc(1, sizeof(struct type_attr));
-            (*last)->name = field->sym.name;
-            (*last)->name_hash = field->sym.name_hash;
+            (*last)->name = field->sym;
             (*last)->value_expr = ARG(1);
             return unit_create(ctx, e);
         }
@@ -180,14 +179,14 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
             struct expr *sym = ARG(1);
             struct type *type = ARG(0)->c.type;
             for (struct type_attr *a = type->attrs; a; a = a->next) {
-                if (a->name_hash == sym->sym.name_hash && slice_equals(a->name, sym->sym.name)) {
+                if (a->name == sym->sym) {
                     struct expr *res = expr_create(ctx, EXPR_CONST, e);
                     res->c = a->value_expr->c;
                     return res;
                 }
             }
 
-            PEVAL_ERR(sym, "non-existing attribute: %.*s", sym->sym.name.len, sym->sym.name.ptr);
+            PEVAL_ERR(sym, "non-existing attribute: %s", sym->sym->data);
         }
         break;
     }

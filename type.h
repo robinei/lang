@@ -22,8 +22,7 @@ enum type_kind {
 extern const char *type_names[];
 
 struct type_attr {
-    slice_t name;
-    uint name_hash;
+    struct symbol *name;
     struct expr *value_expr;
     struct type_attr *next;
 };

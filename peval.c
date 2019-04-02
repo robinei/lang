@@ -7,30 +7,29 @@
 struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e);
 
 
-static void bind_func(struct peval_ctx *ctx, slice_t name, struct function *func) {
-    slice_table_put(&ctx->mod_ctx->functions, name, func);
+static void bind_func(struct peval_ctx *ctx, struct symbol *name, struct function *func) {
+    pointer_table_put(&ctx->mod_ctx->functions, name, func);
 }
 
-static struct function *lookup_func(struct peval_ctx *ctx, slice_t name) {
+static struct function *lookup_func(struct peval_ctx *ctx, struct symbol *name) {
     struct function *func = NULL;
-    slice_table_get(&ctx->mod_ctx->functions, name, (void **)&func);
+    pointer_table_get(&ctx->mod_ctx->functions, name, (void **)&func);
     return func;
 }
 
-static slice_t make_func_name(struct peval_ctx *ctx, slice_t base_name) {
-    uint i = 0, len = 0;
-    slice_t fun_name;
-    assert(base_name.len);
-    fun_name.ptr = malloc(base_name.len + 9);
-    memcpy(fun_name.ptr, base_name.ptr, base_name.len);
+static struct symbol *make_func_name(struct peval_ctx *ctx, struct symbol *base_name) {
+    char buf[256];
+    uint i = 0;
+    assert(base_name->length);
+    assert(base_name->length + 16 < sizeof(buf));
+    memcpy(buf, base_name->data, base_name->length + 1);
     while (1) {
-        fun_name.len = base_name.len + len;
+        struct symbol *fun_name = intern_string(ctx->mod_ctx, buf);
         if (!lookup_func(ctx, fun_name)) {
-            break;
+            return fun_name;
         }
-        len = snprintf(fun_name.ptr + base_name.len, 8, "%d", i++);
+        snprintf(buf + base_name->length, 16, "%d", i++);
     }
-    return fun_name;
 }
 
 
@@ -93,9 +92,9 @@ static void check_type(struct peval_ctx *ctx, struct expr *e, struct expr *e_typ
     }
 }
 
-static struct expr_decl *lookup_name_shallow(struct peval_ctx *ctx, slice_t name, uint name_hash) {
+static struct expr_decl *lookup_name_shallow(struct peval_ctx *ctx, struct symbol *name) {
     for (struct expr_decl *d = ctx->scope->decls; d; d = d->next) {
-        if (d->name_expr->sym.name_hash == name_hash && slice_equals(name, d->name_expr->sym.name)) {
+        if (d->name_expr->sym == name) {
             return d;
         }
     }
@@ -118,7 +117,7 @@ static struct expr_decl *add_single_decl_to_scope(struct peval_ctx *ctx, struct 
 
     struct expr *type_expr = peval_type(ctx, d->type_expr);
 
-    struct expr_decl *d_old = lookup_name_shallow(ctx, d->name_expr->sym.name, d->name_expr->sym.name_hash);
+    struct expr_decl *d_old = lookup_name_shallow(ctx, d->name_expr->sym);
     if (d_old) {
         if (d_old->value_expr && !is_dummy_fun_const(d_old->value_expr)) {
             PEVAL_ERR(d_old->value_expr, "forward declaration cannot have value");
@@ -157,7 +156,7 @@ static struct expr_decl *add_single_decl_to_scope(struct peval_ctx *ctx, struct 
         if ((scope->kind == SCOPE_STRUCT || d->is_static) && type_expr && type_expr->c.type->kind == TYPE_FUN) {
             /* create a dummy forward declare function */
             struct function *func = calloc(1, sizeof(struct function));
-            func->name = make_func_name(ctx, d->name_expr->sym.name);
+            func->name = make_func_name(ctx, d->name_expr->sym);
 
             d_new->value_expr = calloc(1, sizeof(struct expr));
             d_new->value_expr->kind = EXPR_CONST;
@@ -173,8 +172,8 @@ static struct expr_decl *add_single_decl_to_scope(struct peval_ctx *ctx, struct 
             d_new->value_expr = peval_force_expand(ctx, d->value_expr, scope->kind == SCOPE_STRUCT || d->is_static);
             if (is_fun_const(d_new->value_expr)) {
                 struct function *func = d_new->value_expr->c.fun.func;
-                if (slice_str_cmp(func->name, "lambda") == 0) {
-                    func->name = d->name_expr->sym.name;
+                if (func->name == ctx->sym_lambda) {
+                    func->name = d->name_expr->sym;
                 }
             }
         }
@@ -250,7 +249,7 @@ static uint hash_const_args(struct expr_decl *p, struct expr_link *a, uint hash)
     if (a) {
         assert(p);
         if (a->expr->kind == EXPR_CONST) {
-            hash = fnv1a((unsigned char *)p->name_expr->sym.name.ptr, p->name_expr->sym.name.len, hash);
+            hash = fnv1a((unsigned char *)p->name_expr->sym->data, p->name_expr->sym->length, hash);
             hash = FNV1A(a->expr->c.tag->kind, hash);
             switch (a->expr->c.tag->kind) {
             case TYPE_TYPE: hash = FNV1A(a->expr->c.type, hash); break; /* WRONG? */
@@ -277,14 +276,13 @@ static uint count_const_decls(struct expr_decl *d) {
     return const_count;
 }
 
-static slice_t function_name_with_hashed_const_args(struct peval_ctx *ctx, struct function *func, struct expr_link *args) {
+static struct symbol *function_name_with_hashed_const_args(struct peval_ctx *ctx, struct function *func, struct expr_link *args) {
+    char buf[256];
     uint hash = hash_const_args(func->fun_expr->fun.params, args, FNV_SEED);
-    uint fun_name_capacity = func->name.len + 8;
-    slice_t fun_name_new;
-    fun_name_new.ptr = malloc(fun_name_capacity + 1);
-    memcpy(fun_name_new.ptr, func->name.ptr, func->name.len);
-    fun_name_new.len = func->name.len + snprintf(fun_name_new.ptr + func->name.len, 8, "_%u", hash);
-    return fun_name_new;
+    assert(func->name->length + 16 < sizeof(buf));
+    memcpy(buf, func->name->data, func->name->length + 1);
+    snprintf(buf + func->name->length, 16, "_%u", hash);
+    return intern_string(ctx->mod_ctx, buf);
 }
 
 static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
@@ -348,7 +346,7 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
         check_type(ctx, &e_new, func->fun_expr->fun.return_type_expr);
     }
     else {
-        slice_t func_name_new = function_name_with_hashed_const_args(ctx, func, e_new.call.args);
+        struct symbol *func_name_new = function_name_with_hashed_const_args(ctx, func, e_new.call.args);
         struct function *new_func = lookup_func(ctx, func_name_new);
         if (!new_func) {
             new_func = calloc(1, sizeof(struct function));
@@ -381,7 +379,7 @@ static struct expr *peval_sym(struct peval_ctx *ctx, struct expr *e) {
     struct scope *scope = ctx->scope;
     while (scope) {
         for (struct expr_decl *d = scope->decls; d; d = d->next) {
-            if (d->name_expr->sym.name_hash == e->sym.name_hash && slice_equals(e->sym.name, d->name_expr->sym.name)) {
+            if (d->name_expr->sym == e->sym) {
                 if (d->value_expr && d->value_expr->kind == EXPR_CONST) {
                     return dup_expr(ctx, d->value_expr, e);
                 }
@@ -396,7 +394,7 @@ static struct expr *peval_sym(struct peval_ctx *ctx, struct expr *e) {
         }
         if (scope->self) {
             for (struct type_attr *a = scope->self->attrs; a; a = a->next) {
-                if (a->name_hash == e->sym.name_hash && slice_equals(e->sym.name, a->name)) {
+                if (a->name == e->sym) {
                     assert(a->value_expr && a->value_expr->kind == EXPR_CONST);
                     return dup_expr(ctx, a->value_expr, e);
                 }
@@ -535,7 +533,7 @@ static struct expr *peval_fun(struct peval_ctx *ctx, struct expr *e) {
 
     if (ctx->scope->free_var_count == 0) {
         struct function *func = calloc(1, sizeof(struct function));
-        func->name = slice_from_str("lambda");
+        func->name = ctx->sym_lambda;
         func->fun_expr = result;
 
         result = expr_create(ctx, EXPR_CONST, e);
@@ -633,8 +631,7 @@ static void bind_type(struct peval_ctx *ctx, char *name_str, struct type *type) 
     e_type->c.type = type;
 
     struct expr *name_expr = expr_create(ctx, EXPR_SYM, NULL);
-    name_expr->sym.name = slice_from_str(name_str);
-    name_expr->sym.name_hash = slice_hash_fnv1a(name_expr->sym.name);
+    name_expr->sym = intern_string(ctx->mod_ctx, name_str);
 
     struct expr_decl d = {
         .name_expr = name_expr,
@@ -651,6 +648,7 @@ void peval_ctx_init(struct peval_ctx *ctx, struct module_ctx *mod_ctx, struct er
     ctx->mod_ctx = mod_ctx;
     ctx->scope = &ctx->root_scope;
     ctx->scope->last_decl_ptr = &ctx->scope->decls;
+    ctx->sym_lambda = intern_string(mod_ctx, "lambda");
 
     bind_type(ctx, "Expr", &type_expr);
     bind_type(ctx, "Type", &type_type);

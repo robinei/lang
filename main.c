@@ -52,8 +52,9 @@ static void run_tests(char *filename) {
     }
 
     error_ctx_init(&err_ctx, filename, source_text);
+    module_ctx_init(&mod_ctx, &err_ctx);
 
-    mod_struct = parse_module(source_text, &err_ctx);
+    mod_struct = parse_module(&mod_ctx, source_text);
     if (!mod_struct) {
         printf("error parsing test module\n");
         print_errors(&err_ctx);
@@ -61,7 +62,6 @@ static void run_tests(char *filename) {
     }
     printf("parsed module:\n");
     pretty_print(mod_struct);
-
     uint assert_count = 0;
     {
         struct expr_visit_ctx visit_ctx = {
@@ -71,8 +71,7 @@ static void run_tests(char *filename) {
         struct expr *e = expr_visit(&visit_ctx, mod_struct);
         assert(e == mod_struct);
     }
-
-    module_ctx_init(&mod_ctx, mod_struct);
+    mod_ctx.struct_expr = mod_struct;
 
     peval_ctx_init(&peval_ctx, &mod_ctx, &err_ctx);
 
@@ -97,25 +96,25 @@ static void run_tests(char *filename) {
     for (struct type_attr *f = t->attrs; f; f = f->next) {
         struct expr *e = f->value_expr;
 
-        if (f->name.len < 4 || memcmp(f->name.ptr, "test", 4)) {
-            printf("\n(skip) name doesn't start with test: %.*s\n", f->name.len, f->name.ptr);
+        if (f->name->length < 4 || memcmp(f->name->data, "test", 4)) {
+            printf("\n(skip) name doesn't start with test: %s\n", f->name->data);
             continue;
         }
         if (!e) {
-            printf("\n(skip) missing value expression: %.*s\n", f->name.len, f->name.ptr);
+            printf("\n(skip) missing value expression: %s\n", f->name->data);
             continue;
         }
         if (e->kind != EXPR_CONST) {
-            printf("\n(skip) value not const: %.*s\n", f->name.len, f->name.ptr);
+            printf("\n(skip) value not const: %s\n", f->name->data);
             continue;
         }
         if (e->c.tag->kind != TYPE_FUN) {
-            printf("\n(skip) value not a function: %.*s\n", f->name.len, f->name.ptr);
+            printf("\n(skip) value not a function: %s\n", f->name->data);
             continue;
         }
         struct function *func = e->c.fun.func;
         if (func->fun_expr->fun.params) {
-            printf("\n(skip) function is not zero argument: %.*s\n", f->name.len, f->name.ptr);
+            printf("\n(skip) function is not zero argument: %s\n", f->name->data);
             continue;
         }
 
@@ -123,7 +122,7 @@ static void run_tests(char *filename) {
             .kind = EXPR_CALL,
             .call.callable_expr = e
         };
-        printf("\nrunning test function: %.*s\n", func->name.len, func->name.ptr);
+        printf("\nrunning test function: %s\n", func->name->data);
         fflush(stdout);
         pretty_print_indented(func->fun_expr, 1);
 

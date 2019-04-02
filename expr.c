@@ -256,7 +256,7 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
             print_colored(ctx, NUMBER_COLOR, "%d", e->c.integer);
             break;
         case TYPE_FUN:
-            print_colored(ctx, COLOR_NORMAL, "<fun:%.*s>", e->c.fun.func->name.len, e->c.fun.func->name.ptr);
+            print_colored(ctx, COLOR_NORMAL, "<fun:%s>", e->c.fun.func->name->data);
             break;
         default:
             print_colored(ctx, COLOR_NORMAL, "<const:%s>", type_names[e->c.tag->kind]);
@@ -264,14 +264,14 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         }
         break;
     case EXPR_SYM:
-        print_colored(ctx, SYMBOL_COLOR, "%.*s", e->sym.name.len, e->sym.name.ptr);
+        print_colored(ctx, SYMBOL_COLOR, "%s", e->sym->data);
         break;
     case EXPR_FUN:
         print_colored(ctx, KEYWORD_COLOR, "fun");
         if (e->fun.params) {
             print_colored(ctx, PAREN_COLOR, "(");
             for (struct expr_decl *p = e->fun.params; p; p = p->next) {
-                print_colored(ctx, SYMBOL_COLOR, "%.*s", p->name_expr->sym.name.len, p->name_expr->sym.name.ptr);
+                print_colored(ctx, SYMBOL_COLOR, "%s", p->name_expr->sym->data);
                 if (p->type_expr) {
                     print_colored(ctx, OPERATOR_COLOR, ": ");
                     if (p->is_static) {

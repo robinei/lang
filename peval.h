@@ -35,6 +35,8 @@ struct peval_ctx {
     uint assert_count;
     uint assert_fails;
     jmp_buf error_jmp_buf;
+
+    struct symbol *sym_lambda;
 };
 
 void peval_ctx_init(struct peval_ctx *ctx, struct module_ctx *mod_ctx, struct error_ctx *err_ctx);

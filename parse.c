@@ -104,8 +104,7 @@ static struct expr *parse_block(struct parse_ctx *ctx) {
 static struct expr *parse_symbol(struct parse_ctx *ctx) {
     assert(ctx->token == TOK_IDENT);
     struct expr *e = expr_create(ctx, EXPR_SYM, ctx->token_text);
-    e->sym.name = ctx->token_text;
-    e->sym.name_hash = slice_hash_fnv1a(ctx->token_text);
+    e->sym = intern_slice(ctx->mod_ctx, ctx->token_text);
     NEXT_TOKEN();
     return e;
 }
@@ -193,10 +192,11 @@ static struct expr_decl *parse_decls(struct parse_ctx *ctx) {
     return d;
 }
 
-struct expr *parse_module(char *source_text, struct error_ctx *err_ctx) {
+struct expr *parse_module(struct module_ctx *mod_ctx, char *source_text) {
     struct parse_ctx parse_ctx = { { 0 }, };
     parse_ctx.scan_ctx.cursor = source_text;
-    parse_ctx.err_ctx = err_ctx;
+    parse_ctx.mod_ctx = mod_ctx;
+    parse_ctx.err_ctx = mod_ctx->err_ctx;
     return do_parse_module(&parse_ctx);
 }
 

@@ -2,12 +2,12 @@
 #define PARSE_H
 
 #include "scan.h"
-#include "expr.h"
-#include "error.h"
+#include "mod.h"
 #include <setjmp.h>
 
 struct parse_ctx {
     struct scan_ctx scan_ctx;
+    struct module_ctx *mod_ctx;
     struct error_ctx *err_ctx;
 
     enum token_kind token;
@@ -17,7 +17,7 @@ struct parse_ctx {
     jmp_buf error_jmp_buf;
 };
 
-struct expr *parse_module(char *source_text, struct error_ctx *err_ctx);
+struct expr *parse_module(struct module_ctx *err_ctx, char *source_text);
 struct expr *do_parse_module(struct parse_ctx *ctx);
 
 #endif

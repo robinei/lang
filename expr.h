@@ -96,10 +96,7 @@ struct expr {
             struct type *tag;
         } c; /* const */
 
-        struct {
-            slice_t name;
-            uint name_hash;
-        } sym;
+        struct symbol *sym;
 
         struct {
             struct expr_decl *params;
