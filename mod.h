@@ -5,17 +5,6 @@
 #include "error.h"
 #include "slice.h"
 
-#define EXPAND_INTERFACE
-#define NAME        pointer_table
-#define KEY_TYPE    void *
-#define VALUE_TYPE  void *
-#include "hashtable.h"
-
-struct symbol {
-    uint length;
-    char data[0];
-};
-
 struct function {
     struct symbol *name;
     struct expr *fun_expr;

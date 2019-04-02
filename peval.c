@@ -393,11 +393,9 @@ static struct expr *peval_sym(struct peval_ctx *ctx, struct expr *e) {
             }
         }
         if (scope->self) {
-            for (struct type_attr *a = scope->self->attrs; a; a = a->next) {
-                if (a->name == e->sym) {
-                    assert(a->value_expr && a->value_expr->kind == EXPR_CONST);
-                    return dup_expr(ctx, a->value_expr, e);
-                }
+            struct expr *val = type_get_attr(scope->self, e->sym);
+            if (val) {
+                return dup_expr(ctx, val, e);
             }
         }
         scope = scope->outer_scope;

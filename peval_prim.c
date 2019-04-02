@@ -106,7 +106,7 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
         }
         break;
 
-    case PRIM_ASSIGN: {
+    case PRIM_ASSIGN:
         PEVAL_ARG(1);
         if (ARG_CONST(1)) {
             if (ARG(0)->kind != EXPR_PRIM || ARG(0)->prim.kind != PRIM_DOT) {
@@ -121,17 +121,10 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
                 PEVAL_ERR(field, "invalid assignment target");
             }
             struct type *type = target->c.type;
-            struct type_attr **last = &type->attrs;
-            while (*last) {
-                last = &((*last)->next);
-            }
-            *last = calloc(1, sizeof(struct type_attr));
-            (*last)->name = field->sym;
-            (*last)->value_expr = ARG(1);
+            type_set_attr(type, field->sym, ARG(1));
             return unit_create(ctx, e);
         }
         break;
-    }
 
     case PRIM_LOGI_OR:
         PEVAL_ARG(0);
@@ -167,7 +160,7 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
     case PRIM_DIV: HANDLE_BINOP(&type_int, integer, BINOP(/ , int_value))
     case PRIM_MOD: HANDLE_BINOP(&type_int, integer, BINOP(% , int_value))
 
-    case PRIM_DOT: {
+    case PRIM_DOT:
         if (ARG(1)->kind != EXPR_SYM) {
             PEVAL_ERR(ARG(1), "expected symbol");
         }
@@ -178,18 +171,13 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
             }
             struct expr *sym = ARG(1);
             struct type *type = ARG(0)->c.type;
-            for (struct type_attr *a = type->attrs; a; a = a->next) {
-                if (a->name == sym->sym) {
-                    struct expr *res = expr_create(ctx, EXPR_CONST, e);
-                    res->c = a->value_expr->c;
-                    return res;
-                }
+            struct expr *res = type_get_attr(type, sym->sym);
+            if (!res) {
+                PEVAL_ERR(sym, "non-existing attribute: %s", sym->sym->data);
             }
-
-            PEVAL_ERR(sym, "non-existing attribute: %s", sym->sym->data);
+            return dup_expr(ctx, res, e);
         }
         break;
-    }
 
     case PRIM_ASSERT:
         PEVAL_ARG(0);

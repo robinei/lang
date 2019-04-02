@@ -26,12 +26,3 @@ struct symbol *intern_slice(struct module_ctx *ctx, slice_t name) {
 struct symbol *intern_string(struct module_ctx *ctx, char *str) {
     return intern_slice(ctx, slice_from_str(str));
 }
-
-
-#define EXPAND_IMPLEMENTATION
-#define NAME        pointer_table
-#define KEY_TYPE    void *
-#define VALUE_TYPE  void *
-#define HASH_FUNC   hashutil_ptr_hash
-#define EQUAL_FUNC(a, b) ((a) == (b))
-#include "hashtable.h"

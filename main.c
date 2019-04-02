@@ -93,28 +93,32 @@ static void run_tests(char *filename) {
 
     printf("\nrunning tests...\n");
 
-    for (struct type_attr *f = t->attrs; f; f = f->next) {
-        struct expr *e = f->value_expr;
+    for (int i = 0; i < t->attrs.size; ++i) {
+        if (!t->attrs.entries[i].hash) {
+            continue;
+        }
+        struct symbol *name = t->attrs.entries[i].key;
+        struct expr *e = t->attrs.entries[i].value;
 
-        if (f->name->length < 4 || memcmp(f->name->data, "test", 4)) {
-            printf("\n(skip) name doesn't start with test: %s\n", f->name->data);
+        if (name->length < 4 || memcmp(name->data, "test", 4)) {
+            printf("\n(skip) name doesn't start with test: %s\n", name->data);
             continue;
         }
         if (!e) {
-            printf("\n(skip) missing value expression: %s\n", f->name->data);
+            printf("\n(skip) missing value expression: %s\n", name->data);
             continue;
         }
         if (e->kind != EXPR_CONST) {
-            printf("\n(skip) value not const: %s\n", f->name->data);
+            printf("\n(skip) value not const: %s\n", name->data);
             continue;
         }
         if (e->c.tag->kind != TYPE_FUN) {
-            printf("\n(skip) value not a function: %s\n", f->name->data);
+            printf("\n(skip) value not a function: %s\n", name->data);
             continue;
         }
         struct function *func = e->c.fun.func;
         if (func->fun_expr->fun.params) {
-            printf("\n(skip) function is not zero argument: %s\n", f->name->data);
+            printf("\n(skip) function is not zero argument: %s\n", name->data);
             continue;
         }
 

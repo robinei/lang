@@ -21,16 +21,26 @@ enum type_kind {
 
 extern const char *type_names[];
 
-struct type_attr {
-    struct symbol *name;
-    struct expr *value_expr;
-    struct type_attr *next;
+#define EXPAND_INTERFACE
+#define NAME        pointer_table
+#define KEY_TYPE    void *
+#define VALUE_TYPE  void *
+#include "hashtable.h"
+
+struct expr;
+
+struct symbol {
+    uint length;
+    char data[0];
 };
 
 struct type {
-    struct type_attr *attrs;
+    struct pointer_table attrs;
     enum type_kind kind;
 };
+
+void type_set_attr(struct type *type, struct symbol *name, struct expr *val);
+struct expr *type_get_attr(struct type *type, struct symbol *name);
 
 extern struct type type_expr;
 extern struct type type_type;

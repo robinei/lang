@@ -81,20 +81,22 @@ enum {
     EXPR_FLAG_DEF_VAR = 2,
 };
 
-struct expr {
+struct value {
     union {
         struct {
-            union {
-                struct {
-                    struct function *func;
-                } fun;
-                struct expr *expr;
-                struct type *type;
-                bool boolean;
-                int integer;
-            };
-            struct type *tag;
-        } c; /* const */
+            struct function *func;
+        } fun;
+        struct expr *expr;
+        struct type *type;
+        bool boolean;
+        int integer;
+    };
+    struct type *tag;
+};
+
+struct expr {
+    union {
+        struct value c; /* const */
 
         struct symbol *sym;
 

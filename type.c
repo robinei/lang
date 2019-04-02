@@ -1,5 +1,17 @@
-#include "type.h"
+#include "expr.h"
 #include <stdlib.h>
+#include <assert.h>
+
+void type_set_attr(struct type *type, struct symbol *name, struct expr *val) {
+    assert(val->kind == EXPR_CONST);
+    pointer_table_put(&type->attrs, name, val);
+}
+
+struct expr *type_get_attr(struct type *type, struct symbol *name) {
+    struct expr *result = NULL;
+    pointer_table_get(&type->attrs, name, (void **)&result);
+    return result;
+}
 
 struct type type_expr = { .kind = TYPE_EXPR };
 struct type type_type = { .kind = TYPE_TYPE };
@@ -12,3 +24,11 @@ struct type type_fun = { .kind = TYPE_FUN };
 const char *type_names[] = {
     FOR_ALL_TYPES(DECL_TYPE_NAME)
 };
+
+#define EXPAND_IMPLEMENTATION
+#define NAME        pointer_table
+#define KEY_TYPE    void *
+#define VALUE_TYPE  void *
+#define HASH_FUNC   hashutil_ptr_hash
+#define EQUAL_FUNC(a, b) ((a) == (b))
+#include "hashtable.h"
