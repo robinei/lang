@@ -1,14 +1,21 @@
-#include "slice.h"
+#include "sym.h"
 #include "murmur3.h"
 #include "fnv.h"
 #include <stdlib.h>
 #include <string.h>
 
 slice_t slice_from_str(char *str) {
-    slice_t result;
-    result.ptr = str;
-    result.len = strlen(str);
-    return result;
+    return (slice_t) {
+        .ptr = str,
+        .len = strlen(str)
+    };
+}
+
+slice_t slice_from_sym(struct symbol *sym) {
+    return (slice_t) {
+        .ptr = sym->data,
+        .len = sym->length
+    };
 }
 
 int slice_equals(slice_t a, slice_t b) {
@@ -30,7 +37,7 @@ int slice_str_cmp(slice_t a, char *b_str) {
 }
 
 slice_t slice_span(slice_t a, slice_t b) {
-    slice_t c = {0,};
+    slice_t c;
     c.ptr = a.ptr <= b.ptr ?
         a.ptr :
         b.ptr;
