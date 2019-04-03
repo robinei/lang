@@ -12,13 +12,20 @@ struct function {
 
 struct module_ctx {
     struct arena arena;
-    struct error_ctx *err_ctx;
+    struct error_ctx err_ctx;
+
     struct pointer_table functions;
     struct symbol_table symbol_table;
+
+    char *source_text;
     struct expr *struct_expr;
     struct type *module_type;
+
+    uint total_assert_count;
+    uint asserts_hit;
+    uint asserts_failed;
 };
 
-void module_ctx_init(struct module_ctx *ctx, struct error_ctx *err_ctx);
+struct module_ctx *module_load(const char *filename);
 
 #endif

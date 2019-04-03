@@ -33,8 +33,6 @@ struct peval_ctx {
 
     uint force_full_expansion;
 
-    uint assert_count;
-    uint assert_fails;
     jmp_buf error_jmp_buf;
 
     struct symbol *sym_lambda;

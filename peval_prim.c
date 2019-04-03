@@ -182,9 +182,9 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
     case PRIM_ASSERT:
         PEVAL_ARG(0);
         if (ARG_CONST(0)) {
-            ++ctx->assert_count;
+            ++ctx->mod_ctx->asserts_hit;
             if (!bool_value(ctx, ARG(0))) {
-                ++ctx->assert_fails;
+                ++ctx->mod_ctx->asserts_failed;
                 PEVAL_ERR(e, "assertion failure!");
             }
             return unit_create(ctx, e);

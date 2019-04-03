@@ -218,7 +218,7 @@ struct expr *parse_module(struct module_ctx *mod_ctx, char *source_text) {
     parse_ctx.arena = &mod_ctx->arena;
     parse_ctx.scan_ctx.cursor = source_text;
     parse_ctx.mod_ctx = mod_ctx;
-    parse_ctx.err_ctx = mod_ctx->err_ctx;
+    parse_ctx.err_ctx = &mod_ctx->err_ctx;
     return do_parse_module(&parse_ctx);
 }
 

@@ -3,21 +3,13 @@
 #include <string.h>
 #include <stdarg.h>
 
-void error_ctx_init(struct error_ctx *ctx, char *filename, char *source_text, struct arena *arena) {
+void error_ctx_init(struct error_ctx *ctx, const char *filename, char *source_text, struct arena *arena) {
     memset(ctx, 0, sizeof(*ctx));
     ctx->arena = arena;
     ctx->source_buf = slice_from_str(source_text);
-    strncpy(ctx->filename, filename, ERROR_FILENAME_BUF_SIZE - 1);
-    ctx->filename[ERROR_FILENAME_BUF_SIZE - 1] = '\0';
-}
-
-void error_entries_free(struct error_ctx *ctx) {
-    ctx->last_error = NULL;
-    while (ctx->first_error) {
-        struct error_entry *next = ctx->first_error->next;
-        free(ctx->first_error);
-        ctx->first_error = next;
-    }
+    uint filename_len = strlen(filename);
+    ctx->filename = arena_alloc(arena, filename_len + 1);
+    memcpy(ctx->filename, filename, filename_len + 1);
 }
 
 void error_emit(struct error_ctx *ctx, enum error_category category, slice_t location, const char *format, ...) {
@@ -128,4 +120,11 @@ void error_fprint(struct error_ctx *ctx, struct error_entry *entry, FILE *fp) {
     print_repeated(fp, ' ', col_num);
     print_repeated(fp, '^', err_len);
     fputc('\n', fp);
+}
+
+void print_errors(struct error_ctx *err_ctx) {
+    struct error_entry *entry;
+    for (entry = err_ctx->first_error; entry; entry = entry->next) {
+        error_fprint(err_ctx, entry, stdout);
+    }
 }

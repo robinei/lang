@@ -643,7 +643,7 @@ void peval_ctx_init(struct peval_ctx *ctx, struct module_ctx *mod_ctx) {
     memset(ctx, 0, sizeof(*ctx));
 
     ctx->arena = &mod_ctx->arena;
-    ctx->err_ctx = mod_ctx->err_ctx;
+    ctx->err_ctx = &mod_ctx->err_ctx;
     ctx->mod_ctx = mod_ctx;
     ctx->scope = &ctx->root_scope;
     ctx->scope->last_decl_ptr = &ctx->scope->decls;
