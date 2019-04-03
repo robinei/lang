@@ -16,6 +16,12 @@ end;
 assert(Foo.x + Foo.y + Foo.Bar.z == 35);
 assert(Foo.Bar.calcSum() == 35);
 
+begin
+    const str: String = "foo";
+    assert(str == "foo");
+    assert(str != "bar");
+end;
+
 self.testShortCircuit = fun -> begin
     assert(not (false and assert(false)));
     assert(true or assert(false));

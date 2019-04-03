@@ -17,23 +17,25 @@ static int int_value(struct peval_ctx *ctx, struct expr *e) {
     return e->c.integer;
 }
 
-static int const_eq(struct peval_ctx *ctx, struct expr *a, struct expr *b) {
+static bool const_eq(struct peval_ctx *ctx, struct expr *a, struct expr *b) {
     assert(a->kind == EXPR_CONST && b->kind == EXPR_CONST);
     if (a->c.tag != b->c.tag) {
-        return 0;
+        return false;
     }
     switch (a->c.tag->kind) {
     case TYPE_TYPE:
         return a->c.type == b->c.type;
     case TYPE_UNIT:
-        return 1;
+        return true;
     case TYPE_BOOL:
         return a->c.boolean == b->c.boolean;
     case TYPE_INT:
         return a->c.integer == b->c.integer;
+    case TYPE_STRING:
+        return slice_equals(a->c.string, b->c.string);
     default:
         PEVAL_ERR(a, "equality not implemented for type");
-        return 0;
+        return false;
     }
 }
 

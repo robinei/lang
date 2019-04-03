@@ -12,7 +12,7 @@ typedef struct slice {
 
 slice_t slice_from_str(char *str);
 slice_t slice_from_sym(struct symbol *sym);
-int slice_equals(slice_t a, slice_t b);
+bool slice_equals(slice_t a, slice_t b);
 int slice_cmp(slice_t a, slice_t b);
 int slice_str_cmp(slice_t a, char *b_str);
 

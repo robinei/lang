@@ -264,6 +264,9 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         case TYPE_INT:
             print_colored(ctx, NUMBER_COLOR, "%d", e->c.integer);
             break;
+        case TYPE_STRING:
+            print_colored(ctx, STRING_COLOR, "\"%.*s\"", e->c.string.len, e->c.string.ptr);
+            break;
         case TYPE_FUN:
             print_colored(ctx, COLOR_NORMAL, "<fun:%s>", e->c.fun.func->name->data);
             break;

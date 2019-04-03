@@ -18,9 +18,9 @@ slice_t slice_from_sym(struct symbol *sym) {
     };
 }
 
-int slice_equals(slice_t a, slice_t b) {
+bool slice_equals(slice_t a, slice_t b) {
     if (a.len != b.len) {
-        return 0;
+        return false;
     }
     return !memcmp(a.ptr, b.ptr, a.len);
 }

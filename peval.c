@@ -654,4 +654,5 @@ void peval_ctx_init(struct peval_ctx *ctx, struct module_ctx *mod_ctx) {
     bind_type(ctx, "Unit", &type_unit);
     bind_type(ctx, "Bool", &type_bool);
     bind_type(ctx, "Int", &type_int);
+    bind_type(ctx, "String", &type_string);
 }

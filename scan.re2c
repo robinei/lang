@@ -103,5 +103,6 @@ next_token_start:;
     oct { TOK(OCT); }
     dec { TOK(DEC); }
     hex { TOK(HEX); }
+    ["][^"]*["] { TOK(STRING); }
 */
 }

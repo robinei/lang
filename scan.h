@@ -68,7 +68,8 @@
     X(BIN) \
     X(OCT) \
     X(DEC) \
-    X(HEX)
+    X(HEX) \
+    X(STRING)
 
 #define DECL_TOK_ENUM(Tok) TOK_##Tok,
 enum token_kind { FOR_ALL_TOKENS(DECL_TOK_ENUM) };

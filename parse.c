@@ -37,6 +37,18 @@ static struct expr *bool_create(struct parse_ctx *ctx, bool bool_value, slice_t 
     e->c.boolean = bool_value;
     return e;
 }
+static struct expr *string_create(struct parse_ctx *ctx, slice_t source_text) {
+    assert(source_text.len > 2);
+    assert(source_text.ptr[0] == '"');
+    assert(source_text.ptr[source_text.len - 1] == '"');
+    // TODO: handle escape sequences
+    struct expr *e = expr_create(ctx, EXPR_CONST, source_text);
+    source_text.ptr += 1;
+    source_text.len -= 2;
+    e->c.tag = &type_string;
+    e->c.string = source_text;
+    return e;
+}
 static struct expr *unit_create(struct parse_ctx *ctx, slice_t source_text) {
     struct expr *e = expr_create(ctx, EXPR_CONST, source_text);
     e->c.tag = &type_unit;
@@ -478,6 +490,7 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
     case TOK_OCT: return parse_int(ctx, 0, 8);
     case TOK_DEC: return parse_int(ctx, 0, 10);
     case TOK_HEX: return parse_int(ctx, 2, 16);
+    case TOK_STRING: NEXT_TOKEN(); return string_create(ctx, first_token);
     case TOK_KW_STRUCT: return parse_struct(ctx);
     case TOK_KW_SELF: NEXT_TOKEN(); return expr_create(ctx, EXPR_SELF, first_token);
     case TOK_KW_FUN: return parse_fun(ctx);

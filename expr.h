@@ -90,6 +90,7 @@ struct value {
         struct type *type;
         bool boolean;
         int integer;
+        slice_t string;
     };
     struct type *tag;
 };
