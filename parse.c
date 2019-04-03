@@ -116,7 +116,7 @@ static struct expr *parse_block(struct parse_ctx *ctx) {
 static struct expr *parse_symbol(struct parse_ctx *ctx) {
     assert(ctx->token == TOK_IDENT);
     struct expr *e = expr_create(ctx, EXPR_SYM, ctx->token_text);
-    e->sym = intern_slice(&ctx->mod_ctx->symbol_table, ctx->token_text);
+    e->sym = intern_slice(&ctx->mod_ctx->global_ctx->symbol_table, ctx->token_text);
     NEXT_TOKEN();
     return e;
 }
@@ -498,6 +498,7 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
     case TOK_KW_VAR: return parse_def(ctx);
     case TOK_KW_IF: return parse_if(ctx, false);
     case TOK_KW_WHILE: return parse_while(ctx);
+    case TOK_KW_IMPORT: return parse_single_arg_prim(ctx, PRIM_IMPORT);
     case TOK_KW_STATIC: return parse_single_arg_prim(ctx, PRIM_STATIC);
     case TOK_KW_BEGIN: return parse_block(ctx);
     default:

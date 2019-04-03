@@ -1,6 +1,7 @@
 #ifndef MOD_H
 #define MOD_H
 
+#include "global.h"
 #include "expr.h"
 #include "error.h"
 #include "slice.h"
@@ -11,11 +12,11 @@ struct function {
 };
 
 struct module_ctx {
+    struct global_ctx *global_ctx;
     struct arena arena;
     struct error_ctx err_ctx;
 
     struct pointer_table functions;
-    struct symbol_table symbol_table;
 
     char *source_text;
     struct expr *struct_expr;
@@ -26,6 +27,6 @@ struct module_ctx {
     uint asserts_failed;
 };
 
-struct module_ctx *module_load(const char *filename);
+struct module_ctx *module_load(slice_t filename, struct global_ctx *global_ctx);
 
 #endif

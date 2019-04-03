@@ -22,6 +22,11 @@ begin
     assert(str != "bar");
 end;
 
+begin
+    const Secret = import("tests/secret.ml");
+    assert(Secret.getSecret() == 666);
+end;
+
 self.testShortCircuit = fun -> begin
     assert(not (false and assert(false)));
     assert(true or assert(false));

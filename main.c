@@ -5,7 +5,10 @@
 #include "error.h"
 
 static void run_tests(char *filename) {
-    struct module_ctx *mod_ctx = module_load(filename);
+    struct global_ctx global_ctx;
+    global_ctx_init(&global_ctx);
+
+    struct module_ctx *mod_ctx = module_load(slice_from_str(filename), &global_ctx);
     if (!mod_ctx) {
         return;
     }

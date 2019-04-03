@@ -390,6 +390,7 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         case PRIM_QUOTE: print_primcall(ctx, "quote", e); break;
         case PRIM_SPLICE: print_primcall(ctx, "splice", e); break;
         case PRIM_PRINT: print_primcall(ctx, "print", e); break;
+        case PRIM_IMPORT: print_primcall(ctx, "import", e); break;
         case PRIM_STATIC: print_primcall(ctx, "static", e); break;
         }
         break;

@@ -36,6 +36,15 @@ int slice_str_cmp(slice_t a, char *b_str) {
     return slice_cmp(a, b);
 }
 
+slice_t slice_dup(slice_t s, struct arena *arena) {
+    slice_t result;
+    result.len = s.len;
+    result.ptr = arena_alloc(arena, s.len + 1);
+    memcpy(result.ptr, s.ptr, s.len);
+    result.ptr[s.len] = '\0';
+    return result;
+}
+
 slice_t slice_span(slice_t a, slice_t b) {
     slice_t c;
     c.ptr = a.ptr <= b.ptr ?

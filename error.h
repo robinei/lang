@@ -26,11 +26,11 @@ struct error_ctx {
     struct error_entry *first_error;
     struct error_entry *last_error;
     slice_t source_buf;
-    char *filename;
+    slice_t filename;
     char msg_buf[ERROR_MSG_BUF_SIZE];
 };
 
-void error_ctx_init(struct error_ctx *ctx, const char *filename, char *source_text, struct arena *arena);
+void error_ctx_init(struct error_ctx *ctx, slice_t filename, slice_t source_text, struct arena *arena);
 
 void error_emit(struct error_ctx *ctx, enum error_category category, slice_t location, const char *format, ...);
 

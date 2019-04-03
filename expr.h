@@ -35,6 +35,7 @@
     X(QUOTE) \
     X(SPLICE) \
     X(PRINT) \
+    X(IMPORT) \
     X(STATIC)
 
 #define DECL_PRIM_ENUM(name) PRIM_##name,

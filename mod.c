@@ -31,19 +31,21 @@ static void count_asserts(struct expr_visit_ctx *ctx, struct expr *e) {
     expr_visit_children(ctx, e);
 }
 
-struct module_ctx *module_load(const char *filename) {
-    char *source_text = read_file(filename);
-    if (!source_text) {
-        printf("error reading file: %s\n", filename);
+struct module_ctx *module_load(slice_t filename, struct global_ctx *global_ctx) {
+    struct module_ctx *mod_ctx = calloc(1, sizeof(struct module_ctx));
+    mod_ctx->global_ctx = global_ctx;
+
+    filename = slice_dup(filename, &mod_ctx->arena);
+
+    mod_ctx->source_text = read_file(filename.ptr);
+    if (!mod_ctx->source_text) {
+        printf("error reading file: %s\n", filename.ptr);
         return NULL;
     }
 
-    struct module_ctx *mod_ctx = calloc(1, sizeof(struct module_ctx));
-    mod_ctx->source_text = source_text;
-    error_ctx_init(&mod_ctx->err_ctx, filename, source_text, &mod_ctx->arena);
-    symbol_table_init(&mod_ctx->symbol_table, &mod_ctx->arena);
+    error_ctx_init(&mod_ctx->err_ctx, filename, slice_from_str(mod_ctx->source_text), &mod_ctx->arena);
 
-    struct expr *mod_struct = parse_module(mod_ctx, source_text);
+    struct expr *mod_struct = parse_module(mod_ctx, mod_ctx->source_text);
     if (!mod_struct) {
         printf("error parsing test module\n");
         print_errors(&mod_ctx->err_ctx);

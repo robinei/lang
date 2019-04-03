@@ -210,7 +210,7 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
             PEVAL_ERR(e, "'splice' expected compile-time computable argument");
         }
         if (ARG(0)->c.tag->kind != TYPE_EXPR) {
-            PEVAL_ERR(e, "'splice' expected value of type 'Expr'");
+            PEVAL_ERR(e, "'splice' expected argument of type 'Expr'");
         }
         return peval(ctx, ARG(0)->c.expr);
 
@@ -219,6 +219,28 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
         if (ctx->force_full_expansion) {
             pretty_print(ARG(0));
             return unit_create(ctx, e);
+        }
+        break;
+    
+    case PRIM_IMPORT:
+        if (ctx->force_full_expansion) {
+            PEVAL_ARG(0);
+            if (!ARG_CONST(0)) {
+                PEVAL_ERR(e, "'import' expected compile-time computable argument");
+            }
+            if (ARG(0)->c.tag->kind != TYPE_STRING) {
+                PEVAL_ERR(e, "'import' expected argument of type 'String'");
+            }
+            slice_t path = ARG(0)->c.string;
+            struct module_ctx *mod_ctx = module_load(path, ctx->mod_ctx->global_ctx);
+            if (!mod_ctx) {
+                PEVAL_ERR(e, "error importing module '%.*s'", path.len, path.ptr);
+            }
+            // TODO: modules should be in a global registry
+            struct expr *res = expr_create(ctx, EXPR_CONST, e);
+            res->c.tag = &type_type;
+            res->c.type = mod_ctx->module_type;
+            return res;
         }
         break;
 
