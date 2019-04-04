@@ -1,6 +1,7 @@
 #include "arena.h"
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 
 void *arena_alloc(struct arena *arena, uint size) {
     /* round up to nearest 8 so subsequent allocations will remain aligned to that */
@@ -23,12 +24,34 @@ void *arena_alloc(struct arena *arena, uint size) {
     return ptr;
 }
 
-void arena_dealloc_all(struct arena *arena) {
-    struct arena_buffer *buf = arena->buffers;
-    while (buf) {
-        struct arena_buffer *next = buf->next;
-        free(buf);
-        buf = next;
+struct arena_mark arena_mark_allocated(struct arena *arena) {
+    return (struct arena_mark) {
+        .buffer = arena->buffers,
+        .used = arena->buffers ? arena->buffers->used : 0
+    };
+}
+
+void arena_reset_to_mark(struct arena *arena, struct arena_mark mark) {
+    if (!mark.buffer) {
+        arena_dealloc_all(arena);
+        return;
     }
-    memset(arena, 0, sizeof(struct arena));
+    while (arena->buffers) {
+        if (arena->buffers == mark.buffer) {
+            arena->buffers->used = mark.used;
+            return;
+        }
+        struct arena_buffer *next = arena->buffers->next;
+        free(arena->buffers);
+        arena->buffers = next;
+    }
+    assert(0 && "marked buffer not present in arena");
+}
+
+void arena_dealloc_all(struct arena *arena) {
+    while (arena->buffers) {
+        struct arena_buffer *next = arena->buffers->next;
+        free(arena->buffers);
+        arena->buffers = next;
+    }
 }
