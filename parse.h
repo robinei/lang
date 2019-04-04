@@ -18,6 +18,6 @@ struct parse_ctx {
     jmp_buf error_jmp_buf;
 };
 
-struct expr *parse_module(struct module_ctx *mod_ctx, char *source_text);
+struct expr *parse_module(struct module_ctx *mod_ctx, slice_t source_text);
 
 #endif

@@ -4,7 +4,6 @@
 #include "global.h"
 #include "expr.h"
 #include "error.h"
-#include "slice.h"
 
 struct function {
     struct symbol *name;
@@ -18,8 +17,10 @@ struct module_ctx {
 
     struct pointer_table functions;
 
-    char *source_text;
-    struct expr *struct_expr;
+    slice_t source_text; /* buffer is owned */
+    struct expr *struct_expr; /* parsed representation */
+    struct arena_mark parse_mark; /* arena mark for when parsing is done */
+
     struct type *module_type;
 
     uint total_assert_count;
@@ -27,6 +28,7 @@ struct module_ctx {
     uint asserts_failed;
 };
 
-struct module_ctx *module_load(slice_t filename, struct global_ctx *global_ctx);
+struct module_ctx *module_load(struct global_ctx *global_ctx, struct module_ctx *mod_ctx, slice_t path);
+void module_free(struct module_ctx *mod_ctx);
 
 #endif

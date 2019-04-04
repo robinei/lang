@@ -8,7 +8,7 @@ static void run_tests(char *filename) {
     struct global_ctx global_ctx;
     global_ctx_init(&global_ctx);
 
-    struct module_ctx *mod_ctx = module_load(slice_from_str(filename), &global_ctx);
+    struct module_ctx *mod_ctx = module_load(&global_ctx, NULL, slice_from_str(filename));
     if (!mod_ctx) {
         return;
     }
@@ -63,6 +63,7 @@ static void run_tests(char *filename) {
     }
     printf("\n%u/%u(%u) asserts passed\n", mod_ctx->asserts_hit - mod_ctx->asserts_failed, mod_ctx->asserts_hit, mod_ctx->total_assert_count);
     print_errors(&mod_ctx->err_ctx);
+    module_free(mod_ctx);
 }
 
 int main(int argc, char *argv[]) {

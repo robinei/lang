@@ -5,23 +5,20 @@
 #include <string.h>
 #include <assert.h>
 
-static char *read_file(const char *filename) {
-    char *str;
-    uint len;
-
+static slice_t read_file(const char *filename) {
     FILE *fp = fopen(filename, "rb");
     if (!fp) {
-        return NULL;
+        return (slice_t) {NULL, 0};
     }
 
     fseek(fp, 0, SEEK_END);
-    len = ftell(fp);
+    uint len = ftell(fp);
     fseek(fp, 0, SEEK_SET);
-    str = malloc(len + 1);
+    char *str = malloc(len + 1);
     fread(str, 1, len, fp);
     str[len] = 0;
 
-    return str;
+    return (slice_t) {str, len};
 }
 
 static void count_asserts(struct expr_visit_ctx *ctx, struct expr *e) {
@@ -31,50 +28,75 @@ static void count_asserts(struct expr_visit_ctx *ctx, struct expr *e) {
     expr_visit_children(ctx, e);
 }
 
-struct module_ctx *module_load(slice_t filename, struct global_ctx *global_ctx) {
-    struct module_ctx *mod_ctx = calloc(1, sizeof(struct module_ctx));
-    mod_ctx->global_ctx = global_ctx;
+static slice_t normalize_path(struct global_ctx *global_ctx, slice_t path) {
+    /* TODO: actually normalize the import path */
+    return slice_dup(path, &global_ctx->arena);
+}
 
-    filename = slice_dup(filename, &mod_ctx->arena);
+struct module_ctx *module_load(struct global_ctx *global_ctx, struct module_ctx *mod_ctx, slice_t path) {
+    path = normalize_path(global_ctx, path);
 
-    mod_ctx->source_text = read_file(filename.ptr);
-    if (!mod_ctx->source_text) {
-        printf("error reading file: %s\n", filename.ptr);
+    struct module_ctx *new_mod_ctx;
+    if (slice_table_get(&global_ctx->modules, path, (void **)&new_mod_ctx)) {
+        if (!new_mod_ctx->module_type) {
+            printf("circular dependency detected while importing: %.*s\n", path.len, path.ptr);
+            return NULL;
+        }
+        return new_mod_ctx;
+    }
+
+    new_mod_ctx = calloc(1, sizeof(struct module_ctx));
+    new_mod_ctx->global_ctx = global_ctx;
+    new_mod_ctx->source_text = read_file(path.ptr);
+    if (!new_mod_ctx->source_text.ptr) {
+        printf("error reading file: %s\n", path.ptr);
+        module_free(new_mod_ctx);
         return NULL;
     }
 
-    error_ctx_init(&mod_ctx->err_ctx, filename, slice_from_str(mod_ctx->source_text), &mod_ctx->arena);
+    error_ctx_init(&new_mod_ctx->err_ctx, path, new_mod_ctx->source_text, &new_mod_ctx->arena);
 
-    struct expr *mod_struct = parse_module(mod_ctx, mod_ctx->source_text);
-    if (!mod_struct) {
+    new_mod_ctx->struct_expr = parse_module(new_mod_ctx, new_mod_ctx->source_text);
+    if (!new_mod_ctx->struct_expr) {
         printf("error parsing test module\n");
-        print_errors(&mod_ctx->err_ctx);
+        print_errors(&new_mod_ctx->err_ctx);
+        module_free(new_mod_ctx);
         return NULL;
     }
     printf("parsed module:\n");
-    pretty_print(mod_struct);
+    pretty_print(new_mod_ctx->struct_expr);
     {
-        struct expr *e = expr_run_visitor(mod_struct, count_asserts, &mod_ctx->total_assert_count, &mod_ctx->arena);
-        assert(e == mod_struct);
+        struct expr *e = expr_run_visitor(new_mod_ctx->struct_expr, count_asserts, &new_mod_ctx->total_assert_count, &new_mod_ctx->arena);
+        assert(e == new_mod_ctx->struct_expr);
     }
-    mod_ctx->struct_expr = mod_struct;
+    new_mod_ctx->parse_mark = arena_mark_allocated(&new_mod_ctx->arena);
 
     struct peval_ctx peval_ctx;
-    peval_ctx_init(&peval_ctx, mod_ctx);
+    peval_ctx_init(&peval_ctx, new_mod_ctx);
     peval_ctx.force_full_expansion = 1;
 
     if (setjmp(peval_ctx.error_jmp_buf)) {
         printf("error partially evaluating test module\n");
-        print_errors(&mod_ctx->err_ctx);
+        print_errors(&new_mod_ctx->err_ctx);
+        module_free(new_mod_ctx);
         return NULL;
     }
 
-    struct expr *struct_expr = peval(&peval_ctx, mod_ctx->struct_expr);
+    slice_table_put(&global_ctx->modules, path, new_mod_ctx);
+
+    struct expr *struct_expr = peval(&peval_ctx, new_mod_ctx->struct_expr);
     if (struct_expr->kind != EXPR_CONST || struct_expr->c.tag != &type_type || struct_expr->c.type->kind != TYPE_STRUCT) {
         printf("expected struct expr to become a type\n");
+        slice_table_remove(&global_ctx->modules, path);
+        module_free(new_mod_ctx);
         return NULL;
     }
-    mod_ctx->module_type = struct_expr->c.type;
+    new_mod_ctx->module_type = struct_expr->c.type;
+    return new_mod_ctx;
+}
 
-    return mod_ctx;
+void module_free(struct module_ctx *mod_ctx) {
+    arena_dealloc_all(&mod_ctx->arena);
+    free(mod_ctx->source_text.ptr);
+    free(mod_ctx);
 }

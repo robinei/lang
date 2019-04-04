@@ -24,6 +24,7 @@ end;
 
 begin
     const Secret = import("tests/secret.ml");
+    assert(Secret == import("tests/secret.ml"));
     assert(Secret.getSecret() == 666);
 end;
 
