@@ -232,7 +232,7 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
                 PEVAL_ERR(e, "'import' expected argument of type 'String'");
             }
             slice_t path = ARG(0)->c.string;
-            struct module_ctx *mod_ctx = module_load(ctx->mod_ctx->global_ctx, ctx->mod_ctx, path);
+            struct module_ctx *mod_ctx = module_load(ctx->global_ctx, ctx->mod_ctx, path);
             if (!mod_ctx) {
                 PEVAL_ERR(e, "error importing module '%.*s'", path.len, path.ptr);
             }

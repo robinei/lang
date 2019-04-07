@@ -8,6 +8,7 @@
 struct parse_ctx {
     struct arena *arena;
     struct scan_ctx scan_ctx;
+    struct global_ctx *global_ctx;
     struct module_ctx *mod_ctx;
     struct error_ctx *err_ctx;
 

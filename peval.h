@@ -25,8 +25,9 @@ struct scope {
 
 struct peval_ctx {
     struct arena *arena;
-    struct error_ctx *err_ctx;
+    struct global_ctx *global_ctx;
     struct module_ctx *mod_ctx;
+    struct error_ctx *err_ctx;
 
     struct scope root_scope;
     struct scope *scope;

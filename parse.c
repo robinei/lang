@@ -116,7 +116,7 @@ static struct expr *parse_block(struct parse_ctx *ctx) {
 static struct expr *parse_symbol(struct parse_ctx *ctx) {
     assert(ctx->token == TOK_IDENT);
     struct expr *e = expr_create(ctx, EXPR_SYM, ctx->token_text);
-    e->sym = intern_slice(&ctx->mod_ctx->global_ctx->symbol_table, ctx->token_text);
+    e->sym = intern_slice(&ctx->global_ctx->symbol_table, ctx->token_text);
     NEXT_TOKEN();
     return e;
 }
@@ -229,6 +229,7 @@ struct expr *parse_module(struct module_ctx *mod_ctx, slice_t source_text) {
     struct parse_ctx parse_ctx = {0};
     parse_ctx.arena = &mod_ctx->arena;
     parse_ctx.scan_ctx.cursor = source_text.ptr;
+    parse_ctx.global_ctx = mod_ctx->global_ctx;
     parse_ctx.mod_ctx = mod_ctx;
     parse_ctx.err_ctx = &mod_ctx->err_ctx;
     return do_parse_module(&parse_ctx);

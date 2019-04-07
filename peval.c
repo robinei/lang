@@ -24,7 +24,7 @@ static struct symbol *make_func_name(struct peval_ctx *ctx, struct symbol *base_
     assert(base_name->length + 16 < sizeof(buf));
     memcpy(buf, base_name->data, base_name->length + 1);
     while (1) {
-        struct symbol *fun_name = intern_string(&ctx->mod_ctx->global_ctx->symbol_table, buf);
+        struct symbol *fun_name = intern_string(&ctx->global_ctx->symbol_table, buf);
         if (!lookup_func(ctx, fun_name)) {
             return fun_name;
         }
@@ -282,7 +282,7 @@ static struct symbol *function_name_with_hashed_const_args(struct peval_ctx *ctx
     assert(func->name->length + 16 < sizeof(buf));
     memcpy(buf, func->name->data, func->name->length + 1);
     snprintf(buf + func->name->length, 16, "_%u", hash);
-    return intern_string(&ctx->mod_ctx->global_ctx->symbol_table, buf);
+    return intern_string(&ctx->global_ctx->symbol_table, buf);
 }
 
 static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
@@ -629,7 +629,7 @@ static void bind_type(struct peval_ctx *ctx, char *name_str, struct type *type) 
     e_type->c.type = type;
 
     struct expr *name_expr = expr_create(ctx, EXPR_SYM, NULL);
-    name_expr->sym = intern_string(&ctx->mod_ctx->global_ctx->symbol_table, name_str);
+    name_expr->sym = intern_string(&ctx->global_ctx->symbol_table, name_str);
 
     struct expr_decl d = {
         .name_expr = name_expr,
@@ -643,8 +643,9 @@ void peval_ctx_init(struct peval_ctx *ctx, struct module_ctx *mod_ctx) {
     memset(ctx, 0, sizeof(*ctx));
 
     ctx->arena = &mod_ctx->arena;
-    ctx->err_ctx = &mod_ctx->err_ctx;
+    ctx->global_ctx = mod_ctx->global_ctx;
     ctx->mod_ctx = mod_ctx;
+    ctx->err_ctx = &mod_ctx->err_ctx;
     ctx->scope = &ctx->root_scope;
     ctx->scope->last_decl_ptr = &ctx->scope->decls;
     ctx->sym_lambda = intern_string(&mod_ctx->global_ctx->symbol_table, "lambda");
