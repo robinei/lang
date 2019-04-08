@@ -146,7 +146,7 @@ static struct expr_decl *add_single_decl_to_scope(struct peval_ctx *ctx, struct 
     } else {
         check_type(ctx, d->value_expr, type_expr);
 
-        struct expr_decl *d_new = arena_alloc(ctx->arena, sizeof(struct expr_decl));
+        struct expr_decl *d_new = allocate(ctx->arena, sizeof(struct expr_decl));
         *d_new = *d;
         d_new->next = NULL;
         d_new->type_expr = type_expr;
@@ -155,10 +155,10 @@ static struct expr_decl *add_single_decl_to_scope(struct peval_ctx *ctx, struct 
 
         if ((scope->kind == SCOPE_STRUCT || d->is_static) && type_expr && type_expr->c.type->kind == TYPE_FUN) {
             /* create a dummy forward declare function */
-            struct function *func = arena_alloc(ctx->arena, sizeof(struct function));
+            struct function *func = allocate(ctx->arena, sizeof(struct function));
             func->name = make_func_name(ctx, d->name_expr->sym);
 
-            d_new->value_expr = arena_alloc(ctx->arena, sizeof(struct expr));
+            d_new->value_expr = allocate(ctx->arena, sizeof(struct expr));
             d_new->value_expr->kind = EXPR_CONST;
             d_new->value_expr->c.tag = &type_fun;
             d_new->value_expr->c.fun.func = func;
@@ -349,7 +349,7 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
         struct symbol *func_name_new = function_name_with_hashed_const_args(ctx, func, e_new.call.args);
         struct function *new_func = lookup_func(ctx, func_name_new);
         if (!new_func) {
-            new_func = arena_alloc(ctx->arena, sizeof(struct function));
+            new_func = allocate(ctx->arena, sizeof(struct function));
             *new_func = *func;
             new_func->name = func_name_new;
             new_func->fun_expr = expr_create(ctx, EXPR_FUN, func->fun_expr);
@@ -410,7 +410,8 @@ static struct expr *peval_struct(struct peval_ctx *ctx, struct expr *e) {
 
     BEGIN_SCOPE(SCOPE_STRUCT);
 
-    struct type *self = arena_alloc(ctx->arena, sizeof(struct type));
+    struct type *self = allocate(ctx->arena, sizeof(struct type));
+    pointer_table_init(&self->attrs, &ctx->mod_ctx->alloc.a, 0);
     self->kind = TYPE_STRUCT;
     ctx->scope->self = self;
 
@@ -457,7 +458,7 @@ static struct expr *peval_def(struct peval_ctx *ctx, struct expr *e) {
     };
     struct expr_decl *d_new = add_single_decl_to_scope(ctx, &d);
     if (d_new->value_expr && d_new->value_expr->kind == EXPR_CONST) {
-        memset(&e_new, 0, sizeof(e_new));
+        memset(&e_new, 0, sizeof(struct expr));
         e_new.kind = EXPR_CONST;
         e_new.c.tag = &type_unit;
         changed = true;
@@ -530,7 +531,7 @@ static struct expr *peval_fun(struct peval_ctx *ctx, struct expr *e) {
     }
 
     if (ctx->scope->free_var_count == 0) {
-        struct function *func = arena_alloc(ctx->arena, sizeof(struct function));
+        struct function *func = allocate(ctx->arena, sizeof(struct function));
         func->name = ctx->sym_lambda;
         func->fun_expr = result;
 
@@ -640,9 +641,9 @@ static void bind_type(struct peval_ctx *ctx, char *name_str, struct type *type) 
 }
 
 void peval_ctx_init(struct peval_ctx *ctx, struct module_ctx *mod_ctx) {
-    memset(ctx, 0, sizeof(*ctx));
+    memset(ctx, 0, sizeof(struct peval_ctx));
 
-    ctx->arena = &mod_ctx->arena;
+    ctx->arena = &mod_ctx->arena.a;
     ctx->global_ctx = mod_ctx->global_ctx;
     ctx->mod_ctx = mod_ctx;
     ctx->err_ctx = &mod_ctx->err_ctx;

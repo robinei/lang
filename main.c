@@ -45,10 +45,10 @@ static void run_tests(char *filename) {
             continue;
         }
 
-        struct expr call_expr = {
-            .kind = EXPR_CALL,
-            .call.callable_expr = e
-        };
+        struct expr call_expr;
+        memset(&call_expr, 0, sizeof(struct expr));
+        call_expr.kind = EXPR_CALL;
+        call_expr.call.callable_expr = e;
         printf("\nrunning test function: %s\n", func->name->data);
         fflush(stdout);
         pretty_print_indented(func->fun_expr, 1);
@@ -64,6 +64,7 @@ static void run_tests(char *filename) {
     printf("\n%u/%u(%u) asserts passed\n", mod_ctx->asserts_hit - mod_ctx->asserts_failed, mod_ctx->asserts_hit, mod_ctx->total_assert_count);
     print_errors(&mod_ctx->err_ctx);
     module_free(mod_ctx);
+    tracking_allocator_cleanup(&global_ctx.alloc);
 }
 
 int main(int argc, char *argv[]) {

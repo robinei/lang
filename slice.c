@@ -4,18 +4,25 @@
 #include <stdlib.h>
 #include <string.h>
 
+slice_t slice_from_str_len(char *str, uint len) {
+    slice_t result;
+    result.ptr = str;
+    result.len = result.cap = len;
+    return result;
+}
+
 slice_t slice_from_str(char *str) {
-    return (slice_t) {
-        .ptr = str,
-        .len = strlen(str)
-    };
+    slice_t result;
+    result.ptr = str;
+    result.len = result.cap = strlen(str);
+    return result;
 }
 
 slice_t slice_from_sym(struct symbol *sym) {
-    return (slice_t) {
-        .ptr = sym->data,
-        .len = sym->length
-    };
+    slice_t result;
+    result.ptr = sym->data;
+    result.len = result.cap = sym->length;
+    return result;
 }
 
 bool slice_equals(slice_t a, slice_t b) {
@@ -32,14 +39,16 @@ int slice_cmp(slice_t a, slice_t b) {
 }
 
 int slice_str_cmp(slice_t a, char *b_str) {
-    slice_t b = { b_str, strlen(b_str) };
+    slice_t b;
+    b.ptr = b_str;
+    b.len = b.cap = strlen(b_str);
     return slice_cmp(a, b);
 }
 
-slice_t slice_dup(slice_t s, struct arena *arena) {
+slice_t slice_dup(slice_t s, struct allocator *a) {
     slice_t result;
-    result.len = s.len;
-    result.ptr = arena_alloc(arena, s.len + 1);
+    result.len = result.cap = s.len;
+    result.ptr = allocate(a, s.len + 1);
     memcpy(result.ptr, s.ptr, s.len);
     result.ptr[s.len] = '\0';
     return result;
@@ -50,7 +59,7 @@ slice_t slice_span(slice_t a, slice_t b) {
     c.ptr = a.ptr <= b.ptr ?
         a.ptr :
         b.ptr;
-    c.len = a.ptr + a.len >= b.ptr + b.len ?
+    c.len = c.cap = a.ptr + a.len >= b.ptr + b.len ?
         (a.ptr + a.len) - c.ptr :
         (b.ptr + b.len) - c.ptr;
     return c;

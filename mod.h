@@ -11,8 +11,10 @@ struct function {
 };
 
 struct module_ctx {
+    struct tracking_allocator alloc;
+    struct arena_allocator arena;
+
     struct global_ctx *global_ctx;
-    struct arena arena;
     struct error_ctx err_ctx;
 
     struct pointer_table functions;

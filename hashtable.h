@@ -25,6 +25,7 @@
 #undef EXPAND_INTERFACE
 
 #include <stdint.h>
+#include "alloc.h"
 
 struct NAMESPACED(entry) {
     uint32_t hash;
@@ -33,6 +34,7 @@ struct NAMESPACED(entry) {
 };
 
 struct NAME {
+    struct allocator *alloc;
     uint32_t used, size;
     struct NAMESPACED(entry) *entries;
 };
@@ -42,8 +44,8 @@ LINKAGE int NAMESPACED(remove)(struct NAME *table, KEY_TYPE key);
 LINKAGE int NAMESPACED(find)(struct NAME *table, KEY_TYPE key, uint32_t *index_out);
 LINKAGE int NAMESPACED(get)(struct NAME *table, KEY_TYPE key, VALUE_TYPE *value_out);
 LINKAGE void NAMESPACED(put)(struct NAME *table, KEY_TYPE key, VALUE_TYPE value);
-LINKAGE void NAMESPACED(init)(struct NAME *table, uint32_t initial_size);
-LINKAGE void NAMESPACED(free)(struct NAME *table);
+LINKAGE void NAMESPACED(init)(struct NAME *table, struct allocator *a, uint32_t initial_size);
+LINKAGE void NAMESPACED(cleanup)(struct NAME *table);
 
 #endif /* EXPAND_INTERFACE */
 
@@ -202,7 +204,7 @@ static void NAMESPACED(resize)(struct NAME *table, uint32_t new_size) {
     struct NAMESPACED(entry) *old_entries = table->entries;
     table->used = 0;
     table->size = new_size;
-    table->entries = calloc(1, sizeof(struct NAMESPACED(entry)) * new_size);
+    table->entries = allocate(table->alloc, sizeof(struct NAMESPACED(entry)) * new_size);
     if (old_used) {
         assert(old_used <= new_size);
         for (uint32_t i = 0; i < old_size; ++i) {
@@ -211,7 +213,7 @@ static void NAMESPACED(resize)(struct NAME *table, uint32_t new_size) {
                 NAMESPACED(put_entry)(table, *slot);
             }
         }
-        free(old_entries);
+        deallocate(table->alloc, old_entries, sizeof(struct NAMESPACED(entry)) * old_size);
     }
 }
 
@@ -235,15 +237,18 @@ LINKAGE void NAMESPACED(put)(struct NAME *table, KEY_TYPE key, VALUE_TYPE value)
     NAMESPACED(put_entry)(table, entry);
 }
 
-LINKAGE void NAMESPACED(init)(struct NAME *table, uint32_t initial_size) {
+LINKAGE void NAMESPACED(init)(struct NAME *table, struct allocator *a, uint32_t initial_size) {
+    table->alloc = a;
     table->used = 0;
     table->size = 0;
     table->entries = NULL;
-    NAMESPACED(resize)(table, initial_size);
+    if (initial_size > 0) {
+        NAMESPACED(resize)(table, initial_size);
+    }
 }
 
-LINKAGE void NAMESPACED(free)(struct NAME *table) {
-    free(table->entries);
+LINKAGE void NAMESPACED(cleanup)(struct NAME *table) {
+    deallocate(table->alloc, table->entries, sizeof(struct NAMESPACED(entry)) * table->size);
     table->used = 0;
     table->size = 0;
     table->entries = NULL;

@@ -3,8 +3,8 @@
 #include <string.h>
 #include <stdarg.h>
 
-void error_ctx_init(struct error_ctx *ctx, slice_t filename, slice_t source_text, struct arena *arena) {
-    memset(ctx, 0, sizeof(*ctx));
+void error_ctx_init(struct error_ctx *ctx, slice_t filename, slice_t source_text, struct arena_allocator *arena) {
+    memset(ctx, 0, sizeof(struct error_ctx));
     ctx->arena = arena;
     ctx->source_buf = source_text;
     ctx->filename = filename;
@@ -23,7 +23,7 @@ void error_emit(struct error_ctx *ctx, enum error_category category, slice_t loc
     }
     ctx->msg_buf[len] = '\0';
 
-    entry = arena_alloc(ctx->arena, sizeof(struct error_entry) + len + 1);
+    entry = allocate(&ctx->arena->a, sizeof(struct error_entry) + len + 1);
     entry->next = NULL;
     entry->category = category;
     entry->location = location;
@@ -53,7 +53,7 @@ slice_t error_line_text(struct error_ctx *ctx, struct error_entry *entry) {
     }
 
     slice.ptr = start;
-    slice.len = end - start;
+    slice.len = slice.cap = end - start;
     return slice;
 }
 

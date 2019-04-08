@@ -4,7 +4,9 @@
 #include "sym.h"
 
 struct global_ctx {
-    struct arena arena;
+    struct tracking_allocator alloc;
+    struct arena_allocator arena;
+
     struct symbol_table symbol_table;
     struct slice_table modules;
 };

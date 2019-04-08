@@ -2,7 +2,7 @@
 #define ERROR_H
 
 #include <stdio.h>
-#include "arena.h"
+#include "alloc.h"
 #include "slice.h"
 
 #define ERROR_FILENAME_BUF_SIZE 256
@@ -22,7 +22,7 @@ struct error_entry {
 };
 
 struct error_ctx {
-    struct arena *arena;
+    struct arena_allocator *arena;
     struct error_entry *first_error;
     struct error_entry *last_error;
     slice_t source_buf;
@@ -30,7 +30,7 @@ struct error_ctx {
     char msg_buf[ERROR_MSG_BUF_SIZE];
 };
 
-void error_ctx_init(struct error_ctx *ctx, slice_t filename, slice_t source_text, struct arena *arena);
+void error_ctx_init(struct error_ctx *ctx, slice_t filename, slice_t source_text, struct arena_allocator *arena);
 
 void error_emit(struct error_ctx *ctx, enum error_category category, slice_t location, const char *format, ...);
 

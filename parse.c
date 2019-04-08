@@ -26,7 +26,7 @@ static struct expr *parse_infix(struct parse_ctx *ctx, int min_precedence);
 
 
 static struct expr *expr_create(struct parse_ctx *ctx, uint expr_type, slice_t source_text) {
-    struct expr *e = arena_alloc(ctx->arena, sizeof(struct expr));
+    struct expr *e = allocate(ctx->arena, sizeof(struct expr));
     e->kind = expr_type;
     e->source_text = source_text;
     return e;
@@ -131,7 +131,6 @@ static struct expr *parse_def(struct parse_ctx *ctx) {
     slice_t first_token = ctx->token_text;
     NEXT_TOKEN();
     
-    struct expr *name_expr;
     struct expr *type_expr = NULL;
     struct expr *value_expr = NULL;
 
@@ -142,7 +141,7 @@ static struct expr *parse_def(struct parse_ctx *ctx) {
     if (ctx->token != TOK_IDENT) {
         PARSE_ERR("expected identifier");
     }
-    name_expr = parse_symbol(ctx);
+    struct expr *name_expr = parse_symbol(ctx);
     if (ctx->token == TOK_COLON) {
         NEXT_TOKEN();
         type_expr = parse_expr(ctx);
@@ -167,7 +166,7 @@ static struct expr_decl *parse_decls(struct parse_ctx *ctx) {
         return NULL;
     }
 
-    d = arena_alloc(ctx->arena, sizeof(struct expr_decl));
+    d = allocate(ctx->arena, sizeof(struct expr_decl));
     d->name_expr = parse_symbol(ctx);
 
     if (ctx->token == TOK_COMMA) {
@@ -205,14 +204,12 @@ static struct expr_decl *parse_decls(struct parse_ctx *ctx) {
 }
 
 static struct expr *do_parse_module(struct parse_ctx *ctx) {
-    slice_t first_token;
-
     if (setjmp(ctx->error_jmp_buf)) {
         return NULL;
     }
 
     NEXT_TOKEN();
-    first_token = ctx->token_text;
+    slice_t first_token = ctx->token_text;
 
     struct expr *body = parse_expr_seq(ctx);
 
@@ -227,7 +224,7 @@ static struct expr *do_parse_module(struct parse_ctx *ctx) {
 
 struct expr *parse_module(struct module_ctx *mod_ctx, slice_t source_text) {
     struct parse_ctx parse_ctx = {0};
-    parse_ctx.arena = &mod_ctx->arena;
+    parse_ctx.arena = &mod_ctx->arena.a;
     parse_ctx.scan_ctx.cursor = source_text.ptr;
     parse_ctx.global_ctx = mod_ctx->global_ctx;
     parse_ctx.mod_ctx = mod_ctx;
@@ -254,8 +251,8 @@ struct expr *parse_struct(struct parse_ctx *ctx) {
 }
 
 static struct expr *parse_fun(struct parse_ctx *ctx) {
-    struct expr *result, *return_type_expr = NULL, *body_expr = NULL;
-    struct expr_decl *params = NULL, *p;
+    struct expr *return_type_expr = NULL, *body_expr = NULL;
+    struct expr_decl *params = NULL;
     slice_t first_token = ctx->token_text;
 
     assert(ctx->token == TOK_KW_FUN);
@@ -290,7 +287,7 @@ static struct expr *parse_fun(struct parse_ctx *ctx) {
     }
 
     if (!body_expr) {
-        for (p = params; p; p = p->next) {
+        for (struct expr_decl *p = params; p; p = p->next) {
             if (!p->type_expr) {
                 PARSE_ERR("incomplete parameter types in preceding function type definition");
             }
@@ -300,7 +297,7 @@ static struct expr *parse_fun(struct parse_ctx *ctx) {
         }
     }
 
-    result = expr_create(ctx, EXPR_FUN, slice_span(first_token, ctx->prev_token_text));
+    struct expr *result = expr_create(ctx, EXPR_FUN, slice_span(first_token, ctx->prev_token_text));
     result->fun.params = params;
     result->fun.return_type_expr = return_type_expr;
     result->fun.body_expr = body_expr;
@@ -308,21 +305,21 @@ static struct expr *parse_fun(struct parse_ctx *ctx) {
 }
 
 static struct expr *parse_if(struct parse_ctx *ctx, bool is_elif) {
-    struct expr *result, *pred_expr, *then_expr, *else_expr;
     slice_t first_token = ctx->token_text;
 
     assert(is_elif ? ctx->token == TOK_KW_ELIF : ctx->token == TOK_KW_IF);
     NEXT_TOKEN();
 
-    pred_expr = parse_expr(ctx);
+    struct expr *pred_expr = parse_expr(ctx);
 
     if (ctx->token != TOK_KW_THEN) {
         PARSE_ERR("expected 'then' after if condition");
     }
     NEXT_TOKEN();
 
-    then_expr = parse_expr_seq_as_block(ctx);
+    struct expr *then_expr = parse_expr_seq_as_block(ctx);
 
+    struct expr *else_expr;
     if (ctx->token == TOK_KW_ELSE) {
         NEXT_TOKEN();
         else_expr = parse_expr_seq_as_block(ctx);
@@ -342,7 +339,7 @@ static struct expr *parse_if(struct parse_ctx *ctx, bool is_elif) {
         PARSE_ERR("expected 'elif', 'else' or 'end' to terminate");
     }
 
-    result = expr_create(ctx, EXPR_COND, slice_span(first_token, else_expr->source_text));
+    struct expr *result = expr_create(ctx, EXPR_COND, slice_span(first_token, else_expr->source_text));
     result->cond.pred_expr = pred_expr;
     result->cond.then_expr = then_expr;
     result->cond.else_expr = else_expr;
@@ -362,7 +359,7 @@ static struct expr_link *parse_args(struct parse_ctx *ctx) {
         return NULL;
     }
 
-    a = arena_alloc(ctx->arena, sizeof(struct expr_link));
+    a = allocate(ctx->arena, sizeof(struct expr_link));
     a->expr = parse_expr(ctx);
 
     if (ctx->token == TOK_COMMA) {
@@ -382,10 +379,7 @@ static struct expr_link *parse_args(struct parse_ctx *ctx) {
 }
 
 static struct expr *parse_prim_call(struct parse_ctx *ctx, int prim, uint arg_count) {
-    struct expr *result;
-    struct expr_link *args;
     slice_t name = ctx->token_text;
-    uint i;
 
     NEXT_TOKEN();
     if (ctx->token != TOK_LPAREN) {
@@ -393,14 +387,14 @@ static struct expr *parse_prim_call(struct parse_ctx *ctx, int prim, uint arg_co
     }
     NEXT_TOKEN();
 
-    args = parse_args(ctx);
+    struct expr_link *args = parse_args(ctx);
     if (expr_list_length(args) != arg_count) {
         PARSE_ERR("expected %d arguments for '%.*s'", arg_count, name.len, name.ptr);
     }
 
-    result = expr_create(ctx, EXPR_PRIM, slice_span(name, ctx->prev_token_text));
+    struct expr *result = expr_create(ctx, EXPR_PRIM, slice_span(name, ctx->prev_token_text));
     result->prim.kind = prim;
-    for (i = 0; i < arg_count; ++i, args = args->next) {
+    for (uint i = 0; i < arg_count; ++i, args = args->next) {
         result->prim.arg_exprs[i] = args->expr;
     }
 
@@ -408,19 +402,18 @@ static struct expr *parse_prim_call(struct parse_ctx *ctx, int prim, uint arg_co
 }
 
 static struct expr *parse_single_arg_prim(struct parse_ctx *ctx, int prim) {
-    struct expr *result, *e;
     slice_t first_token = ctx->token_text;
     NEXT_TOKEN();
     if (ctx->token != TOK_LPAREN) {
         PARSE_ERR("expected '(' after 'expr'");
     }
     NEXT_TOKEN();
-    e = parse_expr(ctx);
+    struct expr *e = parse_expr(ctx);
     if (ctx->token != TOK_RPAREN) {
         PARSE_ERR("expected ')' after 'expr' expression");
     }
     NEXT_TOKEN();
-    result = expr_create(ctx, EXPR_PRIM, slice_span(first_token, ctx->prev_token_text));
+    struct expr *result = expr_create(ctx, EXPR_PRIM, slice_span(first_token, ctx->prev_token_text));
     result->prim.kind = prim;
     result->prim.arg_exprs[0] = e;
     return result;
@@ -435,15 +428,13 @@ static struct expr *parse_int(struct parse_ctx *ctx, int offset, int base) {
 }
 
 static struct expr *parse_unary(struct parse_ctx *ctx, int prim) {
-    struct expr *result;
-    struct expr *arg;
     slice_t first_token = ctx->token_text;
 
     NEXT_TOKEN();
 
-    arg = parse_infix(ctx, HIGHEST_PRECEDENCE);
+    struct expr *arg = parse_infix(ctx, HIGHEST_PRECEDENCE);
 
-    result = expr_create(ctx, EXPR_PRIM, slice_span(first_token, arg->source_text));
+    struct expr *result = expr_create(ctx, EXPR_PRIM, slice_span(first_token, arg->source_text));
     result->prim.kind = prim;
     result->prim.arg_exprs[0] = arg;
     return result;
@@ -510,15 +501,12 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
 }
 
 static struct expr *parse_call(struct parse_ctx *ctx, struct expr *callable_expr) {
-    struct expr *result;
-    struct expr_link *args;
-
     assert(ctx->token == TOK_LPAREN);
     NEXT_TOKEN();
 
-    args = parse_args(ctx);
+    struct expr_link *args = parse_args(ctx);
 
-    result = expr_create(ctx, EXPR_CALL, slice_span(callable_expr->source_text, ctx->prev_token_text));
+    struct expr *result = expr_create(ctx, EXPR_CALL, slice_span(callable_expr->source_text, ctx->prev_token_text));
     result->call.callable_expr = callable_expr;
     result->call.args = args;
     return result;

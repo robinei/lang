@@ -153,11 +153,11 @@ typedef void (*expr_visitor_t)(struct expr_visit_ctx *ctx, struct expr *e);
 struct expr_visit_ctx {
     expr_visitor_t visitor;
     void *ctx;
-    struct arena *arena;
+    struct allocator *arena;
 };
 struct expr *expr_visit(struct expr_visit_ctx *ctx, struct expr *e);
 void expr_visit_children(struct expr_visit_ctx *ctx, struct expr *e);
-struct expr *expr_run_visitor(struct expr *e, expr_visitor_t visitor, void *ctx, struct arena *arena);
+struct expr *expr_run_visitor(struct expr *e, expr_visitor_t visitor, void *ctx, struct allocator *arena);
 
 
 void pretty_print_indented(struct expr *e, uint indent);
