@@ -9,7 +9,7 @@ static int bool_value(struct peval_ctx *ctx, struct expr *e) {
     return e->c.boolean;
 }
 
-static int int_value(struct peval_ctx *ctx, struct expr *e) {
+static int64_t int_value(struct peval_ctx *ctx, struct expr *e) {
     assert(e->kind == EXPR_CONST);
     if (e->c.tag->kind != TYPE_INT) {
         PEVAL_ERR(e, "expected int");

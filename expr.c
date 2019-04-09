@@ -5,6 +5,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <assert.h>
+#include <inttypes.h>
 
 #define DECL_PRIM_NAME(name) #name,
 const char *prim_names[] = {
@@ -262,7 +263,7 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
             print_colored(ctx, PAREN_COLOR, "()");
             break;
         case TYPE_INT:
-            print_colored(ctx, NUMBER_COLOR, "%d", e->c.integer);
+            print_colored(ctx, NUMBER_COLOR, "%"PRIi64, e->c.integer);
             break;
         case TYPE_STRING:
             print_colored(ctx, STRING_COLOR, "\"%.*s\"", e->c.string.len, e->c.string.ptr);

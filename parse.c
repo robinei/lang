@@ -422,7 +422,7 @@ static struct expr *parse_single_arg_prim(struct parse_ctx *ctx, int prim) {
 static struct expr *parse_int(struct parse_ctx *ctx, int offset, int base) {
     struct expr *result = expr_create(ctx, EXPR_CONST, ctx->token_text);
     result->c.tag = &type_int;
-    result->c.integer = (int)my_strtoll(ctx->token_text.ptr + offset, NULL, base);
+    result->c.integer = my_strtoll(ctx->token_text.ptr + offset, NULL, base);
     NEXT_TOKEN();
     return result;
 }

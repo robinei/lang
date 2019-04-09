@@ -24,7 +24,6 @@
 #ifdef EXPAND_INTERFACE
 #undef EXPAND_INTERFACE
 
-#include <stdint.h>
 #include "alloc.h"
 
 struct NAMESPACED(entry) {
