@@ -9,14 +9,6 @@ static int bool_value(struct peval_ctx *ctx, struct expr *e) {
     return e->c.boolean;
 }
 
-static int64_t int_value(struct peval_ctx *ctx, struct expr *e) {
-    assert(e->kind == EXPR_CONST);
-    if (e->c.tag->kind != TYPE_INT) {
-        PEVAL_ERR(e, "expected int");
-    }
-    return e->c.integer;
-}
-
 static bool const_eq(struct peval_ctx *ctx, struct expr *a, struct expr *b) {
     assert(a->kind == EXPR_CONST && b->kind == EXPR_CONST);
     if (a->c.tag != b->c.tag) {
@@ -31,6 +23,10 @@ static bool const_eq(struct peval_ctx *ctx, struct expr *a, struct expr *b) {
         return a->c.boolean == b->c.boolean;
     case TYPE_INT:
         return a->c.integer == b->c.integer;
+    case TYPE_UINT:
+        return a->c.uinteger == b->c.uinteger;
+    case TYPE_REAL:
+        return a->c.real == b->c.real;
     case TYPE_STRING:
         return slice_equals(a->c.string, b->c.string);
     default:
@@ -38,37 +34,6 @@ static bool const_eq(struct peval_ctx *ctx, struct expr *a, struct expr *b) {
         return false;
     }
 }
-
-#define ARG(N) (e_new.prim.arg_exprs[N])
-#define PEVAL_ARG(N) ARG(N) = peval(ctx, ARG(N))
-#define ARG_CONST(N) (ARG(N)->kind == EXPR_CONST)
-
-#define BINOP(op, value_getter) \
-    value_getter(ctx, ARG(0)) op value_getter(ctx, ARG(1))
-
-
-#define HANDLE_UNOP(type_ptr, value_field, value_expression) \
-    PEVAL_ARG(0); \
-    if (ARG_CONST(0)) { \
-        struct expr *res = expr_create(ctx, EXPR_CONST, e); \
-        res->c.tag = type_ptr; \
-        res->c.value_field = value_expression; \
-        return res; \
-    } \
-    break;
-
-#define HANDLE_BINOP(type_ptr, value_field, value_expression) \
-    PEVAL_ARG(0); \
-    PEVAL_ARG(1); \
-    if (ARG_CONST(0) && ARG_CONST(1)) { \
-        struct expr *res = expr_create(ctx, EXPR_CONST, e); \
-        res->c.tag = type_ptr; \
-        res->c.value_field = value_expression; \
-        return res; \
-    } \
-    break;
-
-
 
 static void splice_visitor(struct expr_visit_ctx *visit_ctx, struct expr *e) {
     if (e->kind == EXPR_PRIM && e->prim.kind == PRIM_SPLICE) {
@@ -88,6 +53,102 @@ static void splice_visitor(struct expr_visit_ctx *visit_ctx, struct expr *e) {
 }
 
 
+#define ARG(N) (e_new.prim.arg_exprs[N])
+#define PEVAL_ARG(N) ARG(N) = peval(ctx, ARG(N))
+#define ARG_CONST(N) (ARG(N)->kind == EXPR_CONST)
+#define PEVAL_ARGS() PEVAL_ARG(0); PEVAL_ARG(1)
+#define ARGS_CONST() ARG_CONST(0) && ARG_CONST(1)
+
+#define RETURN_CONST(type_ptr, value_field, value_expression) \
+    struct expr *res = expr_create(ctx, EXPR_CONST, e); \
+    res->c.tag = type_ptr; \
+    res->c.value_field = value_expression; \
+    return res;
+
+
+#define BEGIN_UNOP_HANDLER() \
+    PEVAL_ARG(0); \
+    if (ARG_CONST(0)) {
+
+#define END_UNOP_HANDLER() \
+        PEVAL_ERR(e, "bad type"); \
+    } \
+    break;
+
+#define UNOP(op, field) op ARG(0)->c.field
+
+#define HANDLE_BOOL_UNOP(op) \
+    BEGIN_UNOP_HANDLER() \
+        if(ARG(0)->c.tag == &type_bool) { RETURN_CONST(&type_bool, boolean, UNOP(op, boolean)) } \
+    END_UNOP_HANDLER()
+    
+#define HANDLE_INT_UINT_UNOP(op) \
+    BEGIN_UNOP_HANDLER() \
+        if(ARG(0)->c.tag == &type_int) { RETURN_CONST(&type_int, integer, UNOP(op, integer)) } \
+        if(ARG(0)->c.tag == &type_uint) { RETURN_CONST(&type_uint, uinteger, UNOP(op, uinteger)) } \
+    END_UNOP_HANDLER()
+
+#define HANDLE_INT_UINT_REAL_UNOP(op) \
+    BEGIN_UNOP_HANDLER() \
+        if(ARG(0)->c.tag == &type_int) { RETURN_CONST(&type_int, integer, UNOP(op, integer)) } \
+        if(ARG(0)->c.tag == &type_uint) { RETURN_CONST(&type_uint, uinteger, UNOP(op, uinteger)) } \
+        if(ARG(0)->c.tag == &type_real) { RETURN_CONST(&type_real, real, UNOP(op, real)) } \
+    END_UNOP_HANDLER()
+
+
+#define BEGIN_BINOP_HANDLER() \
+    PEVAL_ARGS(); \
+    if (ARGS_CONST()) { \
+        if (ARG(0)->c.tag != ARG(1)->c.tag) { \
+            PEVAL_ERR(e, "type mismatch"); \
+        }
+
+#define END_BINOP_HANDLER() \
+        PEVAL_ERR(e, "bad types"); \
+    } \
+    break;
+
+#define BINOP(op, field) ARG(0)->c.field op ARG(1)->c.field
+
+#define HANDLE_INT_UINT_REAL_BINOP(op) \
+    BEGIN_BINOP_HANDLER() \
+        if (ARG(0)->c.tag == &type_int) { RETURN_CONST(&type_int, integer, BINOP(op, integer)); } \
+        if (ARG(0)->c.tag == &type_uint) { RETURN_CONST(&type_uint, uinteger, BINOP(op, uinteger)); } \
+        if (ARG(0)->c.tag == &type_real) { RETURN_CONST(&type_real, real, BINOP(op, real)); } \
+    END_BINOP_HANDLER()
+
+#define HANDLE_INT_UINT_BINOP(op) \
+    BEGIN_BINOP_HANDLER() \
+        if (ARG(0)->c.tag == &type_int) { RETURN_CONST(&type_int, integer, BINOP(op, integer)); } \
+        if (ARG(0)->c.tag == &type_uint) { RETURN_CONST(&type_uint, uinteger, BINOP(op, uinteger)); } \
+    END_BINOP_HANDLER()
+
+#define HANDLE_CMP_BINOP(op) \
+    BEGIN_BINOP_HANDLER() \
+        if (ARG(0)->c.tag == &type_int) { RETURN_CONST(&type_bool, boolean, BINOP(op, integer)); } \
+        if (ARG(0)->c.tag == &type_uint) { RETURN_CONST(&type_bool, boolean, BINOP(op, uinteger)); } \
+        if (ARG(0)->c.tag == &type_real) { RETURN_CONST(&type_bool, boolean, BINOP(op, real)); } \
+    END_BINOP_HANDLER()
+
+#define HANDLE_SHIFT_BINOP(op) \
+    PEVAL_ARGS(); \
+    if (ARGS_CONST()) { \
+        if (ARG(1)->c.tag == &type_int) { \
+            if (ARG(1)->c.integer < 0) { PEVAL_ERR(ARG(1), "can't shift by negative number"); } \
+        } else if (ARG(1)->c.tag != &type_uint) { \
+            PEVAL_ERR(ARG(1), "can't shift by non-integer"); \
+        } \
+        if (ARG(0)->c.tag == &type_int) { \
+            if (ARG(0)->c.integer < 0) { PEVAL_ERR(ARG(0), "can't shift negative number"); } \
+            RETURN_CONST(&type_int, integer, BINOP(op, integer)); \
+        } else if (ARG(0)->c.tag == &type_uint) { \
+            RETURN_CONST(&type_uint, uinteger, BINOP(op, uinteger)); \
+        } else { \
+            PEVAL_ERR(ARG(0), "can't shift non-integer"); \
+        } \
+    } \
+    break;
+
 
 struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
     struct expr e_new = *e;
@@ -95,14 +156,13 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
     assert(e_new.kind == EXPR_PRIM);
 
     switch (e_new.prim.kind) {
-    case PRIM_PLUS: PEVAL_ARG(0); int_value(ctx, ARG(0)); return ARG(0);
-    case PRIM_NEGATE: HANDLE_UNOP(&type_int, integer, -int_value(ctx, ARG(0)))
-    case PRIM_LOGI_NOT: HANDLE_UNOP(&type_bool, boolean, !bool_value(ctx, ARG(0)))
-    case PRIM_BITWISE_NOT: HANDLE_UNOP(&type_int, integer, ~int_value(ctx, ARG(0)))
+    case PRIM_PLUS: HANDLE_INT_UINT_REAL_UNOP(+)
+    case PRIM_NEGATE: HANDLE_INT_UINT_REAL_UNOP(-)
+    case PRIM_LOGI_NOT: HANDLE_BOOL_UNOP(!)
+    case PRIM_BITWISE_NOT: HANDLE_INT_UINT_UNOP(~)
 
     case PRIM_SEQ:
-        PEVAL_ARG(0);
-        PEVAL_ARG(1);
+        PEVAL_ARGS();
         if (ARG_CONST(0)) {
             return ARG(1);
         }
@@ -141,27 +201,27 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
         }
         break;
 
-    case PRIM_BITWISE_OR: HANDLE_BINOP(&type_int, integer, BINOP(|, int_value))
-    case PRIM_BITWISE_XOR: HANDLE_BINOP(&type_int, integer, BINOP(^ , int_value))
-    case PRIM_BITWISE_AND: HANDLE_BINOP(&type_int, integer, BINOP(& , int_value))
+    case PRIM_BITWISE_OR:  HANDLE_INT_UINT_BINOP(|)
+    case PRIM_BITWISE_XOR: HANDLE_INT_UINT_BINOP(^)
+    case PRIM_BITWISE_AND: HANDLE_INT_UINT_BINOP(&)
 
-    case PRIM_EQ: HANDLE_BINOP(&type_bool, boolean, const_eq(ctx, ARG(0), ARG(1)))
-    case PRIM_NEQ: HANDLE_BINOP(&type_bool, boolean, !const_eq(ctx, ARG(0), ARG(1)))
+    case PRIM_EQ:  PEVAL_ARGS(); if (ARGS_CONST()) { RETURN_CONST(&type_bool, boolean,  const_eq(ctx, ARG(0), ARG(1))) }
+    case PRIM_NEQ: PEVAL_ARGS(); if (ARGS_CONST()) { RETURN_CONST(&type_bool, boolean, !const_eq(ctx, ARG(0), ARG(1))) }
 
-    case PRIM_LT: HANDLE_BINOP(&type_bool, boolean, BINOP(<, int_value))
-    case PRIM_GT: HANDLE_BINOP(&type_bool, boolean, BINOP(>, int_value))
-    case PRIM_LTEQ: HANDLE_BINOP(&type_bool, boolean, BINOP(<=, int_value))
-    case PRIM_GTEQ: HANDLE_BINOP(&type_bool, boolean, BINOP(>=, int_value))
+    case PRIM_LT:   HANDLE_CMP_BINOP(<)
+    case PRIM_GT:   HANDLE_CMP_BINOP(>)
+    case PRIM_LTEQ: HANDLE_CMP_BINOP(<=)
+    case PRIM_GTEQ: HANDLE_CMP_BINOP(>=)
 
-    case PRIM_BITWISE_LSH: HANDLE_BINOP(&type_int, integer, BINOP(<<, int_value))
-    case PRIM_BITWISE_RSH: HANDLE_BINOP(&type_int, integer, BINOP(>>, int_value))
+    case PRIM_BITWISE_LSH: HANDLE_SHIFT_BINOP(<<)
+    case PRIM_BITWISE_RSH: HANDLE_SHIFT_BINOP(>>)
 
-    case PRIM_ADD: HANDLE_BINOP(&type_int, integer, BINOP(+, int_value))
-    case PRIM_SUB: HANDLE_BINOP(&type_int, integer, BINOP(-, int_value))
-    case PRIM_MUL: HANDLE_BINOP(&type_int, integer, BINOP(*, int_value))
-    case PRIM_DIV: HANDLE_BINOP(&type_int, integer, BINOP(/ , int_value))
-    case PRIM_MOD: HANDLE_BINOP(&type_int, integer, BINOP(% , int_value))
-
+    case PRIM_ADD: HANDLE_INT_UINT_REAL_BINOP(+)
+    case PRIM_SUB: HANDLE_INT_UINT_REAL_BINOP(-)
+    case PRIM_MUL: HANDLE_INT_UINT_REAL_BINOP(*)
+    case PRIM_DIV: HANDLE_INT_UINT_REAL_BINOP(/)
+    case PRIM_MOD: HANDLE_INT_UINT_BINOP(%)
+    
     case PRIM_DOT:
         if (ARG(1)->kind != EXPR_SYM) {
             PEVAL_ERR(ARG(1), "expected symbol");

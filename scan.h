@@ -69,6 +69,7 @@
     X(OCT) \
     X(DEC) \
     X(HEX) \
+    X(REAL) \
     X(STRING)
 
 #define DECL_TOK_ENUM(Tok) TOK_##Tok,

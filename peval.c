@@ -255,6 +255,8 @@ static uint hash_const_args(struct expr_decl *p, struct expr_link *a, uint hash)
             case TYPE_TYPE: hash = FNV1A(a->expr->c.type, hash); break; /* WRONG? */
             case TYPE_BOOL: hash = FNV1A(a->expr->c.boolean, hash); break;
             case TYPE_INT: hash = FNV1A(a->expr->c.integer, hash); break;
+            case TYPE_UINT: hash = FNV1A(a->expr->c.uinteger, hash); break;
+            case TYPE_REAL: hash = FNV1A(a->expr->c.real, hash); break;
             default: assert(0); break;
             }
         }

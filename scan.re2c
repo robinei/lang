@@ -18,10 +18,15 @@ next_token_start:;
     re2c:yyfill:enable = 0;
 
     end = "\x00";
+    
     bin = '0b' [01]+;
     oct = "0" [0-7]*;
     dec = [1-9][0-9]*;
     hex = '0x' [0-9a-fA-F]+;
+
+    frc = [0-9]* "." [0-9]+ | [0-9]+ ".";
+    exp = 'e' [+-]? [0-9]+;
+    flt = (frc exp? | [0-9]+ exp) [fFlL]?;
 
     *       { TOK(ERR); }
     end     { TOK(END); }
@@ -103,6 +108,7 @@ next_token_start:;
     oct { TOK(OCT); }
     dec { TOK(DEC); }
     hex { TOK(HEX); }
+    flt { TOK(REAL); }
     ["][^"]*["] { TOK(STRING); }
 */
 }

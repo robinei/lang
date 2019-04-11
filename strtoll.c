@@ -1,6 +1,3 @@
-/*    $NetBSD: strtoll.c,v 1.4 2005/05/16 11:27:58 lukem Exp $    */
-/*    from    NetBSD: strtoll.c,v 1.6 2003/10/27 00:12:42 lukem Exp    */
-
 /*-
  * Copyright (c) 1992, 1993
  *    The Regents of the University of California.  All rights reserved.

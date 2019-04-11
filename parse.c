@@ -4,6 +4,7 @@
 #include <assert.h>
 
 long long int my_strtoll(const char *nptr, const char **endptr, int base);
+unsigned long long my_strtoull(const char *str, char **endptr, int base);
 double my_strtod(const char *string, const char **endPtr);
 
 #define LOWEST_PRECEDENCE 1
@@ -421,19 +422,35 @@ static struct expr *parse_single_arg_prim(struct parse_ctx *ctx, int prim) {
 
 static struct expr *parse_int(struct parse_ctx *ctx, int offset, int base) {
     struct expr *result = expr_create(ctx, EXPR_CONST, ctx->token_text);
-    result->c.tag = &type_int;
-    result->c.integer = my_strtoll(ctx->token_text.ptr + offset, NULL, base);
+    char *end = NULL;
+    // TODO: parse negative signed numbers as such here rather than parsing unary negation of positive number
+    uint64_t value = my_strtoull(ctx->token_text.ptr + offset, &end, base);
+    assert(end == ctx->token_text.ptr + ctx->token_text.len);
+    if (value <= INT64_MAX) {
+        result->c.tag = &type_int;
+        result->c.integer = (int64_t)value;
+    } else {
+        result->c.tag = &type_uint;
+        result->c.uinteger = value;
+    }
+    NEXT_TOKEN();
+    return result;
+}
+
+static struct expr *parse_real(struct parse_ctx *ctx) {
+    struct expr *result = expr_create(ctx, EXPR_CONST, ctx->token_text);
+    const char *end = NULL;
+    result->c.tag = &type_real;
+    result->c.real = my_strtod(ctx->token_text.ptr, &end);
+    assert(end == ctx->token_text.ptr + ctx->token_text.len);
     NEXT_TOKEN();
     return result;
 }
 
 static struct expr *parse_unary(struct parse_ctx *ctx, int prim) {
     slice_t first_token = ctx->token_text;
-
     NEXT_TOKEN();
-
     struct expr *arg = parse_infix(ctx, HIGHEST_PRECEDENCE);
-
     struct expr *result = expr_create(ctx, EXPR_PRIM, slice_span(first_token, arg->source_text));
     result->prim.kind = prim;
     result->prim.arg_exprs[0] = arg;
@@ -482,6 +499,7 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
     case TOK_OCT: return parse_int(ctx, 0, 8);
     case TOK_DEC: return parse_int(ctx, 0, 10);
     case TOK_HEX: return parse_int(ctx, 2, 16);
+    case TOK_REAL: return parse_real(ctx);
     case TOK_STRING: NEXT_TOKEN(); return string_create(ctx, first_token);
     case TOK_KW_STRUCT: return parse_struct(ctx);
     case TOK_KW_SELF: NEXT_TOKEN(); return expr_create(ctx, EXPR_SELF, first_token);

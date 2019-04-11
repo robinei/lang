@@ -28,6 +28,10 @@ begin
     assert(Secret.getSecret() == 666);
 end;
 
+begin
+    const f = 0.5;
+end;
+
 self.testShortCircuit = fun -> begin
     assert(not (false and assert(false)));
     assert(true or assert(false));

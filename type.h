@@ -9,6 +9,8 @@
     X(UNIT) \
     X(BOOL) \
     X(INT) \
+    X(UINT) \
+    X(REAL) \
     X(STRING) \
     X(FUN) \
     X(STRUCT)
@@ -42,6 +44,8 @@ extern struct type type_type;
 extern struct type type_unit;
 extern struct type type_bool;
 extern struct type type_int;
+extern struct type type_uint;
+extern struct type type_real;
 extern struct type type_string;
 extern struct type type_fun; /* TODO: replace with fun types actually having structure, and which are different */
 

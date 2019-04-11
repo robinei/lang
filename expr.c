@@ -265,6 +265,12 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         case TYPE_INT:
             print_colored(ctx, NUMBER_COLOR, "%"PRIi64, e->c.integer);
             break;
+        case TYPE_UINT:
+            print_colored(ctx, NUMBER_COLOR, "%"PRIu64, e->c.uinteger);
+            break;
+        case TYPE_REAL:
+            print_colored(ctx, NUMBER_COLOR, "%f", e->c.real);
+            break;
         case TYPE_STRING:
             print_colored(ctx, STRING_COLOR, "\"%.*s\"", e->c.string.len, e->c.string.ptr);
             break;

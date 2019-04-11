@@ -91,6 +91,8 @@ struct value {
         struct type *type;
         bool boolean;
         int64_t integer;
+        uint64_t uinteger;
+        double real;
         slice_t string;
     };
     struct type *tag;
