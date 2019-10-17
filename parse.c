@@ -1,29 +1,36 @@
 #include "parse.h"
-#include <stdarg.h>
-#include <stdlib.h>
-#include <assert.h>
 
-long long int my_strtoll(const char *nptr, const char **endptr, int base);
-unsigned long long my_strtoull(const char *str, char **endptr, int base);
+#include <stdlib.h>
+#include <string.h>
+#include <assert.h>
+#include <setjmp.h>
+
+unsigned long long my_strtoull(const char *str, const char **endptr, int base);
 double my_strtod(const char *string, const char **endPtr);
+
+
+struct parse_ctx {
+    struct allocator *arena;
+    struct global_ctx *global_ctx;
+    struct module_ctx *mod_ctx;
+    struct error_ctx *err_ctx;
+
+    char *ptr;
+    jmp_buf error_jmp_buf;
+};
+
+#define PARSE_ERR(...) \
+    do { \
+        error_emit(ctx->err_ctx, ERROR_CATEGORY_ERROR, slice_from_str_len(ctx->ptr, 1), __VA_ARGS__); \
+        longjmp(ctx->error_jmp_buf, 1); \
+    } while(0)
+
+#define SLICE_FROM_START slice_from_str_len(start, ctx->ptr - start)
+
 
 #define LOWEST_PRECEDENCE 1
 #define HIGHEST_PRECEDENCE 12
 static struct expr *parse_infix(struct parse_ctx *ctx, int min_precedence);
-
-
-#define PARSE_ERR(...) \
-    do { \
-        error_emit(ctx->err_ctx, ERROR_CATEGORY_ERROR, ctx->token_text, __VA_ARGS__); \
-        longjmp(ctx->error_jmp_buf, 1); \
-    } while(0)
-
-#define NEXT_TOKEN() \
-    do { \
-        ctx->prev_token_text = ctx->token_text; \
-        ctx->token = scan_next_token(&ctx->scan_ctx, &ctx->token_text.ptr); \
-        ctx->token_text.len = (int)(ctx->scan_ctx.cursor - ctx->token_text.ptr); \
-    } while (0)
 
 
 static struct expr *expr_create(struct parse_ctx *ctx, uint expr_type, slice_t source_text) {
@@ -38,7 +45,7 @@ static struct expr *bool_create(struct parse_ctx *ctx, bool bool_value, slice_t 
     e->c.boolean = bool_value;
     return e;
 }
-static struct expr *string_create(struct parse_ctx *ctx, slice_t source_text) {
+static struct expr *string_create(struct parse_ctx *ctx, bool has_escapes, slice_t source_text) {
     assert(source_text.len > 2);
     assert(source_text.ptr[0] == '"');
     assert(source_text.ptr[source_text.len - 1] == '"');
@@ -48,6 +55,11 @@ static struct expr *string_create(struct parse_ctx *ctx, slice_t source_text) {
     source_text.len -= 2;
     e->c.tag = &type_string;
     e->c.string = source_text;
+    return e;
+}
+static struct expr *symbol_create(struct parse_ctx *ctx, char *start) {
+    struct expr *e = expr_create(ctx, EXPR_SYM, SLICE_FROM_START);
+    e->sym = intern_slice(&ctx->global_ctx->symbol_table, e->source_text);
     return e;
 }
 static struct expr *unit_create(struct parse_ctx *ctx, slice_t source_text) {
@@ -64,227 +76,363 @@ static struct expr *prim_create_bin(struct parse_ctx *ctx, int prim, struct expr
 }
 
 
+
+static bool is_space_char(char ch) {
+    switch (ch) {
+    case '\r':
+    case '\n':
+    case '\t':
+    case ' ':
+        return true;
+    default:
+        return false;
+    }
+}
+static bool is_leading_ident_char(char ch) {
+    return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_';
+}
+static bool is_non_leading_ident_char(char ch) {
+    return is_leading_ident_char(ch) || (ch >= '0' && ch <= '9');
+}
+
+static bool is_reserved_word(char *str, int len) {
+    switch (*str) {
+    case 'a':
+        if (len == 3 && !memcmp(str, "and", len)) { return true; }
+        if (len == 6 && !memcmp(str, "assert", len)) { return true; }
+        break;
+    case 'b':
+        if (len == 5 && !memcmp(str, "begin", len)) { return true; }
+        break;
+    case 'c':
+        if (len == 5 && !memcmp(str, "const", len)) { return true; }
+        break;
+    case 'e':
+        if (len == 3 && !memcmp(str, "end", len)) { return true; }
+        if (len == 4 && !memcmp(str, "else", len)) { return true; }
+        if (len == 4 && !memcmp(str, "elif", len)) { return true; }
+        break;
+    case 'f':
+        if (len == 3 && !memcmp(str, "fun", len)) { return true; }
+        if (len == 5 && !memcmp(str, "false", len)) { return true; }
+        break;
+    case 'i':
+        if (len == 2 && !memcmp(str, "if", len)) { return true; }
+        if (len == 6 && !memcmp(str, "import", len)) { return true; }
+        break;
+    case 'n':
+        if (len == 3 && !memcmp(str, "not", len)) { return true; }
+        break;
+    case 'o':
+        if (len == 2 && !memcmp(str, "or", len)) { return true; }
+        break;
+    case 'p':
+        if (len == 5 && !memcmp(str, "print", len)) { return true; }
+        break;
+    case 'q':
+        if (len == 5 && !memcmp(str, "quote", len)) { return true; }
+        break;
+    case 's':
+        if (len == 4 && !memcmp(str, "self", len)) { return true; }
+        if (len == 6 && !memcmp(str, "struct", len)) { return true; }
+        if (len == 6 && !memcmp(str, "static", len)) { return true; }
+        if (len == 6 && !memcmp(str, "splice", len)) { return true; }
+        break;
+    case 't':
+        if (len == 4 && !memcmp(str, "then", len)) { return true; }
+        if (len == 4 && !memcmp(str, "true", len)) { return true; }
+        break;
+    case 'v':
+        if (len == 3 && !memcmp(str, "var", len)) { return true; }
+        break;
+    }
+    return false;
+}
+
+static bool match_ident(struct parse_ctx *ctx) {
+    if (!is_leading_ident_char(*ctx->ptr)) {
+        return false;
+    }
+    char *start = ctx->ptr;
+    do {
+        ++ctx->ptr;
+    } while(is_non_leading_ident_char(*ctx->ptr));
+    if (is_reserved_word(start, ctx->ptr - start)) {
+        return false;
+    }
+    return true;
+}
+static void expect_ident(struct parse_ctx *ctx, const char *context_info) {
+    if (!match_ident(ctx)) {
+        PARSE_ERR("expected identifier %s", context_info);
+    }
+}
+
+static bool match_keyword(struct parse_ctx *ctx, const char *str) {
+    assert(is_leading_ident_char(*str));
+    char *ptr = ctx->ptr;
+    while (*ptr && *str) {
+        if (*ptr != *str) {
+            return false;
+        }
+        ++ptr;
+        ++str;
+        assert(!*str || is_non_leading_ident_char(*str));
+    }
+    if (*str) {
+        return false;
+    }
+    if (is_non_leading_ident_char(*ptr)) {
+        return false;
+    }
+    ctx->ptr = ptr;
+    return true;
+}
+static void expect_keyword(struct parse_ctx *ctx, const char *str, const char *context_info) {
+    if (!match_keyword(ctx, str)) {
+        PARSE_ERR("expected '%s' %s", str, context_info);
+    }
+}
+
+static bool match_str(struct parse_ctx *ctx, const char *str) {
+    assert(*str);
+    char *ptr = ctx->ptr;
+    while (*ptr && *str) {
+        if (*ptr != *str) {
+            return false;
+        }
+        ++ptr;
+        ++str;
+    }
+    if (*str) {
+        return false;
+    }
+    ctx->ptr = ptr;
+    return true;
+}
+static void expect_str(struct parse_ctx *ctx, const char *str, const char *context_info) {
+    if (!match_str(ctx, str)) {
+        PARSE_ERR("expected '%s' %s", str, context_info);
+    }
+}
+
+static bool match_char(struct parse_ctx *ctx, char ch) {
+    if (*ctx->ptr != ch) {
+        return false;
+    }
+    ++ctx->ptr;
+    return true;
+}
+static void expect_char(struct parse_ctx *ctx, char ch, const char *context_info) {
+    if (!match_char(ctx, ch)) {
+        PARSE_ERR("expected '%c' %s", ch, context_info);
+    }
+}
+
+static void skip_whitespace(struct parse_ctx *ctx) {
+    for (;;) {
+        if (is_space_char(*ctx->ptr)) {
+            ++ctx->ptr;
+            continue;
+        }
+        if (!(ctx->ptr[0] == '/' && ctx->ptr[1] == '/')) {
+            break;
+        }
+        ctx->ptr += 2;
+        for (;;) {
+            char ch = *ctx->ptr;
+            if (ch == '\0') {
+                return;
+            }
+            ++ctx->ptr;
+            if (ch == '\n') {
+                break;
+            }
+        }
+    }
+}
+
+
 static struct expr *parse_expr(struct parse_ctx *ctx) {
     return parse_infix(ctx, LOWEST_PRECEDENCE + 1); /* disallow '=' operator */
 }
 
-static struct expr *parse_expr_seq(struct parse_ctx *ctx) {
-    struct expr *first = parse_infix(ctx, LOWEST_PRECEDENCE); /* allow '=' operator */
-    if (ctx->token != TOK_SEMICOLON) {
-        return first;
-    }
-    NEXT_TOKEN();
-    if (ctx->token == TOK_KW_END || ctx->token == TOK_KW_ELIF || ctx->token == TOK_KW_ELSE || ctx->token == TOK_END) {
-        return first;
-    }
-    struct expr *rest = parse_expr_seq(ctx);
-    if (!rest) {
-        return first;
-    }
-    return prim_create_bin(ctx, PRIM_SEQ, first, rest);
+
+static struct expr *parse_unary(struct parse_ctx *ctx, int prim, char *start) {
+    skip_whitespace(ctx);
+    struct expr *arg = parse_infix(ctx, HIGHEST_PRECEDENCE);
+    struct expr *result = expr_create(ctx, EXPR_PRIM, SLICE_FROM_START);
+    result->prim.kind = prim;
+    result->prim.arg_exprs[0] = arg;
+    return result;
 }
 
-static struct expr *maybe_wrap_in_block(struct parse_ctx *ctx, struct expr *e, slice_t first_token) {
+static struct expr *parse_string(struct parse_ctx *ctx) {
+    char *start = ctx->ptr++; /* skip initial " */
+    bool has_escapes = false;
+    for (;;) {
+        switch (*ctx->ptr) {
+        case '"':
+            ++ctx->ptr;
+            return string_create(ctx, has_escapes, SLICE_FROM_START);
+        case '\0':
+            PARSE_ERR("unexpected end of input while parsing string literal");
+        case '\\':
+            ctx->ptr += 2;
+            has_escapes = true;
+            continue;
+        default:
+            ++ctx->ptr;
+            continue;
+        }
+    }
+}
+
+static struct expr *parse_number(struct parse_ctx *ctx) {
+    char *start = ctx->ptr;
+    uint64_t value = my_strtoull(ctx->ptr, (const char **)&ctx->ptr, 0);
+    if (ctx->ptr > start && *ctx->ptr != '.') {
+        if (is_leading_ident_char(*ctx->ptr)) {
+            PARSE_ERR("illegal number suffix");
+        }
+        struct expr *result = expr_create(ctx, EXPR_CONST, SLICE_FROM_START);
+        if (value <= INT64_MAX) {
+            result->c.tag = &type_int;
+            result->c.integer = (int64_t)value;
+        } else {
+            result->c.tag = &type_uint;
+            result->c.uinteger = value;
+        }
+        return result;
+    } else {
+        double real = my_strtod(start, (const char **)&ctx->ptr);
+        if (ctx->ptr == start) {
+            PARSE_ERR("error parsing number");
+        }
+        if (is_leading_ident_char(*ctx->ptr)) {
+            PARSE_ERR("illegal number suffix");
+        }
+        struct expr *result = expr_create(ctx, EXPR_CONST, SLICE_FROM_START);
+        result->c.tag = &type_real;
+        result->c.real = real;
+        return result;
+    }
+}
+
+static struct expr *maybe_parse_expr_seq(struct parse_ctx *ctx) {
+    char *start = ctx->ptr;
+    if (!*start || match_keyword(ctx, "end") || match_keyword(ctx, "elif") || match_keyword(ctx, "else")) {
+        ctx->ptr = start;
+        return NULL;
+    }
+    struct expr *first = parse_infix(ctx, LOWEST_PRECEDENCE); /* allow '=' operator */
+    skip_whitespace(ctx);
+    if (!match_char(ctx, ';')) {
+        return first;
+    }
+    skip_whitespace(ctx);
+    struct expr *rest = maybe_parse_expr_seq(ctx);
+    return rest ? prim_create_bin(ctx, PRIM_SEQ, first, rest) : first;
+}
+static struct expr *parse_expr_seq(struct parse_ctx *ctx) {
+    char *start = ctx->ptr;
+    struct expr *result = maybe_parse_expr_seq(ctx);
+    return result ? result : unit_create(ctx, SLICE_FROM_START); 
+}
+static struct expr *maybe_wrap_in_block(struct parse_ctx *ctx, struct expr *e, char *start) {
     if (e->kind == EXPR_BLOCK) {
         return e; /* avoid redundant block in block */
     }
     if (e->kind != EXPR_DEF && (e->kind != EXPR_PRIM || e->prim.kind != PRIM_SEQ)) {
         return e; /* avoid redundant wrapping of single non-def expression */
     }
-    struct expr *result = expr_create(ctx, EXPR_BLOCK, slice_span(first_token, ctx->prev_token_text));
+    struct expr *result = expr_create(ctx, EXPR_BLOCK, SLICE_FROM_START);
     result->block.body_expr = e;
     return result;
 }
-
 static struct expr *parse_expr_seq_as_block(struct parse_ctx *ctx) {
-    slice_t first_token = ctx->token_text;
+    char *start = ctx->ptr;
     struct expr *body = parse_expr_seq(ctx);
-    return maybe_wrap_in_block(ctx, body, first_token);
+    return maybe_wrap_in_block(ctx, body, start);
 }
-
-static struct expr *parse_block(struct parse_ctx *ctx) {
-    assert(ctx->token == TOK_KW_BEGIN);
-    slice_t first_token = ctx->token_text;
-    NEXT_TOKEN();
+static struct expr *parse_block(struct parse_ctx *ctx, char *start) {
+    skip_whitespace(ctx);
     struct expr *body = parse_expr_seq(ctx);
-    if (ctx->token != TOK_KW_END) {
-        PARSE_ERR("expected 'end' after 'begin' block");
-    }
-    NEXT_TOKEN();
-    return maybe_wrap_in_block(ctx, body, first_token);
+    skip_whitespace(ctx);
+    expect_keyword(ctx, "end", "after 'begin' block");
+    return maybe_wrap_in_block(ctx, body, start);
 }
 
-static struct expr *parse_symbol(struct parse_ctx *ctx) {
-    assert(ctx->token == TOK_IDENT);
-    struct expr *e = expr_create(ctx, EXPR_SYM, ctx->token_text);
-    e->sym = intern_slice(&ctx->global_ctx->symbol_table, ctx->token_text);
-    NEXT_TOKEN();
-    return e;
+static struct expr *parse_struct(struct parse_ctx *ctx, char *start) {
+    skip_whitespace(ctx);
+    struct expr *body = parse_expr_seq(ctx);
+    skip_whitespace(ctx);
+    expect_keyword(ctx, "end", "after 'struct' definition");
+
+    struct expr *result = expr_create(ctx, EXPR_STRUCT, SLICE_FROM_START);
+    result->struc.body_expr = body;
+    return result;
 }
 
-static struct expr *parse_def(struct parse_ctx *ctx) {
-    assert(ctx->token == TOK_KW_CONST || ctx->token == TOK_KW_VAR);
-    unsigned int flags = 0;
-    if (ctx->token == TOK_KW_VAR) {
-        flags |= EXPR_FLAG_DEF_VAR;
-    }
-
-    slice_t first_token = ctx->token_text;
-    NEXT_TOKEN();
-    
-    struct expr *type_expr = NULL;
-    struct expr *value_expr = NULL;
-
-    if (ctx->token == TOK_KW_STATIC) {
-        flags |= EXPR_FLAG_DEF_STATIC;
-        NEXT_TOKEN();
-    }
-    if (ctx->token != TOK_IDENT) {
-        PARSE_ERR("expected identifier");
-    }
-    struct expr *name_expr = parse_symbol(ctx);
-    if (ctx->token == TOK_COLON) {
-        NEXT_TOKEN();
-        type_expr = parse_expr(ctx);
-    }
-    if (ctx->token == TOK_ASSIGN) {
-        NEXT_TOKEN();
-        value_expr = parse_expr(ctx);
-    }
-
-    struct expr *e = expr_create(ctx, EXPR_DEF, slice_span(first_token, ctx->prev_token_text));
-    e->flags = flags;
-    e->def.name_expr = name_expr;
-    e->def.type_expr = type_expr;
-    e->def.value_expr = value_expr;
-    return e;
-}
 
 static struct expr_decl *parse_decls(struct parse_ctx *ctx) {
-    struct expr_decl *d;
-
-    if (ctx->token != TOK_IDENT) {
-        return NULL;
-    }
-
-    d = allocate(ctx->arena, sizeof(struct expr_decl));
-    d->name_expr = parse_symbol(ctx);
-
-    if (ctx->token == TOK_COMMA) {
-        NEXT_TOKEN();
-        if (ctx->token != TOK_IDENT) {
-            PARSE_ERR("unexpected identifier after ',' in declaration");
-        }
+    skip_whitespace(ctx);
+    char *start = ctx->ptr;
+    struct expr_decl *d = allocate(ctx->arena, sizeof(struct expr_decl));
+    expect_ident(ctx, "for declaration");
+    d->name_expr = symbol_create(ctx, start);
+    skip_whitespace(ctx);
+    if (match_char(ctx, ',')) {
         d->next = parse_decls(ctx);
         d->type_expr = d->next->type_expr;
         d->value_expr = d->next->value_expr;
         d->is_static = d->next->is_static;
     }
     else {
-        if (ctx->token == TOK_COLON) {
-            NEXT_TOKEN();
-            if (ctx->token == TOK_KW_STATIC) {
+        if (match_char(ctx, ':')) {
+            skip_whitespace(ctx);
+            if (match_keyword(ctx, "static")) {
                 d->is_static = true;
-                NEXT_TOKEN();
+                skip_whitespace(ctx);
             }
             d->type_expr = parse_expr(ctx);
         }
-
-        if (ctx->token == TOK_ASSIGN) {
-            NEXT_TOKEN();
+        if (match_char(ctx, '=')) {
+            skip_whitespace(ctx);
             d->value_expr = parse_expr(ctx);
         }
-
-        if (ctx->token == TOK_SEMICOLON) {
-            NEXT_TOKEN();
+        if (match_char(ctx, ';')) {
+            skip_whitespace(ctx);
             d->next = parse_decls(ctx);
         }
     }
-
     return d;
 }
 
-static struct expr *do_parse_module(struct parse_ctx *ctx) {
-    if (setjmp(ctx->error_jmp_buf)) {
-        return NULL;
-    }
-
-    NEXT_TOKEN();
-    slice_t first_token = ctx->token_text;
-
-    struct expr *body = parse_expr_seq(ctx);
-
-    if (ctx->token != TOK_END) {
-        PARSE_ERR("unexpected token in module");
-    }
-
-    struct expr *result = expr_create(ctx, EXPR_STRUCT, slice_span(first_token, ctx->prev_token_text));
-    result->struc.body_expr = body;
-    return result;
-}
-
-struct expr *parse_module(struct module_ctx *mod_ctx, slice_t source_text) {
-    struct parse_ctx parse_ctx = {0};
-    parse_ctx.arena = &mod_ctx->arena.a;
-    parse_ctx.scan_ctx.cursor = source_text.ptr;
-    parse_ctx.global_ctx = mod_ctx->global_ctx;
-    parse_ctx.mod_ctx = mod_ctx;
-    parse_ctx.err_ctx = &mod_ctx->err_ctx;
-    return do_parse_module(&parse_ctx);
-}
-
-struct expr *parse_struct(struct parse_ctx *ctx) {
-    slice_t first_token = ctx->token_text;
-    
-    assert(ctx->token == TOK_KW_STRUCT);
-    NEXT_TOKEN();
-
-    struct expr *body = parse_expr_seq(ctx);
-
-    if (ctx->token != TOK_KW_END) {
-        PARSE_ERR("expected 'end' after struct definition");
-    }
-    NEXT_TOKEN();
-
-    struct expr *result = expr_create(ctx, EXPR_STRUCT, slice_span(first_token, ctx->prev_token_text));
-    result->struc.body_expr = body;
-    return result;
-}
-
-static struct expr *parse_fun(struct parse_ctx *ctx) {
+static struct expr *parse_fun(struct parse_ctx *ctx, char *start) {
     struct expr *return_type_expr = NULL, *body_expr = NULL;
     struct expr_decl *params = NULL;
-    slice_t first_token = ctx->token_text;
 
-    assert(ctx->token == TOK_KW_FUN);
-    NEXT_TOKEN();
-
-    if (ctx->token == TOK_LPAREN) {
-        NEXT_TOKEN();
-        if (ctx->token == TOK_RPAREN) {
-            NEXT_TOKEN();
-        }
-        else {
+    skip_whitespace(ctx);
+    if (match_char(ctx, '(')) {
+        skip_whitespace(ctx);
+        if (!match_char(ctx, ')')) {
             params = parse_decls(ctx);
-            if (ctx->token != TOK_RPAREN) {
-                PARSE_ERR("expected ')' after parameter list");
-            }
-            NEXT_TOKEN();
+            expect_char(ctx, ')', "after parameter list");
+            skip_whitespace(ctx);
         }
+        skip_whitespace(ctx);
     }
 
-    if (ctx->token == TOK_COLON) {
-        NEXT_TOKEN();
+    if (match_char(ctx, ':')) {
+        skip_whitespace(ctx);
         return_type_expr = parse_expr(ctx);
+        skip_whitespace(ctx);
     }
 
-    if (ctx->token == TOK_RARROW) {
-        NEXT_TOKEN();
+    if (match_str(ctx, "->")) {
+        skip_whitespace(ctx);
         body_expr = parse_expr(ctx);
-
-        if (ctx->token == TOK_KW_END) {
-            NEXT_TOKEN();
-        }
     }
 
     if (!body_expr) {
@@ -298,40 +446,66 @@ static struct expr *parse_fun(struct parse_ctx *ctx) {
         }
     }
 
-    struct expr *result = expr_create(ctx, EXPR_FUN, slice_span(first_token, ctx->prev_token_text));
+    struct expr *result = expr_create(ctx, EXPR_FUN, SLICE_FROM_START);
     result->fun.params = params;
     result->fun.return_type_expr = return_type_expr;
     result->fun.body_expr = body_expr;
     return result;
 }
 
-static struct expr *parse_if(struct parse_ctx *ctx, bool is_elif) {
-    slice_t first_token = ctx->token_text;
-
-    assert(is_elif ? ctx->token == TOK_KW_ELIF : ctx->token == TOK_KW_IF);
-    NEXT_TOKEN();
-
-    struct expr *pred_expr = parse_expr(ctx);
-
-    if (ctx->token != TOK_KW_THEN) {
-        PARSE_ERR("expected 'then' after if condition");
+static struct expr *parse_def(struct parse_ctx *ctx, bool is_const, char *start) {
+    unsigned int flags = 0;
+    if (!is_const) {
+        flags |= EXPR_FLAG_DEF_VAR;
     }
-    NEXT_TOKEN();
+    skip_whitespace(ctx);
+    if (match_keyword(ctx, "static")) {
+        flags |= EXPR_FLAG_DEF_STATIC;
+        skip_whitespace(ctx);
+    }
+    char *sym_start = ctx->ptr;
+    expect_ident(ctx, "for declaration");
+    struct expr *name_expr = symbol_create(ctx, sym_start);
+    skip_whitespace(ctx);
+    struct expr *type_expr = NULL;
+    if (match_char(ctx, ':')) {
+        skip_whitespace(ctx);
+        type_expr = parse_expr(ctx);
+        skip_whitespace(ctx);
+    }
+    struct expr *value_expr = NULL;
+    if (match_char(ctx, '=')) {
+        skip_whitespace(ctx);
+        value_expr = parse_expr(ctx);
+    }
 
+    struct expr *e = expr_create(ctx, EXPR_DEF, SLICE_FROM_START);
+    e->flags = flags;
+    e->def.name_expr = name_expr;
+    e->def.type_expr = type_expr;
+    e->def.value_expr = value_expr;
+    return e;
+}
+
+static struct expr *parse_if(struct parse_ctx *ctx, bool is_elif, char *start) {
+    skip_whitespace(ctx);
+    struct expr *pred_expr = parse_expr(ctx);
+    skip_whitespace(ctx);
+    expect_keyword(ctx, "then", "after 'if' condition");
+    skip_whitespace(ctx);
     struct expr *then_expr = parse_expr_seq_as_block(ctx);
+    skip_whitespace(ctx);
 
+    char *after_then = ctx->ptr;
     struct expr *else_expr;
-    if (ctx->token == TOK_KW_ELSE) {
-        NEXT_TOKEN();
+    if (match_keyword(ctx, "else")) {
+        skip_whitespace(ctx);
         else_expr = parse_expr_seq_as_block(ctx);
-        if (ctx->token != TOK_KW_END) {
-            PARSE_ERR("expected 'end' to terminate 'if'");
-        }
-        NEXT_TOKEN();
-    } else if (ctx->token == TOK_KW_ELIF) {
-        else_expr = parse_if(ctx, true);
-    } else if (ctx->token == TOK_KW_END) {
-        NEXT_TOKEN();
+        skip_whitespace(ctx);
+        expect_keyword(ctx, "end", "to terminate 'if'");
+    } else if (match_keyword(ctx, "elif")) {
+        else_expr = parse_if(ctx, true, after_then);
+    } else if (match_keyword(ctx, "end")) {
         slice_t text = then_expr->source_text;
         text.ptr += text.len;
         text.len = 0;
@@ -340,191 +514,168 @@ static struct expr *parse_if(struct parse_ctx *ctx, bool is_elif) {
         PARSE_ERR("expected 'elif', 'else' or 'end' to terminate");
     }
 
-    struct expr *result = expr_create(ctx, EXPR_COND, slice_span(first_token, else_expr->source_text));
+    struct expr *result = expr_create(ctx, EXPR_COND, SLICE_FROM_START);
     result->cond.pred_expr = pred_expr;
     result->cond.then_expr = then_expr;
     result->cond.else_expr = else_expr;
     return result;
 }
 
-static struct expr *parse_while(struct parse_ctx *ctx) {
-    assert(ctx->token == TOK_KW_WHILE);
-    return NULL;
-}
-
-static struct expr_link *parse_args(struct parse_ctx *ctx) {
-    struct expr_link *a;
-    
-    if (ctx->token == TOK_RPAREN) {
-        NEXT_TOKEN();
-        return NULL;
+static struct expr *parse_single_arg_prim(struct parse_ctx *ctx, int prim, char *start) {
+    char *after_ident = ctx->ptr;
+    skip_whitespace(ctx);
+    if (!match_char(ctx, '(')) {
+        PARSE_ERR("expected '(' after '%.*s'", after_ident - start, start);
     }
-
-    a = allocate(ctx->arena, sizeof(struct expr_link));
-    a->expr = parse_expr(ctx);
-
-    if (ctx->token == TOK_COMMA) {
-        NEXT_TOKEN();
-        a->next = parse_args(ctx);
-    }
-    else {
-        if (ctx->token == TOK_RPAREN) {
-            NEXT_TOKEN();
-        }
-        else {
-            PARSE_ERR("expected ')' after argument list");
-        }
-    }
-
-    return a;
-}
-
-static struct expr *parse_prim_call(struct parse_ctx *ctx, int prim, uint arg_count) {
-    slice_t name = ctx->token_text;
-
-    NEXT_TOKEN();
-    if (ctx->token != TOK_LPAREN) {
-        PARSE_ERR("expected '(' after '%.*s'", name.len, name.ptr);
-    }
-    NEXT_TOKEN();
-
-    struct expr_link *args = parse_args(ctx);
-    if (expr_list_length(args) != arg_count) {
-        PARSE_ERR("expected %d arguments for '%.*s'", arg_count, name.len, name.ptr);
-    }
-
-    struct expr *result = expr_create(ctx, EXPR_PRIM, slice_span(name, ctx->prev_token_text));
-    result->prim.kind = prim;
-    for (uint i = 0; i < arg_count; ++i, args = args->next) {
-        result->prim.arg_exprs[i] = args->expr;
-    }
-
-    return result;
-}
-
-static struct expr *parse_single_arg_prim(struct parse_ctx *ctx, int prim) {
-    slice_t first_token = ctx->token_text;
-    NEXT_TOKEN();
-    if (ctx->token != TOK_LPAREN) {
-        PARSE_ERR("expected '(' after 'expr'");
-    }
-    NEXT_TOKEN();
+    skip_whitespace(ctx);
     struct expr *e = parse_expr(ctx);
-    if (ctx->token != TOK_RPAREN) {
-        PARSE_ERR("expected ')' after 'expr' expression");
+    if (!match_char(ctx, ')')) {
+        PARSE_ERR("expected ')' after argument to '%.*s'", after_ident - start, start);
     }
-    NEXT_TOKEN();
-    struct expr *result = expr_create(ctx, EXPR_PRIM, slice_span(first_token, ctx->prev_token_text));
+    struct expr *result = expr_create(ctx, EXPR_PRIM, SLICE_FROM_START);
     result->prim.kind = prim;
     result->prim.arg_exprs[0] = e;
     return result;
 }
 
-static struct expr *parse_int(struct parse_ctx *ctx, int offset, int base) {
-    struct expr *result = expr_create(ctx, EXPR_CONST, ctx->token_text);
-    char *end = NULL;
-    // TODO: parse negative signed numbers as such here rather than parsing unary negation of positive number
-    uint64_t value = my_strtoull(ctx->token_text.ptr + offset, &end, base);
-    assert(end == ctx->token_text.ptr + ctx->token_text.len);
-    if (value <= INT64_MAX) {
-        result->c.tag = &type_int;
-        result->c.integer = (int64_t)value;
-    } else {
-        result->c.tag = &type_uint;
-        result->c.uinteger = value;
-    }
-    NEXT_TOKEN();
-    return result;
-}
-
-static struct expr *parse_real(struct parse_ctx *ctx) {
-    struct expr *result = expr_create(ctx, EXPR_CONST, ctx->token_text);
-    const char *end = NULL;
-    result->c.tag = &type_real;
-    result->c.real = my_strtod(ctx->token_text.ptr, &end);
-    assert(end == ctx->token_text.ptr + ctx->token_text.len);
-    NEXT_TOKEN();
-    return result;
-}
-
-static struct expr *parse_unary(struct parse_ctx *ctx, int prim) {
-    slice_t first_token = ctx->token_text;
-    NEXT_TOKEN();
-    struct expr *arg = parse_infix(ctx, HIGHEST_PRECEDENCE);
-    struct expr *result = expr_create(ctx, EXPR_PRIM, slice_span(first_token, arg->source_text));
-    result->prim.kind = prim;
-    result->prim.arg_exprs[0] = arg;
-    return result;
-}
-
 static struct expr *parse_atom(struct parse_ctx *ctx) {
-    struct expr *result;
-    slice_t first_token = ctx->token_text;
-
-    switch (ctx->token) {
-    case TOK_LPAREN:
-        NEXT_TOKEN();
-        if (ctx->token == TOK_RPAREN) {
-            result = unit_create(ctx, slice_span(first_token, ctx->token_text));
+    char *start = ctx->ptr;
+    switch (*start) {
+    case '(':
+        ++ctx->ptr;
+        skip_whitespace(ctx);
+        if (match_char(ctx, ')')) {
+            return unit_create(ctx, SLICE_FROM_START);
         } else {
-            result = parse_expr(ctx);
-            if (ctx->token != TOK_RPAREN) {
-                PARSE_ERR("expected ')'");
-            }
+            struct expr *result = parse_expr(ctx);
+            skip_whitespace(ctx);
+            expect_char(ctx, ')', "after expression following '('");
+            return result;
         }
-        NEXT_TOKEN();
         break;
-    case TOK_IDENT:
-        if (!slice_str_cmp(ctx->token_text, "assert")) {
-            return parse_prim_call(ctx, PRIM_ASSERT, 1);
+    case '+':
+        ++ctx->ptr;
+        return parse_unary(ctx, PRIM_PLUS, start);
+    case '-':
+        ++ctx->ptr;
+        return parse_unary(ctx, PRIM_NEGATE, start);
+    case '~':
+        ++ctx->ptr;
+        return parse_unary(ctx, PRIM_BITWISE_NOT, start);
+    case '0':
+    case '1':
+    case '2':
+    case '3':
+    case '4':
+    case '5':
+    case '6':
+    case '7':
+    case '8':
+    case '9':
+        return parse_number(ctx);
+    case '"':
+        return parse_string(ctx);
+    case 'a':
+        if (match_keyword(ctx, "assert")) {
+            return parse_single_arg_prim(ctx, PRIM_ASSERT, start);
         }
-        if (!slice_str_cmp(ctx->token_text, "quote")) {
-            return parse_single_arg_prim(ctx, PRIM_QUOTE);
-        }
-        if (!slice_str_cmp(ctx->token_text, "splice")) {
-            return parse_single_arg_prim(ctx, PRIM_SPLICE);
-        }
-        if (!slice_str_cmp(ctx->token_text, "print")) {
-            return parse_single_arg_prim(ctx, PRIM_PRINT);
-        }
-        result = parse_symbol(ctx);
         break;
-    case TOK_PLUS: return parse_unary(ctx, PRIM_PLUS);
-    case TOK_MINUS: return parse_unary(ctx, PRIM_NEGATE);
-    case TOK_KW_NOT: return parse_unary(ctx, PRIM_LOGI_NOT);
-    case TOK_NOT_BW: return parse_unary(ctx, PRIM_BITWISE_NOT);
-    case TOK_KW_TRUE: NEXT_TOKEN(); return bool_create(ctx, true, first_token);
-    case TOK_KW_FALSE: NEXT_TOKEN(); return bool_create(ctx, false, first_token);
-    case TOK_BIN: return parse_int(ctx, 2, 2);
-    case TOK_OCT: return parse_int(ctx, 0, 8);
-    case TOK_DEC: return parse_int(ctx, 0, 10);
-    case TOK_HEX: return parse_int(ctx, 2, 16);
-    case TOK_REAL: return parse_real(ctx);
-    case TOK_STRING: NEXT_TOKEN(); return string_create(ctx, first_token);
-    case TOK_KW_STRUCT: return parse_struct(ctx);
-    case TOK_KW_SELF: NEXT_TOKEN(); return expr_create(ctx, EXPR_SELF, first_token);
-    case TOK_KW_FUN: return parse_fun(ctx);
-    case TOK_KW_CONST:
-    case TOK_KW_VAR: return parse_def(ctx);
-    case TOK_KW_IF: return parse_if(ctx, false);
-    case TOK_KW_WHILE: return parse_while(ctx);
-    case TOK_KW_IMPORT: return parse_single_arg_prim(ctx, PRIM_IMPORT);
-    case TOK_KW_STATIC: return parse_single_arg_prim(ctx, PRIM_STATIC);
-    case TOK_KW_BEGIN: return parse_block(ctx);
-    default:
-        PARSE_ERR("unexpected token in expression");
+    case 'b':
+        if (match_keyword(ctx, "begin")) {
+            return parse_block(ctx, start);
+        }
+        break;
+    case 'c':
+        if (match_keyword(ctx, "const")) {
+            return parse_def(ctx, true, start);
+        }
+        break;
+    case 'f':
+        if (match_keyword(ctx, "false")) {
+            return bool_create(ctx, false, SLICE_FROM_START);
+        }
+        if (match_keyword(ctx, "fun")) {
+            return parse_fun(ctx, start);
+        }
+        break;
+    case 'i':
+        if (match_keyword(ctx, "if")) {
+            return parse_if(ctx, false, start);
+        }
+        if (match_keyword(ctx, "import")) {
+            return parse_single_arg_prim(ctx, PRIM_IMPORT, start);
+        }
+        break;
+    case 'n':
+        if (match_keyword(ctx, "not")) {
+            return parse_unary(ctx, PRIM_LOGI_NOT, start);
+        }
+        break;
+    case 'p':
+        if (match_keyword(ctx, "print")) {
+            return parse_single_arg_prim(ctx, PRIM_PRINT, start);
+        }
+        break;
+    case 'q':
+        if (match_keyword(ctx, "quote")) {
+            return parse_single_arg_prim(ctx, PRIM_QUOTE, start);
+        }
+        break;
+    case 's':
+        if (match_keyword(ctx, "self")) {
+            return expr_create(ctx, EXPR_SELF, SLICE_FROM_START);
+        }
+        if (match_keyword(ctx, "struct")) {
+            return parse_struct(ctx, start);
+        }
+        if (match_keyword(ctx, "static")) {
+            return parse_single_arg_prim(ctx, PRIM_STATIC, start);
+        }
+        if (match_keyword(ctx, "splice")) {
+            return parse_single_arg_prim(ctx, PRIM_SPLICE, start);
+        }
+        break;
+    case 't':
+        if (match_keyword(ctx, "true")) {
+            return bool_create(ctx, true, SLICE_FROM_START);
+        }
+        break;
+    case 'v':
+        if (match_keyword(ctx, "var")) {
+            return parse_def(ctx, false, start);
+        }
+        break;
     }
-
-    return result;
+    
+    if (match_ident(ctx)) {
+        return symbol_create(ctx, start);
+    }
+    PARSE_ERR("unexpected input while parsing atom");
 }
 
+
+
+
+static struct expr_link *parse_args(struct parse_ctx *ctx) {
+    if (match_char(ctx, ')')) {
+        return NULL;
+    }
+    struct expr_link *a = allocate(ctx->arena, sizeof(struct expr_link));
+    a->expr = parse_expr(ctx);
+    skip_whitespace(ctx);
+    if (match_char(ctx, ',')) {
+        skip_whitespace(ctx);
+        a->next = parse_args(ctx);
+    } else {
+        expect_char(ctx, ')', "after argument list");
+    }
+    return a;
+}
 static struct expr *parse_call(struct parse_ctx *ctx, struct expr *callable_expr) {
-    assert(ctx->token == TOK_LPAREN);
-    NEXT_TOKEN();
-
+    skip_whitespace(ctx);
     struct expr_link *args = parse_args(ctx);
-
-    struct expr *result = expr_create(ctx, EXPR_CALL, slice_span(callable_expr->source_text, ctx->prev_token_text));
+    char *start = callable_expr->source_text.ptr;
+    struct expr *result = expr_create(ctx, EXPR_CALL, SLICE_FROM_START);
     result->call.callable_expr = callable_expr;
     result->call.args = args;
     return result;
@@ -540,7 +691,6 @@ static void quote_args(struct parse_ctx *ctx, struct expr_link *arg) {
     arg->expr = e;
     quote_args(ctx, arg->next);
 }
-
 static struct expr *macroify(struct parse_ctx *ctx, struct expr *call_expr) {
     struct expr *e = expr_create(ctx, EXPR_PRIM, call_expr->source_text);
     e->prim.kind = PRIM_SPLICE;
@@ -549,11 +699,12 @@ static struct expr *macroify(struct parse_ctx *ctx, struct expr *call_expr) {
     return e;
 }
 
-#define HANDLE_INFIX_PRIM(Precedence, Prim, LeftAssoc) \
+#define HANDLE_INFIX_PRIM(Precedence, Prim, SkipChars) \
     { \
         if (Precedence < min_precedence) { return result; } \
-        NEXT_TOKEN(); \
-        struct expr *rhs = parse_infix(ctx, Precedence + LeftAssoc); \
+        ctx->ptr += SkipChars; \
+        skip_whitespace(ctx); \
+        struct expr *rhs = parse_infix(ctx, Precedence + 1); \
         result = prim_create_bin(ctx, Prim, result, rhs); \
         continue; \
     }
@@ -562,53 +713,94 @@ static struct expr *parse_infix(struct parse_ctx *ctx, int min_precedence) {
     struct expr *result = parse_atom(ctx);
 
     while (true) {
-        switch (ctx->token) {
-        case TOK_ASSIGN:    HANDLE_INFIX_PRIM(LOWEST_PRECEDENCE, PRIM_ASSIGN, 1)
+        skip_whitespace(ctx);
 
-        case TOK_KW_OR:     HANDLE_INFIX_PRIM(2, PRIM_LOGI_OR, 1)
+        switch (*ctx->ptr) {
+        case '=':
+            if (ctx->ptr[1] == '=') HANDLE_INFIX_PRIM(7, PRIM_EQ, 2)
+            else HANDLE_INFIX_PRIM(LOWEST_PRECEDENCE, PRIM_ASSIGN, 1)
 
-        case TOK_KW_AND:    HANDLE_INFIX_PRIM(3, PRIM_LOGI_AND, 1)
+        case 'o':
+            if (match_keyword(ctx, "or")) HANDLE_INFIX_PRIM(2, PRIM_LOGI_OR, 1)
+            else return result;
 
-        case TOK_OR_BW:     HANDLE_INFIX_PRIM(4, PRIM_BITWISE_OR, 1)
+        case 'a':
+            if (match_keyword(ctx, "and")) HANDLE_INFIX_PRIM(3, PRIM_LOGI_AND, 1)
+            else return result;
 
-        case TOK_XOR_BW:    HANDLE_INFIX_PRIM(5, PRIM_BITWISE_XOR, 1)
+        case '|': HANDLE_INFIX_PRIM(4, PRIM_BITWISE_OR, 1)
 
-        case TOK_AND_BW:    HANDLE_INFIX_PRIM(6, PRIM_BITWISE_AND, 1)
+        case '^': HANDLE_INFIX_PRIM(5, PRIM_BITWISE_XOR, 1)
 
-        case TOK_EQ:        HANDLE_INFIX_PRIM(7, PRIM_EQ, 1)
-        case TOK_NEQ:       HANDLE_INFIX_PRIM(7, PRIM_NEQ, 1)
+        case '&': HANDLE_INFIX_PRIM(6, PRIM_BITWISE_AND, 1)
 
-        case TOK_LT:        HANDLE_INFIX_PRIM(8, PRIM_LT, 1)
-        case TOK_GT:        HANDLE_INFIX_PRIM(8, PRIM_GT, 1)
-        case TOK_LTEQ:      HANDLE_INFIX_PRIM(8, PRIM_LTEQ, 1)
-        case TOK_GTEQ:      HANDLE_INFIX_PRIM(8, PRIM_GTEQ, 1)
-
-        case TOK_LSH:       HANDLE_INFIX_PRIM(9, PRIM_BITWISE_LSH, 1)
-        case TOK_RSH:       HANDLE_INFIX_PRIM(9, PRIM_BITWISE_RSH, 1)
-
-        case TOK_PLUS:      HANDLE_INFIX_PRIM(10, PRIM_ADD, 1)
-        case TOK_MINUS:     HANDLE_INFIX_PRIM(10, PRIM_SUB, 1)
-
-        case TOK_MUL:       HANDLE_INFIX_PRIM(11, PRIM_MUL, 1)
-        case TOK_DIV:       HANDLE_INFIX_PRIM(11, PRIM_DIV, 1)
-        case TOK_MOD:       HANDLE_INFIX_PRIM(11, PRIM_MOD, 1)
-
-        case TOK_PERIOD:    HANDLE_INFIX_PRIM(HIGHEST_PRECEDENCE, PRIM_DOT, 1)
-        case TOK_LPAREN:
-            if (HIGHEST_PRECEDENCE < min_precedence) { return result; }
-            result = parse_call(ctx, result);
-            continue;
-        case TOK_NOT:
-            if (HIGHEST_PRECEDENCE < min_precedence) { return result; }
-            NEXT_TOKEN();
-            if (ctx->token != TOK_LPAREN) {
-                PARSE_ERR("expected '(' after postfix '!'");
+        case '!':
+            if (ctx->ptr[1] == '=') HANDLE_INFIX_PRIM(7, PRIM_NEQ, 2)
+            else {
+                if (HIGHEST_PRECEDENCE < min_precedence) { return result; }
+                ++ctx->ptr;
+                skip_whitespace(ctx);
+                expect_char(ctx, '(', "after postfix '!'");
+                result = parse_call(ctx, result);
+                result = macroify(ctx, result);
+                continue;
             }
+
+        case '<':
+            if (ctx->ptr[1] == '=') HANDLE_INFIX_PRIM(8, PRIM_LTEQ, 2)
+            else if (ctx->ptr[1] == '<') HANDLE_INFIX_PRIM(9, PRIM_BITWISE_LSH, 2)
+            else HANDLE_INFIX_PRIM(8, PRIM_LT, 1)
+        case '>':
+            if (ctx->ptr[1] == '=') HANDLE_INFIX_PRIM(8, PRIM_GTEQ, 2)
+            else if (ctx->ptr[1] == '>') HANDLE_INFIX_PRIM(9, PRIM_BITWISE_RSH, 2)
+            else HANDLE_INFIX_PRIM(8, PRIM_GT, 1)
+
+        case '+': HANDLE_INFIX_PRIM(10, PRIM_ADD, 1)
+        case '-':
+            if (ctx->ptr[1] != '>') HANDLE_INFIX_PRIM(10, PRIM_SUB, 1)
+            else return result;
+
+        case '*': HANDLE_INFIX_PRIM(11, PRIM_MUL, 1)
+        case '/': HANDLE_INFIX_PRIM(11, PRIM_DIV, 1)
+        case '%': HANDLE_INFIX_PRIM(11, PRIM_MOD, 1)
+
+        case '.': HANDLE_INFIX_PRIM(HIGHEST_PRECEDENCE, PRIM_DOT, 1)
+        case '(':
+            if (HIGHEST_PRECEDENCE < min_precedence) { return result; }
+            ++ctx->ptr;
             result = parse_call(ctx, result);
-            result = macroify(ctx, result);
             continue;
 
         default: return result;
         }
     }
+}
+
+static struct expr *do_parse_module(struct parse_ctx *ctx) {
+    skip_whitespace(ctx);
+    char *start = ctx->ptr;
+    struct expr *body = parse_expr_seq(ctx);
+    struct expr *result = expr_create(ctx, EXPR_STRUCT, SLICE_FROM_START);
+    skip_whitespace(ctx);
+    if (*ctx->ptr) {
+        PARSE_ERR("unexpected input in module");
+    }
+    result->struc.body_expr = body;
+    return result;
+}
+
+struct expr *parse_module(struct module_ctx *mod_ctx, slice_t source_text) {
+    struct parse_ctx parse_ctx = {0};
+    parse_ctx.arena = &mod_ctx->arena.a;
+    parse_ctx.global_ctx = mod_ctx->global_ctx;
+    parse_ctx.mod_ctx = mod_ctx;
+    parse_ctx.err_ctx = &mod_ctx->err_ctx;
+
+    parse_ctx.ptr = source_text.ptr;
+
+    if (setjmp(parse_ctx.error_jmp_buf)) {
+        return NULL;
+    }
+
+    return do_parse_module(&parse_ctx);
 }

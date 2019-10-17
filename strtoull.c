@@ -51,7 +51,7 @@
  *
  * @returns The converted value.
  */
-unsigned long long my_strtoull(const char *str, char **endptr, int base)
+unsigned long long my_strtoull(const char *str, const char **endptr, int base)
 {
 	const char *s;
 	unsigned long long acc, cutoff;

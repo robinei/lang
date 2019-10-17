@@ -1,5 +1,7 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include "mod.h"
 #include "peval.h"
 #include "error.h"
@@ -68,6 +70,7 @@ static void run_tests(char *filename) {
 }
 
 int main(int argc, char *argv[]) {
+    srand(time(NULL));
     if (argc == 3 && !strcmp(argv[1], "test")) {
         run_tests(argv[2]);
     }
