@@ -1,2 +1,2 @@
 
-self.getSecret = fun -> 666;
+Self.getSecret = fun() 666

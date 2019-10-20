@@ -116,7 +116,7 @@ void error_fprint(struct error_ctx *ctx, struct error_entry *entry, FILE *fp) {
     print_slice(fp, line);
     fputc('\n', fp);
     print_repeated(fp, ' ', col_num);
-    print_repeated(fp, '^', err_len);
+    print_repeated(fp, '^', err_len ? err_len : 1);
     fputc('\n', fp);
 }
 

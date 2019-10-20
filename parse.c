@@ -16,6 +16,10 @@ struct parse_ctx {
     struct error_ctx *err_ctx;
 
     char *ptr;
+    char *line_start;
+    int line;
+    int current_indent;
+    bool skip_newline;
     jmp_buf error_jmp_buf;
 };
 
@@ -101,20 +105,22 @@ static bool is_reserved_word(char *str, int len) {
         if (len == 3 && !memcmp(str, "and", len)) { return true; }
         if (len == 6 && !memcmp(str, "assert", len)) { return true; }
         break;
-    case 'b':
-        if (len == 5 && !memcmp(str, "begin", len)) { return true; }
-        break;
     case 'c':
         if (len == 5 && !memcmp(str, "const", len)) { return true; }
         break;
+    case 'd':
+        if (len == 2 && !memcmp(str, "do", len)) { return true; }
+        break;
     case 'e':
-        if (len == 3 && !memcmp(str, "end", len)) { return true; }
         if (len == 4 && !memcmp(str, "else", len)) { return true; }
         if (len == 4 && !memcmp(str, "elif", len)) { return true; }
         break;
     case 'f':
         if (len == 3 && !memcmp(str, "fun", len)) { return true; }
         if (len == 5 && !memcmp(str, "false", len)) { return true; }
+        break;
+    case 'F':
+        if (len == 3 && !memcmp(str, "Fun", len)) { return true; }
         break;
     case 'i':
         if (len == 2 && !memcmp(str, "if", len)) { return true; }
@@ -133,10 +139,12 @@ static bool is_reserved_word(char *str, int len) {
         if (len == 5 && !memcmp(str, "quote", len)) { return true; }
         break;
     case 's':
-        if (len == 4 && !memcmp(str, "self", len)) { return true; }
         if (len == 6 && !memcmp(str, "struct", len)) { return true; }
         if (len == 6 && !memcmp(str, "static", len)) { return true; }
         if (len == 6 && !memcmp(str, "splice", len)) { return true; }
+        break;
+    case 'S':
+        if (len == 4 && !memcmp(str, "Self", len)) { return true; }
         break;
     case 't':
         if (len == 4 && !memcmp(str, "then", len)) { return true; }
@@ -158,7 +166,7 @@ static bool match_ident(struct parse_ctx *ctx) {
         ++ctx->ptr;
     } while(is_non_leading_ident_char(*ctx->ptr));
     if (is_reserved_word(start, ctx->ptr - start)) {
-        return false;
+        PARSE_ERR("unexpected keyword '%.*s'", ctx->ptr - start, start);
     }
     return true;
 }
@@ -229,9 +237,40 @@ static void expect_char(struct parse_ctx *ctx, char ch, const char *context_info
     }
 }
 
+static void skip_leading_space(struct parse_ctx *ctx) {
+    ctx->current_indent = 0;
+    for (;;) {
+        switch (*ctx->ptr) {
+        case '\t':
+            PARSE_ERR("tabs are illegal as indentation");
+        case ' ':
+            ++ctx->current_indent;
+            ++ctx->ptr;
+            continue;
+        default:
+            return;
+        }
+    }
+}
+static void move_to_next_line(struct parse_ctx *ctx) {
+    assert(*ctx->ptr == '\n');
+    ++ctx->ptr;
+    ++ctx->line;
+    ctx->line_start = ctx->ptr;
+    skip_leading_space(ctx);
+}
 static void skip_whitespace(struct parse_ctx *ctx) {
     for (;;) {
-        if (is_space_char(*ctx->ptr)) {
+        switch (*ctx->ptr) {
+        case '\n':
+            if (!ctx->skip_newline) {
+                return;
+            }
+            move_to_next_line(ctx);
+            continue;
+        case '\r':
+        case '\t':
+        case ' ':
             ++ctx->ptr;
             continue;
         }
@@ -244,12 +283,28 @@ static void skip_whitespace(struct parse_ctx *ctx) {
             if (ch == '\0') {
                 return;
             }
-            ++ctx->ptr;
             if (ch == '\n') {
+                if (!ctx->skip_newline) {
+                    return;
+                }
+                move_to_next_line(ctx);
                 break;
             }
+            ++ctx->ptr;
         }
     }
+}
+static void skip_whitespace_including_newlines(struct parse_ctx *ctx) {
+    bool prev_skip_newline = ctx->skip_newline;
+    ctx->skip_newline = true;
+    skip_whitespace(ctx);
+    ctx->skip_newline = prev_skip_newline;
+}
+static void skip_whitespace_excluding_newlines(struct parse_ctx *ctx) {
+    bool prev_skip_newline = ctx->skip_newline;
+    ctx->skip_newline = false;
+    skip_whitespace(ctx);
+    ctx->skip_newline = prev_skip_newline;
 }
 
 
@@ -319,25 +374,59 @@ static struct expr *parse_number(struct parse_ctx *ctx) {
     }
 }
 
-static struct expr *maybe_parse_expr_seq(struct parse_ctx *ctx) {
-    char *start = ctx->ptr;
-    if (!*start || match_keyword(ctx, "end") || match_keyword(ctx, "elif") || match_keyword(ctx, "else")) {
-        ctx->ptr = start;
-        return NULL;
+static struct expr *parse_expr_seq_at_indent(struct parse_ctx *ctx, int indent_to_keep) {
+    struct expr *result = NULL;
+    struct expr *last_seq = NULL;
+    for (;;) {
+        skip_whitespace(ctx);
+        switch (*ctx->ptr) {
+        case '\n':
+            move_to_next_line(ctx);
+            continue;
+        case '\0':
+        case ')':
+        case ',':
+            goto out;
+        }
+        if (ctx->current_indent > indent_to_keep) {
+            PARSE_ERR("unexpectedly increased indentation");
+        }
+        if (ctx->current_indent < indent_to_keep) {
+            break;
+        }
+        struct expr *e = parse_infix(ctx, LOWEST_PRECEDENCE); /* allow '=' */
+        if (!result) {
+            result = e;
+        } else if (!last_seq) {
+            result = last_seq = prim_create_bin(ctx, PRIM_SEQ, result, e);
+        } else {
+            last_seq = last_seq->prim.arg_exprs[1] = prim_create_bin(ctx, PRIM_SEQ, last_seq->prim.arg_exprs[1], e);
+        }
     }
-    struct expr *first = parse_infix(ctx, LOWEST_PRECEDENCE); /* allow '=' operator */
-    skip_whitespace(ctx);
-    if (!match_char(ctx, ';')) {
-        return first;
+out:
+    if (!result) {
+        PARSE_ERR("expected block expression");
     }
-    skip_whitespace(ctx);
-    struct expr *rest = maybe_parse_expr_seq(ctx);
-    return rest ? prim_create_bin(ctx, PRIM_SEQ, first, rest) : first;
+    return result;
 }
 static struct expr *parse_expr_seq(struct parse_ctx *ctx) {
-    char *start = ctx->ptr;
-    struct expr *result = maybe_parse_expr_seq(ctx);
-    return result ? result : unit_create(ctx, SLICE_FROM_START); 
+    bool prev_skip_newline = ctx->skip_newline;
+    ctx->skip_newline = false;
+    skip_whitespace(ctx);
+    if (*ctx->ptr != '\n') {
+        // if an expression starts on the same line as a "block starter",
+        // then expect a single-line expression for this block
+        ctx->skip_newline = prev_skip_newline;
+        return parse_expr(ctx);
+    }
+    int initial_indent = ctx->current_indent;
+    move_to_next_line(ctx);
+    if (ctx->current_indent <= initial_indent) {
+        PARSE_ERR("expected indented expression");
+    }
+    struct expr *result = parse_expr_seq_at_indent(ctx, ctx->current_indent);
+    ctx->skip_newline = prev_skip_newline;
+    return result;
 }
 static struct expr *maybe_wrap_in_block(struct parse_ctx *ctx, struct expr *e, char *start) {
     if (e->kind == EXPR_BLOCK) {
@@ -350,25 +439,17 @@ static struct expr *maybe_wrap_in_block(struct parse_ctx *ctx, struct expr *e, c
     result->block.body_expr = e;
     return result;
 }
-static struct expr *parse_expr_seq_as_block(struct parse_ctx *ctx) {
+static struct expr *parse_expr_seq_and_wrap_in_block(struct parse_ctx *ctx) {
     char *start = ctx->ptr;
     struct expr *body = parse_expr_seq(ctx);
     return maybe_wrap_in_block(ctx, body, start);
 }
-static struct expr *parse_block(struct parse_ctx *ctx, char *start) {
-    skip_whitespace(ctx);
+static struct expr *parse_do(struct parse_ctx *ctx, char *start) {
     struct expr *body = parse_expr_seq(ctx);
-    skip_whitespace(ctx);
-    expect_keyword(ctx, "end", "after 'begin' block");
     return maybe_wrap_in_block(ctx, body, start);
 }
-
 static struct expr *parse_struct(struct parse_ctx *ctx, char *start) {
-    skip_whitespace(ctx);
     struct expr *body = parse_expr_seq(ctx);
-    skip_whitespace(ctx);
-    expect_keyword(ctx, "end", "after 'struct' definition");
-
     struct expr *result = expr_create(ctx, EXPR_STRUCT, SLICE_FROM_START);
     result->struc.body_expr = body;
     return result;
@@ -379,7 +460,7 @@ static struct expr_decl *parse_decls(struct parse_ctx *ctx) {
     skip_whitespace(ctx);
     char *start = ctx->ptr;
     struct expr_decl *d = allocate(ctx->arena, sizeof(struct expr_decl));
-    expect_ident(ctx, "for declaration");
+    expect_ident(ctx, "in declaration");
     d->name_expr = symbol_create(ctx, start);
     skip_whitespace(ctx);
     if (match_char(ctx, ',')) {
@@ -409,33 +490,30 @@ static struct expr_decl *parse_decls(struct parse_ctx *ctx) {
     return d;
 }
 
-static struct expr *parse_fun(struct parse_ctx *ctx, char *start) {
+static struct expr *parse_fun(struct parse_ctx *ctx, bool is_type, char *start) {
     struct expr *return_type_expr = NULL, *body_expr = NULL;
     struct expr_decl *params = NULL;
 
     skip_whitespace(ctx);
-    if (match_char(ctx, '(')) {
-        skip_whitespace(ctx);
-        if (!match_char(ctx, ')')) {
-            params = parse_decls(ctx);
-            expect_char(ctx, ')', "after parameter list");
-            skip_whitespace(ctx);
-        }
+    expect_char(ctx, '(', "after 'fun'");
+    bool prev_skip_newline = ctx->skip_newline;
+    ctx->skip_newline = true;
+    skip_whitespace(ctx);
+    if (ctx->ptr[0] != ')' && !(ctx->ptr[0] == '-' && ctx->ptr[1] == '>')) {
+        params = parse_decls(ctx);
         skip_whitespace(ctx);
     }
-
-    if (match_char(ctx, ':')) {
+    if (match_str(ctx, "->")) {
         skip_whitespace(ctx);
         return_type_expr = parse_expr(ctx);
         skip_whitespace(ctx);
     }
-
-    if (match_str(ctx, "->")) {
+    expect_char(ctx, ')', "after parameter list");
+    ctx->skip_newline = prev_skip_newline;
+    if (!is_type) {
         skip_whitespace(ctx);
-        body_expr = parse_expr(ctx);
-    }
-
-    if (!body_expr) {
+        body_expr = parse_expr_seq_and_wrap_in_block(ctx);
+    } else {
         for (struct expr_decl *p = params; p; p = p->next) {
             if (!p->type_expr) {
                 PARSE_ERR("incomplete parameter types in preceding function type definition");
@@ -464,7 +542,7 @@ static struct expr *parse_def(struct parse_ctx *ctx, bool is_const, char *start)
         skip_whitespace(ctx);
     }
     char *sym_start = ctx->ptr;
-    expect_ident(ctx, "for declaration");
+    expect_ident(ctx, "in declaration");
     struct expr *name_expr = symbol_create(ctx, sym_start);
     skip_whitespace(ctx);
     struct expr *type_expr = NULL;
@@ -488,32 +566,31 @@ static struct expr *parse_def(struct parse_ctx *ctx, bool is_const, char *start)
 }
 
 static struct expr *parse_if(struct parse_ctx *ctx, bool is_elif, char *start) {
+    bool prev_skip_newline = ctx->skip_newline;
+    ctx->skip_newline = true;
     skip_whitespace(ctx);
     struct expr *pred_expr = parse_expr(ctx);
     skip_whitespace(ctx);
     expect_keyword(ctx, "then", "after 'if' condition");
-    skip_whitespace(ctx);
-    struct expr *then_expr = parse_expr_seq_as_block(ctx);
-    skip_whitespace(ctx);
-
+    int then_indent = ctx->current_indent;
+    struct expr *then_expr = parse_expr_seq_and_wrap_in_block(ctx);
     char *after_then = ctx->ptr;
+    skip_whitespace(ctx);
+    ctx->skip_newline = prev_skip_newline;
+    if (ctx->current_indent > then_indent) {
+        PARSE_ERR("unexpected indentation");
+    }
     struct expr *else_expr;
-    if (match_keyword(ctx, "else")) {
-        skip_whitespace(ctx);
-        else_expr = parse_expr_seq_as_block(ctx);
-        skip_whitespace(ctx);
-        expect_keyword(ctx, "end", "to terminate 'if'");
-    } else if (match_keyword(ctx, "elif")) {
+    if (ctx->current_indent == then_indent && match_keyword(ctx, "else")) {
+        else_expr = parse_expr_seq_and_wrap_in_block(ctx);
+    } else if (ctx->current_indent == then_indent && match_keyword(ctx, "elif")) {
         else_expr = parse_if(ctx, true, after_then);
-    } else if (match_keyword(ctx, "end")) {
+    } else {
         slice_t text = then_expr->source_text;
         text.ptr += text.len;
         text.len = 0;
         else_expr = unit_create(ctx, text);
-    } else {
-        PARSE_ERR("expected 'elif', 'else' or 'end' to terminate");
     }
-
     struct expr *result = expr_create(ctx, EXPR_COND, SLICE_FROM_START);
     result->cond.pred_expr = pred_expr;
     result->cond.then_expr = then_expr;
@@ -527,11 +604,14 @@ static struct expr *parse_single_arg_prim(struct parse_ctx *ctx, int prim, char 
     if (!match_char(ctx, '(')) {
         PARSE_ERR("expected '(' after '%.*s'", after_ident - start, start);
     }
+    bool prev_skip_newline = ctx->skip_newline;
+    ctx->skip_newline = true;
     skip_whitespace(ctx);
     struct expr *e = parse_expr(ctx);
     if (!match_char(ctx, ')')) {
         PARSE_ERR("expected ')' after argument to '%.*s'", after_ident - start, start);
     }
+    ctx->skip_newline = prev_skip_newline;
     struct expr *result = expr_create(ctx, EXPR_PRIM, SLICE_FROM_START);
     result->prim.kind = prim;
     result->prim.arg_exprs[0] = e;
@@ -541,18 +621,23 @@ static struct expr *parse_single_arg_prim(struct parse_ctx *ctx, int prim, char 
 static struct expr *parse_atom(struct parse_ctx *ctx) {
     char *start = ctx->ptr;
     switch (*start) {
-    case '(':
+    case '(': {
         ++ctx->ptr;
+        bool prev_skip_newline = ctx->skip_newline;
+        ctx->skip_newline = true;
         skip_whitespace(ctx);
         if (match_char(ctx, ')')) {
+            ctx->skip_newline = prev_skip_newline;
             return unit_create(ctx, SLICE_FROM_START);
         } else {
             struct expr *result = parse_expr(ctx);
             skip_whitespace(ctx);
             expect_char(ctx, ')', "after expression following '('");
+            ctx->skip_newline = prev_skip_newline;
             return result;
         }
         break;
+    }
     case '+':
         ++ctx->ptr;
         return parse_unary(ctx, PRIM_PLUS, start);
@@ -580,14 +665,14 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
             return parse_single_arg_prim(ctx, PRIM_ASSERT, start);
         }
         break;
-    case 'b':
-        if (match_keyword(ctx, "begin")) {
-            return parse_block(ctx, start);
-        }
-        break;
     case 'c':
         if (match_keyword(ctx, "const")) {
             return parse_def(ctx, true, start);
+        }
+        break;
+    case 'd':
+        if (match_keyword(ctx, "do")) {
+            return parse_do(ctx, start);
         }
         break;
     case 'f':
@@ -595,7 +680,12 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
             return bool_create(ctx, false, SLICE_FROM_START);
         }
         if (match_keyword(ctx, "fun")) {
-            return parse_fun(ctx, start);
+            return parse_fun(ctx, false, start);
+        }
+        break;
+    case 'F':
+        if (match_keyword(ctx, "Fun")) {
+            return parse_fun(ctx, true, start);
         }
         break;
     case 'i':
@@ -622,9 +712,6 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
         }
         break;
     case 's':
-        if (match_keyword(ctx, "self")) {
-            return expr_create(ctx, EXPR_SELF, SLICE_FROM_START);
-        }
         if (match_keyword(ctx, "struct")) {
             return parse_struct(ctx, start);
         }
@@ -635,6 +722,10 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
             return parse_single_arg_prim(ctx, PRIM_SPLICE, start);
         }
         break;
+    case 'S':
+        if (match_keyword(ctx, "Self")) {
+            return expr_create(ctx, EXPR_SELF, SLICE_FROM_START);
+        }
     case 't':
         if (match_keyword(ctx, "true")) {
             return bool_create(ctx, true, SLICE_FROM_START);
@@ -672,8 +763,11 @@ static struct expr_link *parse_args(struct parse_ctx *ctx) {
     return a;
 }
 static struct expr *parse_call(struct parse_ctx *ctx, struct expr *callable_expr) {
+    bool prev_skip_newline = ctx->skip_newline;
+    ctx->skip_newline = true;
     skip_whitespace(ctx);
     struct expr_link *args = parse_args(ctx);
+    ctx->skip_newline = prev_skip_newline;
     char *start = callable_expr->source_text.ptr;
     struct expr *result = expr_create(ctx, EXPR_CALL, SLICE_FROM_START);
     result->call.callable_expr = callable_expr;
@@ -777,9 +871,9 @@ static struct expr *parse_infix(struct parse_ctx *ctx, int min_precedence) {
 }
 
 static struct expr *do_parse_module(struct parse_ctx *ctx) {
-    skip_whitespace(ctx);
     char *start = ctx->ptr;
-    struct expr *body = parse_expr_seq(ctx);
+    skip_leading_space(ctx);
+    struct expr *body = parse_expr_seq_at_indent(ctx, 0);
     struct expr *result = expr_create(ctx, EXPR_STRUCT, SLICE_FROM_START);
     skip_whitespace(ctx);
     if (*ctx->ptr) {
@@ -796,7 +890,7 @@ struct expr *parse_module(struct module_ctx *mod_ctx, slice_t source_text) {
     parse_ctx.mod_ctx = mod_ctx;
     parse_ctx.err_ctx = &mod_ctx->err_ctx;
 
-    parse_ctx.ptr = source_text.ptr;
+    parse_ctx.line_start = parse_ctx.ptr = source_text.ptr;
 
     if (setjmp(parse_ctx.error_jmp_buf)) {
         return NULL;
