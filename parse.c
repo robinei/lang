@@ -32,8 +32,23 @@ struct parse_ctx {
 #define SLICE_FROM_START slice_from_str_len(start, ctx->ptr - start)
 
 
-#define LOWEST_PRECEDENCE 1
-#define HIGHEST_PRECEDENCE 12
+enum {
+    PREC_LOWEST = 1,
+
+    PREC_ASSIGN = PREC_LOWEST,
+    PREC_LOGI_OR,
+    PREC_LOGI_AND,
+    PREC_BW_OR,
+    PREC_BW_XOR,
+    PREC_BW_AND,
+    PREC_EQ,
+    PREC_LTGT,
+    PREC_SHIFT,
+    PREC_ADDSUB,
+    PREC_MULDIVMOD,
+
+    PREC_HIGHEST
+};
 static struct expr *parse_infix(struct parse_ctx *ctx, int min_precedence);
 
 
@@ -309,13 +324,13 @@ static void skip_whitespace_excluding_newlines(struct parse_ctx *ctx) {
 
 
 static struct expr *parse_expr(struct parse_ctx *ctx) {
-    return parse_infix(ctx, LOWEST_PRECEDENCE + 1); /* disallow '=' operator */
+    return parse_infix(ctx, PREC_LOWEST + 1); /* disallow '=' operator */
 }
 
 
 static struct expr *parse_unary(struct parse_ctx *ctx, int prim, char *start) {
     skip_whitespace(ctx);
-    struct expr *arg = parse_infix(ctx, HIGHEST_PRECEDENCE);
+    struct expr *arg = parse_infix(ctx, PREC_HIGHEST);
     struct expr *result = expr_create(ctx, EXPR_PRIM, SLICE_FROM_START);
     result->prim.kind = prim;
     result->prim.arg_exprs[0] = arg;
@@ -394,7 +409,7 @@ static struct expr *parse_expr_seq_at_indent(struct parse_ctx *ctx, int indent_t
         if (ctx->current_indent < indent_to_keep) {
             break;
         }
-        struct expr *e = parse_infix(ctx, LOWEST_PRECEDENCE); /* allow '=' */
+        struct expr *e = parse_infix(ctx, PREC_LOWEST); /* allow '=' */
         if (!result) {
             result = e;
         } else if (!last_seq) {
@@ -811,27 +826,27 @@ static struct expr *parse_infix(struct parse_ctx *ctx, int min_precedence) {
 
         switch (*ctx->ptr) {
         case '=':
-            if (ctx->ptr[1] == '=') HANDLE_INFIX_PRIM(7, PRIM_EQ, 2)
-            else HANDLE_INFIX_PRIM(LOWEST_PRECEDENCE, PRIM_ASSIGN, 1)
+            if (ctx->ptr[1] == '=') HANDLE_INFIX_PRIM(PREC_EQ, PRIM_EQ, 2)
+            else HANDLE_INFIX_PRIM(PREC_LOWEST, PRIM_ASSIGN, 1)
 
         case 'o':
-            if (match_keyword(ctx, "or")) HANDLE_INFIX_PRIM(2, PRIM_LOGI_OR, 1)
+            if (match_keyword(ctx, "or")) HANDLE_INFIX_PRIM(PREC_LOGI_OR, PRIM_LOGI_OR, 1)
             else return result;
 
         case 'a':
-            if (match_keyword(ctx, "and")) HANDLE_INFIX_PRIM(3, PRIM_LOGI_AND, 1)
+            if (match_keyword(ctx, "and")) HANDLE_INFIX_PRIM(PREC_LOGI_AND, PRIM_LOGI_AND, 1)
             else return result;
 
-        case '|': HANDLE_INFIX_PRIM(4, PRIM_BITWISE_OR, 1)
+        case '|': HANDLE_INFIX_PRIM(PREC_BW_OR, PRIM_BITWISE_OR, 1)
 
-        case '^': HANDLE_INFIX_PRIM(5, PRIM_BITWISE_XOR, 1)
+        case '^': HANDLE_INFIX_PRIM(PREC_BW_XOR, PRIM_BITWISE_XOR, 1)
 
-        case '&': HANDLE_INFIX_PRIM(6, PRIM_BITWISE_AND, 1)
+        case '&': HANDLE_INFIX_PRIM(PREC_BW_AND, PRIM_BITWISE_AND, 1)
 
         case '!':
-            if (ctx->ptr[1] == '=') HANDLE_INFIX_PRIM(7, PRIM_NEQ, 2)
+            if (ctx->ptr[1] == '=') HANDLE_INFIX_PRIM(PREC_EQ, PRIM_NEQ, 2)
             else {
-                if (HIGHEST_PRECEDENCE < min_precedence) { return result; }
+                if (PREC_HIGHEST < min_precedence) { return result; }
                 ++ctx->ptr;
                 skip_whitespace(ctx);
                 expect_char(ctx, '(', "after postfix '!'");
@@ -841,26 +856,26 @@ static struct expr *parse_infix(struct parse_ctx *ctx, int min_precedence) {
             }
 
         case '<':
-            if (ctx->ptr[1] == '=') HANDLE_INFIX_PRIM(8, PRIM_LTEQ, 2)
-            else if (ctx->ptr[1] == '<') HANDLE_INFIX_PRIM(9, PRIM_BITWISE_LSH, 2)
-            else HANDLE_INFIX_PRIM(8, PRIM_LT, 1)
+            if (ctx->ptr[1] == '=') HANDLE_INFIX_PRIM(PREC_LTGT, PRIM_LTEQ, 2)
+            else if (ctx->ptr[1] == '<') HANDLE_INFIX_PRIM(PREC_SHIFT, PRIM_BITWISE_LSH, 2)
+            else HANDLE_INFIX_PRIM(PREC_LTGT, PRIM_LT, 1)
         case '>':
-            if (ctx->ptr[1] == '=') HANDLE_INFIX_PRIM(8, PRIM_GTEQ, 2)
-            else if (ctx->ptr[1] == '>') HANDLE_INFIX_PRIM(9, PRIM_BITWISE_RSH, 2)
-            else HANDLE_INFIX_PRIM(8, PRIM_GT, 1)
+            if (ctx->ptr[1] == '=') HANDLE_INFIX_PRIM(PREC_LTGT, PRIM_GTEQ, 2)
+            else if (ctx->ptr[1] == '>') HANDLE_INFIX_PRIM(PREC_SHIFT, PRIM_BITWISE_RSH, 2)
+            else HANDLE_INFIX_PRIM(PREC_LTGT, PRIM_GT, 1)
 
-        case '+': HANDLE_INFIX_PRIM(10, PRIM_ADD, 1)
+        case '+': HANDLE_INFIX_PRIM(PREC_ADDSUB, PRIM_ADD, 1)
         case '-':
-            if (ctx->ptr[1] != '>') HANDLE_INFIX_PRIM(10, PRIM_SUB, 1)
+            if (ctx->ptr[1] != '>') HANDLE_INFIX_PRIM(PREC_ADDSUB, PRIM_SUB, 1)
             else return result;
 
-        case '*': HANDLE_INFIX_PRIM(11, PRIM_MUL, 1)
-        case '/': HANDLE_INFIX_PRIM(11, PRIM_DIV, 1)
-        case '%': HANDLE_INFIX_PRIM(11, PRIM_MOD, 1)
+        case '*': HANDLE_INFIX_PRIM(PREC_MULDIVMOD, PRIM_MUL, 1)
+        case '/': HANDLE_INFIX_PRIM(PREC_MULDIVMOD, PRIM_DIV, 1)
+        case '%': HANDLE_INFIX_PRIM(PREC_MULDIVMOD, PRIM_MOD, 1)
 
-        case '.': HANDLE_INFIX_PRIM(HIGHEST_PRECEDENCE, PRIM_DOT, 1)
+        case '.': HANDLE_INFIX_PRIM(PREC_HIGHEST, PRIM_DOT, 1)
         case '(':
-            if (HIGHEST_PRECEDENCE < min_precedence) { return result; }
+            if (PREC_HIGHEST < min_precedence) { return result; }
             ++ctx->ptr;
             result = parse_call(ctx, result);
             continue;
