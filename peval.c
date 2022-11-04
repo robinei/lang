@@ -618,8 +618,6 @@ struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
         break;
     }
 
-    assert(expr_source_text(result).ptr);
-
     if (ctx->force_full_expansion && result->kind != EXPR_CONST) {
         PEVAL_ERR(e, "expected static expression");
     }

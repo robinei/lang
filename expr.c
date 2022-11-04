@@ -26,23 +26,18 @@ struct expr *expr_visit(struct expr_visit_ctx *ctx, struct expr *e) {
     struct expr e_new = *e;
     ctx->visitor(ctx, &e_new);
     if (memcmp(e, &e_new, sizeof(struct expr))) {
-        /* TODO: don't duplicate this (from dup_expr) */
         struct expr *e_copy = allocate(ctx->arena, sizeof(struct expr));
         *e_copy = e_new;
-        e_copy->antecedent = e;
-        e_copy->source_text.ptr = NULL;
-        e_copy->source_text.len = 0;
         return e_copy;
     }
     return e;
 }
 
 static struct expr_decl *expr_decl_visit(struct expr_visit_ctx *ctx, struct expr_decl *decl) {
-    struct expr_decl decl_new;
     if (!decl) {
         return NULL;
     }
-    decl_new = *decl;
+    struct expr_decl decl_new = *decl;
     decl_new.next = expr_decl_visit(ctx, decl_new.next);
     decl_new.type_expr = expr_visit(ctx, decl_new.type_expr);
     decl_new.value_expr = expr_visit(ctx, decl_new.value_expr);
@@ -55,11 +50,10 @@ static struct expr_decl *expr_decl_visit(struct expr_visit_ctx *ctx, struct expr
 }
 
 static struct expr_link *expr_call_arg_visit(struct expr_visit_ctx *ctx, struct expr_link *arg) {
-    struct expr_link arg_new;
     if (!arg) {
         return NULL;
     }
-    arg_new = *arg;
+    struct expr_link arg_new = *arg;
     arg_new.next = expr_call_arg_visit(ctx, arg_new.next);
     arg_new.expr = expr_visit(ctx, arg_new.expr);
     if (memcmp(&arg_new, arg, sizeof(struct expr_link))) {

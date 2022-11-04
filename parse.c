@@ -25,11 +25,9 @@ struct parse_ctx {
 
 #define PARSE_ERR(...) \
     do { \
-        error_emit(ctx->err_ctx, ERROR_CATEGORY_ERROR, slice_from_str_len(ctx->ptr, 1), __VA_ARGS__); \
+        error_emit(ctx->err_ctx, ERROR_CATEGORY_ERROR, ctx->ptr - ctx->mod_ctx->source_text.ptr, __VA_ARGS__); \
         longjmp(ctx->error_jmp_buf, 1); \
     } while(0)
-
-#define SLICE_FROM_START slice_from_str_len(start, ctx->ptr - start)
 
 
 enum {
@@ -52,42 +50,30 @@ enum {
 static struct expr *parse_infix(struct parse_ctx *ctx, int min_precedence);
 
 
-static struct expr *expr_create(struct parse_ctx *ctx, uint expr_type, slice_t source_text) {
+static struct expr *expr_create(struct parse_ctx *ctx, uint expr_type, char *start) {
     struct expr *e = allocate(ctx->arena, sizeof(struct expr));
     e->kind = expr_type;
-    e->source_text = source_text;
+    e->source_pos = start - ctx->mod_ctx->source_text.ptr;
     return e;
 }
-static struct expr *bool_create(struct parse_ctx *ctx, bool bool_value, slice_t source_text) {
-    struct expr *e = expr_create(ctx, EXPR_CONST, source_text);
+static struct expr *bool_create(struct parse_ctx *ctx, bool bool_value, char *start) {
+    struct expr *e = expr_create(ctx, EXPR_CONST, start);
     e->c.tag = &type_bool;
     e->c.boolean = bool_value;
     return e;
 }
-static struct expr *string_create(struct parse_ctx *ctx, bool has_escapes, slice_t source_text) {
-    assert(source_text.len > 2);
-    assert(source_text.ptr[0] == '"');
-    assert(source_text.ptr[source_text.len - 1] == '"');
-    // TODO: handle escape sequences
-    struct expr *e = expr_create(ctx, EXPR_CONST, source_text);
-    source_text.ptr += 1;
-    source_text.len -= 2;
-    e->c.tag = &type_string;
-    e->c.string = source_text;
-    return e;
-}
 static struct expr *symbol_create(struct parse_ctx *ctx, char *start) {
-    struct expr *e = expr_create(ctx, EXPR_SYM, SLICE_FROM_START);
-    e->sym = intern_slice(&ctx->global_ctx->symbol_table, e->source_text);
+    struct expr *e = expr_create(ctx, EXPR_SYM, start);
+    e->sym = intern_slice(&ctx->global_ctx->symbol_table, slice_from_str_len(start, ctx->ptr - start));
     return e;
 }
-static struct expr *unit_create(struct parse_ctx *ctx, slice_t source_text) {
-    struct expr *e = expr_create(ctx, EXPR_CONST, source_text);
+static struct expr *unit_create(struct parse_ctx *ctx, char *start) {
+    struct expr *e = expr_create(ctx, EXPR_CONST, start);
     e->c.tag = &type_unit;
     return e;
 }
-static struct expr *prim_create_bin(struct parse_ctx *ctx, int prim, struct expr *lhs, struct expr *rhs) {
-    struct expr *e = expr_create(ctx, EXPR_PRIM, slice_span(lhs->source_text, rhs->source_text));
+static struct expr *prim_create_bin(struct parse_ctx *ctx, int prim, struct expr *lhs, struct expr *rhs, char *start) {
+    struct expr *e = expr_create(ctx, EXPR_PRIM, start);
     e->prim.kind = prim;
     e->prim.arg_exprs[0] = lhs;
     e->prim.arg_exprs[1] = rhs;
@@ -319,7 +305,7 @@ static struct expr *parse_expr(struct parse_ctx *ctx) {
 static struct expr *parse_unary(struct parse_ctx *ctx, int prim, char *start) {
     skip_whitespace(ctx);
     struct expr *arg = parse_infix(ctx, PREC_HIGHEST);
-    struct expr *result = expr_create(ctx, EXPR_PRIM, SLICE_FROM_START);
+    struct expr *result = expr_create(ctx, EXPR_PRIM, start);
     result->prim.kind = prim;
     result->prim.arg_exprs[0] = arg;
     return result;
@@ -327,12 +313,18 @@ static struct expr *parse_unary(struct parse_ctx *ctx, int prim, char *start) {
 
 static struct expr *parse_string(struct parse_ctx *ctx) {
     char *start = ctx->ptr++; /* skip initial " */
+    assert(*start == '"');
     bool has_escapes = false;
     for (;;) {
         switch (*ctx->ptr) {
         case '"':
             ++ctx->ptr;
-            return string_create(ctx, has_escapes, SLICE_FROM_START);
+            // TODO: handle escape sequences
+            (void)has_escapes;
+            struct expr *result = expr_create(ctx, EXPR_CONST, start);
+            result->c.tag = &type_string;
+            result->c.string = slice_from_str_len(start + 1, ctx->ptr - start - 2);
+            return result;
         case '\0':
             PARSE_ERR("unexpected end of input while parsing string literal");
         case '\\':
@@ -353,7 +345,7 @@ static struct expr *parse_number(struct parse_ctx *ctx) {
         if (is_leading_ident_char(*ctx->ptr)) {
             PARSE_ERR("illegal number suffix");
         }
-        struct expr *result = expr_create(ctx, EXPR_CONST, SLICE_FROM_START);
+        struct expr *result = expr_create(ctx, EXPR_CONST, start);
         if (value <= INT64_MAX) {
             result->c.tag = &type_int;
             result->c.integer = (int64_t)value;
@@ -370,7 +362,7 @@ static struct expr *parse_number(struct parse_ctx *ctx) {
         if (is_leading_ident_char(*ctx->ptr)) {
             PARSE_ERR("illegal number suffix");
         }
-        struct expr *result = expr_create(ctx, EXPR_CONST, SLICE_FROM_START);
+        struct expr *result = expr_create(ctx, EXPR_CONST, start);
         result->c.tag = &type_real;
         result->c.real = real;
         return result;
@@ -401,9 +393,9 @@ static struct expr *parse_expr_seq_at_indent(struct parse_ctx *ctx, int indent_t
         if (!result) {
             result = e;
         } else if (!last_seq) {
-            result = last_seq = prim_create_bin(ctx, PRIM_SEQ, result, e);
+            result = last_seq = prim_create_bin(ctx, PRIM_SEQ, result, e, ctx->mod_ctx->source_text.ptr + e->source_pos);
         } else {
-            last_seq = last_seq->prim.arg_exprs[1] = prim_create_bin(ctx, PRIM_SEQ, last_seq->prim.arg_exprs[1], e);
+            last_seq = last_seq->prim.arg_exprs[1] = prim_create_bin(ctx, PRIM_SEQ, last_seq->prim.arg_exprs[1], e, ctx->mod_ctx->source_text.ptr + e->source_pos);
         }
     }
 out:
@@ -438,7 +430,7 @@ static struct expr *maybe_wrap_in_block(struct parse_ctx *ctx, struct expr *e, c
     if (e->kind != EXPR_DEF && (e->kind != EXPR_PRIM || e->prim.kind != PRIM_SEQ)) {
         return e; /* avoid redundant wrapping of single non-def expression */
     }
-    struct expr *result = expr_create(ctx, EXPR_BLOCK, SLICE_FROM_START);
+    struct expr *result = expr_create(ctx, EXPR_BLOCK, start);
     result->block.body_expr = e;
     return result;
 }
@@ -453,7 +445,7 @@ static struct expr *parse_do(struct parse_ctx *ctx, char *start) {
 }
 static struct expr *parse_struct(struct parse_ctx *ctx, char *start) {
     struct expr *body = parse_expr_seq(ctx);
-    struct expr *result = expr_create(ctx, EXPR_STRUCT, SLICE_FROM_START);
+    struct expr *result = expr_create(ctx, EXPR_STRUCT, start);
     result->struc.body_expr = body;
     return result;
 }
@@ -527,7 +519,7 @@ static struct expr *parse_fun(struct parse_ctx *ctx, bool is_type, char *start) 
         }
     }
 
-    struct expr *result = expr_create(ctx, EXPR_FUN, SLICE_FROM_START);
+    struct expr *result = expr_create(ctx, EXPR_FUN, start);
     result->fun.params = params;
     result->fun.return_type_expr = return_type_expr;
     result->fun.body_expr = body_expr;
@@ -560,7 +552,7 @@ static struct expr *parse_def(struct parse_ctx *ctx, bool is_const, char *start)
         value_expr = parse_expr(ctx);
     }
 
-    struct expr *e = expr_create(ctx, EXPR_DEF, SLICE_FROM_START);
+    struct expr *e = expr_create(ctx, EXPR_DEF, start);
     e->flags = flags;
     e->def.name_expr = name_expr;
     e->def.type_expr = type_expr;
@@ -589,12 +581,9 @@ static struct expr *parse_if(struct parse_ctx *ctx, bool is_elif, char *start) {
     } else if (ctx->current_indent == then_indent && match_keyword(ctx, "elif")) {
         else_expr = parse_if(ctx, true, after_then);
     } else {
-        slice_t text = then_expr->source_text;
-        text.ptr += text.len;
-        text.len = 0;
-        else_expr = unit_create(ctx, text);
+        else_expr = unit_create(ctx, ctx->ptr);
     }
-    struct expr *result = expr_create(ctx, EXPR_COND, SLICE_FROM_START);
+    struct expr *result = expr_create(ctx, EXPR_COND, start);
     result->cond.pred_expr = pred_expr;
     result->cond.then_expr = then_expr;
     result->cond.else_expr = else_expr;
@@ -615,7 +604,7 @@ static struct expr *parse_single_arg_prim(struct parse_ctx *ctx, int prim, char 
         PARSE_ERR("expected ')' after argument to '%.*s'", after_ident - start, start);
     }
     ctx->skip_newline = prev_skip_newline;
-    struct expr *result = expr_create(ctx, EXPR_PRIM, SLICE_FROM_START);
+    struct expr *result = expr_create(ctx, EXPR_PRIM, start);
     result->prim.kind = prim;
     result->prim.arg_exprs[0] = e;
     return result;
@@ -631,7 +620,7 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
         skip_whitespace(ctx);
         if (match_char(ctx, ')')) {
             ctx->skip_newline = prev_skip_newline;
-            return unit_create(ctx, SLICE_FROM_START);
+            return unit_create(ctx, start);
         } else {
             struct expr *result = parse_expr(ctx);
             skip_whitespace(ctx);
@@ -680,7 +669,7 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
         break;
     case 'f':
         if (match_keyword(ctx, "false")) {
-            return bool_create(ctx, false, SLICE_FROM_START);
+            return bool_create(ctx, false, start);
         }
         if (match_keyword(ctx, "fun")) {
             return parse_fun(ctx, false, start);
@@ -727,11 +716,11 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
         break;
     case 'S':
         if (match_keyword(ctx, "Self")) {
-            return expr_create(ctx, EXPR_SELF, SLICE_FROM_START);
+            return expr_create(ctx, EXPR_SELF, start);
         }
     case 't':
         if (match_keyword(ctx, "true")) {
-            return bool_create(ctx, true, SLICE_FROM_START);
+            return bool_create(ctx, true, start);
         }
         break;
     case 'v':
@@ -766,13 +755,13 @@ static struct expr_link *parse_args(struct parse_ctx *ctx) {
     return a;
 }
 static struct expr *parse_call(struct parse_ctx *ctx, struct expr *callable_expr) {
+    char *start = ctx->ptr - 1;
     bool prev_skip_newline = ctx->skip_newline;
     ctx->skip_newline = true;
     skip_whitespace(ctx);
     struct expr_link *args = parse_args(ctx);
     ctx->skip_newline = prev_skip_newline;
-    char *start = callable_expr->source_text.ptr;
-    struct expr *result = expr_create(ctx, EXPR_CALL, SLICE_FROM_START);
+    struct expr *result = expr_create(ctx, EXPR_CALL, start);
     result->call.callable_expr = callable_expr;
     result->call.args = args;
     return result;
@@ -782,14 +771,14 @@ static void quote_args(struct parse_ctx *ctx, struct expr_link *arg) {
     if (!arg) {
         return;
     }
-    struct expr *e = expr_create(ctx, EXPR_PRIM, arg->expr->source_text);
+    struct expr *e = expr_create(ctx, EXPR_PRIM, ctx->mod_ctx->source_text.ptr + arg->expr->source_pos);
     e->prim.kind = PRIM_QUOTE;
     e->prim.arg_exprs[0] = arg->expr;
     arg->expr = e;
     quote_args(ctx, arg->next);
 }
 static struct expr *macroify(struct parse_ctx *ctx, struct expr *call_expr) {
-    struct expr *e = expr_create(ctx, EXPR_PRIM, call_expr->source_text);
+    struct expr *e = expr_create(ctx, EXPR_PRIM, ctx->mod_ctx->source_text.ptr + call_expr->source_pos);
     e->prim.kind = PRIM_SPLICE;
     e->prim.arg_exprs[0] = call_expr;
     quote_args(ctx, call_expr->call.args);
@@ -799,10 +788,11 @@ static struct expr *macroify(struct parse_ctx *ctx, struct expr *call_expr) {
 #define HANDLE_INFIX_PRIM(Precedence, Prim, SkipChars) \
     { \
         if (Precedence < min_precedence) { return result; } \
+        char *start = ctx->ptr; \
         ctx->ptr += SkipChars; \
         skip_whitespace(ctx); \
         struct expr *rhs = parse_infix(ctx, Precedence + 1); \
-        result = prim_create_bin(ctx, Prim, result, rhs); \
+        result = prim_create_bin(ctx, Prim, result, rhs, start); \
         continue; \
     }
 
@@ -877,7 +867,7 @@ static struct expr *do_parse_module(struct parse_ctx *ctx) {
     char *start = ctx->ptr;
     skip_leading_space(ctx);
     struct expr *body = parse_expr_seq_at_indent(ctx, 0);
-    struct expr *result = expr_create(ctx, EXPR_STRUCT, SLICE_FROM_START);
+    struct expr *result = expr_create(ctx, EXPR_STRUCT, start);
     skip_whitespace(ctx);
     if (*ctx->ptr) {
         PARSE_ERR("unexpected input in module");

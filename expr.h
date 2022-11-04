@@ -4,7 +4,6 @@
 #include "type.h"
 #include "slice.h"
 
-
 #define FOR_ALL_PRIMS(X) \
     X(PLUS) \
     X(NEGATE) \
@@ -141,22 +140,21 @@ struct expr {
         } call;
     };
 
-    slice_t source_text;
-    struct expr *antecedent;
-
-    enum expr_kind kind;
-    unsigned int flags;
+    uint source_pos;
+    uint flags : 16;
+    enum expr_kind kind : 16;
 };
-
 
 
 struct expr_visit_ctx;
 typedef void (*expr_visitor_t)(struct expr_visit_ctx *ctx, struct expr *e);
+
 struct expr_visit_ctx {
     expr_visitor_t visitor;
     void *ctx;
     struct allocator *arena;
 };
+
 struct expr *expr_visit(struct expr_visit_ctx *ctx, struct expr *e);
 void expr_visit_children(struct expr_visit_ctx *ctx, struct expr *e);
 struct expr *expr_run_visitor(struct expr *e, expr_visitor_t visitor, void *ctx, struct allocator *arena);
@@ -182,16 +180,6 @@ static uint expr_list_length(struct expr_link *link) {
         link = link->next;
     }
     return count;
-}
-
-static slice_t expr_source_text(struct expr *e) {
-    while (e) {
-        if (e->source_text.ptr) {
-            return e->source_text;
-        }
-        e = e->antecedent;
-    }
-    return (slice_t) { "", 0 };
 }
 
 #endif

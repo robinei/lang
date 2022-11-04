@@ -4,7 +4,7 @@
 
 #define PEVAL_ERR(exp, ...) \
     do { \
-        error_emit(ctx->err_ctx, ERROR_CATEGORY_ERROR, expr_source_text(exp), __VA_ARGS__); \
+        error_emit(ctx->err_ctx, ERROR_CATEGORY_ERROR, (exp)->source_pos, __VA_ARGS__); \
         longjmp(ctx->error_jmp_buf, 1); \
     } while(0)
 
@@ -12,7 +12,7 @@
 static struct expr *expr_create(struct peval_ctx *ctx, uint expr_type, struct expr *antecedent) {
     struct expr *e = allocate(ctx->arena, sizeof(struct expr));
     e->kind = expr_type;
-    e->antecedent = antecedent;
+    e->source_pos = antecedent ? antecedent->source_pos : 0;
     return e;
 }
 static struct expr *unit_create(struct peval_ctx *ctx, struct expr *antecedent) {
@@ -24,9 +24,7 @@ static struct expr *unit_create(struct peval_ctx *ctx, struct expr *antecedent) 
 static struct expr *dup_expr(struct peval_ctx *ctx, struct expr *e, struct expr *antecedent) {
     struct expr *e_copy = allocate(ctx->arena, sizeof(struct expr));
     *e_copy = *e;
-    e_copy->antecedent = antecedent;
-    e_copy->source_text.ptr = NULL;
-    e_copy->source_text.len = 0;
+    e_copy->source_pos = antecedent ? antecedent->source_pos : 0;
     return e_copy;
 }
 static struct expr_decl *dup_decl(struct peval_ctx *ctx, struct expr_decl *f) {

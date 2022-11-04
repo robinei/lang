@@ -10,7 +10,7 @@ void error_ctx_init(struct error_ctx *ctx, slice_t filename, slice_t source_text
     ctx->filename = filename;
 }
 
-void error_emit(struct error_ctx *ctx, enum error_category category, slice_t location, const char *format, ...) {
+void error_emit(struct error_ctx *ctx, enum error_category category, uint source_pos, const char *format, ...) {
     va_list args;
     int len;
     struct error_entry *entry;
@@ -26,7 +26,7 @@ void error_emit(struct error_ctx *ctx, enum error_category category, slice_t loc
     entry = allocate(&ctx->arena->a, sizeof(struct error_entry) + len + 1);
     entry->next = NULL;
     entry->category = category;
-    entry->location = location;
+    entry->source_pos = source_pos;
     memcpy(entry->message, ctx->msg_buf, len + 1);
 
     if (ctx->last_error) {
@@ -41,8 +41,8 @@ void error_emit(struct error_ctx *ctx, enum error_category category, slice_t loc
 slice_t error_line_text(struct error_ctx *ctx, struct error_entry *entry) {
     char *buf_start = ctx->source_buf.ptr;
     char *buf_end = ctx->source_buf.ptr + ctx->source_buf.len;
-    char *start = entry->location.ptr;
-    char *end = entry->location.ptr;
+    char *start = ctx->source_buf.ptr + entry->source_pos;
+    char *end = start;
     slice_t slice;
 
     while (start > buf_start && start[-1] != '\n') {
@@ -60,7 +60,7 @@ slice_t error_line_text(struct error_ctx *ctx, struct error_entry *entry) {
 uint error_line_num(struct error_ctx *ctx, struct error_entry *entry) {
     uint line = 0;
     char *buf_start = ctx->source_buf.ptr;
-    char *ch = entry->location.ptr - 1;
+    char *ch = ctx->source_buf.ptr + entry->source_pos - 1;
     for (; ch >= buf_start; --ch) {
         if (*ch == '\n') {
             ++line;
@@ -72,7 +72,7 @@ uint error_line_num(struct error_ctx *ctx, struct error_entry *entry) {
 uint error_col_num(struct error_ctx *ctx, struct error_entry *entry) {
     uint col = 0;
     char *buf_start = ctx->source_buf.ptr;
-    char *ch = entry->location.ptr - 1;
+    char *ch = ctx->source_buf.ptr + entry->source_pos - 1;
     for (; ch >= buf_start && *ch != '\n'; --ch) {
         ++col;
     }
@@ -94,10 +94,6 @@ void error_fprint(struct error_ctx *ctx, struct error_entry *entry, FILE *fp) {
     uint line_num = error_line_num(ctx, entry);
     uint col_num = error_col_num(ctx, entry);
     slice_t line = error_line_text(ctx, entry);
-    uint err_len = line.len - col_num;
-    if (entry->location.len < err_len) {
-        err_len = entry->location.len;
-    }
 
     fprintf(fp, "(%.*s:%u:%u) ", ctx->filename.len, ctx->filename.ptr, line_num + 1, col_num + 1);
     switch (entry->category) {
@@ -116,7 +112,7 @@ void error_fprint(struct error_ctx *ctx, struct error_entry *entry, FILE *fp) {
     print_slice(fp, line);
     fputc('\n', fp);
     print_repeated(fp, ' ', col_num);
-    print_repeated(fp, '^', err_len ? err_len : 1);
+    fputc('^', fp);
     fputc('\n', fp);
 }
 

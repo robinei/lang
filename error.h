@@ -17,7 +17,7 @@ enum error_category {
 struct error_entry {
     struct error_entry *next;
     enum error_category category;
-    slice_t location;
+    uint source_pos;
     char message[0];
 };
 
@@ -32,7 +32,7 @@ struct error_ctx {
 
 void error_ctx_init(struct error_ctx *ctx, slice_t filename, slice_t source_text, struct arena_allocator *arena);
 
-void error_emit(struct error_ctx *ctx, enum error_category category, slice_t location, const char *format, ...);
+void error_emit(struct error_ctx *ctx, enum error_category category, uint source_pos, const char *format, ...);
 
 slice_t error_line_text(struct error_ctx *ctx, struct error_entry *entry);
 uint error_line_num(struct error_ctx *ctx, struct error_entry *entry);
