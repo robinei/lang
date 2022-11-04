@@ -309,18 +309,6 @@ static void skip_whitespace(struct parse_ctx *ctx) {
         }
     }
 }
-static void skip_whitespace_including_newlines(struct parse_ctx *ctx) {
-    bool prev_skip_newline = ctx->skip_newline;
-    ctx->skip_newline = true;
-    skip_whitespace(ctx);
-    ctx->skip_newline = prev_skip_newline;
-}
-static void skip_whitespace_excluding_newlines(struct parse_ctx *ctx) {
-    bool prev_skip_newline = ctx->skip_newline;
-    ctx->skip_newline = false;
-    skip_whitespace(ctx);
-    ctx->skip_newline = prev_skip_newline;
-}
 
 
 static struct expr *parse_expr(struct parse_ctx *ctx) {

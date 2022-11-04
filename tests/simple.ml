@@ -110,6 +110,7 @@ Self.testOps = fun()
     assert(2 <= 2)
     assert(1 <= 2)
     assert(2 >= 2)
+    
     assert(2 >= 1)
     assert(1 + 2 == 3)
     assert(3 - 2 == 1)
@@ -164,5 +165,5 @@ Self.testCallArg = fun()
 
 // this will require changes to how functions are handled:
 //Self.testStaticArgAsReturnType = fun()
-//    const test = fun(t: static Type, x: t -> t) x
+//    const test = fun(t: static Type; x: t -> t) x
 //    assert(test(Int, 123) == 123)
