@@ -8,12 +8,13 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e);
 
 
 static void bind_func(struct peval_ctx *ctx, struct symbol *name, struct function *func) {
-    pointer_table_put(&ctx->mod_ctx->functions, name, func);
+    hashtable_put(FUNCTION_HASHTABLE, ctx->mod_ctx->functions, name, func);
 }
 
 static struct function *lookup_func(struct peval_ctx *ctx, struct symbol *name) {
     struct function *func = NULL;
-    pointer_table_get(&ctx->mod_ctx->functions, name, (void **)&func);
+    bool found;
+    hashtable_get(FUNCTION_HASHTABLE, ctx->mod_ctx->functions, name, func, found);
     return func;
 }
 
@@ -413,7 +414,7 @@ static struct expr *peval_struct(struct peval_ctx *ctx, struct expr *e) {
     BEGIN_SCOPE(SCOPE_STRUCT);
 
     struct type *self = allocate(ctx->arena, sizeof(struct type));
-    pointer_table_init(&self->attrs, &ctx->mod_ctx->alloc.a, 0);
+    hashtable_init(TYPEATTR_HASHTABLE, self->attrs, &ctx->mod_ctx->alloc.a, 0);
     self->kind = TYPE_STRUCT;
     ctx->scope->self = self;
 

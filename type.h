@@ -23,16 +23,13 @@ enum type_kind {
 
 extern const char *type_names[];
 
-#define EXPAND_INTERFACE
-#define NAME        pointer_table
-#define KEY_TYPE    void *
-#define VALUE_TYPE  void *
-#include "hashtable.h"
-
 struct expr;
 
+#define TYPEATTR_HASHTABLE(X) X(typeattr_hashtable, struct symbol *, struct expr *, calc_ptr_hash, VALUE_EQ)
+DECLARE_HASHTABLE(TYPEATTR_HASHTABLE)
+
 struct type {
-    struct pointer_table attrs;
+    struct typeattr_hashtable attrs;
     enum type_kind kind;
 };
 

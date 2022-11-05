@@ -10,6 +10,9 @@ struct function {
     struct expr *fun_expr;
 };
 
+#define FUNCTION_HASHTABLE(X) X(function_hashtable, struct symbol *, struct function *, calc_ptr_hash, VALUE_EQ)
+DECLARE_HASHTABLE(FUNCTION_HASHTABLE)
+
 struct module_ctx {
     struct tracking_allocator alloc;
     struct arena_allocator arena;
@@ -17,7 +20,7 @@ struct module_ctx {
     struct global_ctx *global_ctx;
     struct error_ctx err_ctx;
 
-    struct pointer_table functions;
+    struct function_hashtable functions;
 
     slice_t source_text; /* buffer is owned */
     struct expr *struct_expr; /* parsed representation */

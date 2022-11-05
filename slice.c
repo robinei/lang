@@ -74,12 +74,3 @@ uint slice_hash_murmur(slice_t s) {
 uint slice_hash_fnv1a(slice_t s) {
     return fnv1a((unsigned char *)s.ptr, s.len, FNV_SEED);
 }
-
-
-#define EXPAND_IMPLEMENTATION
-#define NAME        slice_table
-#define KEY_TYPE    slice_t
-#define VALUE_TYPE  void *
-#define HASH_FUNC   slice_hash_murmur
-#define EQUAL_FUNC  slice_equals
-#include "hashtable.h"

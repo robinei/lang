@@ -25,11 +25,4 @@ slice_t slice_span(slice_t a, slice_t b);
 uint slice_hash_murmur(slice_t s);
 uint slice_hash_fnv1a(slice_t s);
 
-
-#define EXPAND_INTERFACE
-#define NAME        slice_table
-#define KEY_TYPE    slice_t
-#define VALUE_TYPE  void *
-#include "hashtable.h"
-
 #endif

@@ -4,12 +4,13 @@
 
 void type_set_attr(struct type *type, struct symbol *name, struct expr *val) {
     assert(val->kind == EXPR_CONST);
-    pointer_table_put(&type->attrs, name, val);
+    hashtable_put(TYPEATTR_HASHTABLE, type->attrs, name, val);
 }
 
 struct expr *type_get_attr(struct type *type, struct symbol *name) {
     struct expr *result = NULL;
-    pointer_table_get(&type->attrs, name, (void **)&result);
+    bool found;
+    hashtable_get(TYPEATTR_HASHTABLE, type->attrs, name, result, found);
     return result;
 }
 
@@ -27,11 +28,3 @@ struct type type_fun = { .kind = TYPE_FUN };
 const char *type_names[] = {
     FOR_ALL_TYPES(DECL_TYPE_NAME)
 };
-
-#define EXPAND_IMPLEMENTATION
-#define NAME        pointer_table
-#define KEY_TYPE    void *
-#define VALUE_TYPE  void *
-#define HASH_FUNC   hashutil_ptr_hash
-#define EQUAL_FUNC(a, b) ((a) == (b))
-#include "hashtable.h"

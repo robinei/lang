@@ -1,73 +1,180 @@
-
-#if !defined(EXPAND_INTERFACE) && !defined(EXPAND_IMPLEMENTATION)
-#error Define EXPAND_INTERFACE or EXPAND_IMPLEMENTATION before including this header
-#endif
-
-#ifndef NAME
-#error Define NAME before including this header
-#endif
-#ifndef KEY_TYPE
-#error Define KEY_TYPE before including this header
-#endif
-#ifndef VALUE_TYPE
-#error Define VALUE_TYPE before including this header
-#endif
-#ifndef LINKAGE
-#define LINKAGE
-#endif
-
-#define CONCAT_SYMBOLS2(x, y) x ## y
-#define CONCAT_SYMBOLS(x, y) CONCAT_SYMBOLS2(x, y)
-#define NAMESPACED(x) CONCAT_SYMBOLS(NAME, _ ## x)
-
-
-#ifdef EXPAND_INTERFACE
-#undef EXPAND_INTERFACE
+#ifndef HASHTABLE_H
+#define HASHTABLE_H
 
 #include "alloc.h"
-
-struct NAMESPACED(entry) {
-    uint32_t hash;
-    KEY_TYPE key;
-    VALUE_TYPE value;
-};
-
-struct NAME {
-    struct allocator *alloc;
-    uint32_t used, size;
-    struct NAMESPACED(entry) *entries;
-};
-
-LINKAGE void NAMESPACED(clear)(struct NAME *table);
-LINKAGE int NAMESPACED(remove)(struct NAME *table, KEY_TYPE key);
-LINKAGE int NAMESPACED(find)(struct NAME *table, KEY_TYPE key, uint32_t *index_out);
-LINKAGE int NAMESPACED(get)(struct NAME *table, KEY_TYPE key, VALUE_TYPE *value_out);
-LINKAGE void NAMESPACED(put)(struct NAME *table, KEY_TYPE key, VALUE_TYPE value);
-LINKAGE void NAMESPACED(init)(struct NAME *table, struct allocator *a, uint32_t initial_size);
-LINKAGE void NAMESPACED(cleanup)(struct NAME *table);
-
-#endif /* EXPAND_INTERFACE */
-
-
-
-#ifdef EXPAND_IMPLEMENTATION
-#undef EXPAND_IMPLEMENTATION
-
-#ifndef HASH_FUNC
-#error Define HASH_FUNC before including this header with EXPAND_IMPLEMENTATION defined
-#endif
-#ifndef EQUAL_FUNC
-#error Define EQUAL_FUNC before including this header with EXPAND_IMPLEMENTATION defined
-#endif
-
-
-#ifndef HASH_TABLE_COMMON
-#define HASH_TABLE_COMMON
-
 #include <stdlib.h>
 #include <assert.h>
 
-static uint32_t hashutil_uint32_mix(uint32_t key) {
+#define HASHTABLE_NAME(N, K, V, HF, EQ) N
+#define HASHTABLE_ENTRYNAME(N, K, V, HF, EQ) N##_entry
+#define HASHTABLE_KEYTYPE(N, K, V, HF, EQ) K
+#define HASHTABLE_VALUETYPE(N, K, V, HF, EQ) V
+#define HASHTABLE_HASHFUNC(N, K, V, HF, EQ) HF
+#define HASHTABLE_EQFUNC(N, K, V, HF, EQ) EQ
+
+#define DECLARE_HASHTABLE(Params) \
+    struct Params(HASHTABLE_ENTRYNAME) { \
+        uint32_t hash; \
+        Params(HASHTABLE_KEYTYPE) key; \
+        Params(HASHTABLE_VALUETYPE) value; \
+    }; \
+    struct Params(HASHTABLE_NAME) { \
+        struct allocator *alloc; \
+        uint32_t used, size; \
+        struct Params(HASHTABLE_ENTRYNAME) *entries; \
+    };
+
+#define hashtable_find(Params, Table, Key, IndexOut, FoundOut) \
+    do { \
+        assert((Table).used <= (Table).size); \
+        FoundOut = false; \
+        if ((Table).used > 0) { \
+            Params(HASHTABLE_KEYTYPE) _key = Key; \
+            uint32_t _hash = Params(HASHTABLE_HASHFUNC)(_key); \
+            uint32_t _start_index = _hash & ((Table).size - 1); \
+            for (uint32_t _i = 0; _i < (Table).size; ++_i) { \
+                uint32_t _curr_index = (_start_index + _i) & ((Table).size - 1); \
+                struct Params(HASHTABLE_ENTRYNAME) *_slot = (Table).entries + _curr_index; \
+                if (_slot->hash == _hash && Params(HASHTABLE_EQFUNC)(_slot->key, _key)) { IndexOut = _curr_index; FoundOut = true; break; } \
+                if (_slot->hash == 0) break; \
+                if (_i > _hashtable_dist_to_start((Table).size, _slot->hash, _curr_index)) break; \
+            } \
+        } \
+    } while(0)
+
+#define hashtable_putentry(Params, Table, Entry) \
+    do { \
+        struct Params(HASHTABLE_ENTRYNAME) _entry = Entry; \
+        uint32_t _start_index = _entry.hash & ((Table).size - 1); \
+        uint32_t _probe = 0; \
+        uint32_t _i = 0; \
+        for (; _i < (Table).size; ++_i, ++_probe) { \
+            uint32_t _index = (_start_index + _i) & ((Table).size - 1); \
+            struct Params(HASHTABLE_ENTRYNAME) *_slot = (Table).entries + _index; \
+            if (_slot->hash == 0) { \
+                ++(Table).used; \
+                *_slot = _entry; \
+                break; \
+            } \
+            if (_slot->hash == _entry.hash && Params(HASHTABLE_EQFUNC)(_slot->key, _entry.key)) { \
+                _slot->value = _entry.value; \
+                break; \
+            } \
+            uint32_t _slot_probe = _hashtable_dist_to_start((Table).size, _slot->hash, _index); \
+            if (_probe > _slot_probe) { \
+                struct Params(HASHTABLE_ENTRYNAME) _temp = _entry; \
+                _entry = *_slot; \
+                *_slot = _temp; \
+                _probe = _slot_probe; \
+            } \
+        } \
+        assert(_i < (Table).size && "unexpectedly could not find a slot for insertion"); \
+    } while (0)
+
+#define hashtable_remove(Params, Table, Key, RemovedOut) \
+    do { \
+        RemovedOut = false; \
+        uint32_t _index; \
+        bool _found; \
+        hashtable_find(Params, Table, Key, _index, _found); \
+        if (_found) { \
+            uint32_t _i = 0; \
+            for (; _i < (Table).size; ++_i) { \
+                uint32_t _curr_index = (_index + _i) & ((Table).size - 1); \
+                uint32_t _next_index = (_index + _i + 1) & ((Table).size - 1); \
+                uint32_t _next_hash = (Table).entries[_next_index].hash; \
+                if (_next_hash == 0 || _hashtable_dist_to_start((Table).size, _next_hash, _next_index) == 0) { \
+                    (Table).entries[_curr_index].hash = 0; \
+                    --(Table).used; \
+                    RemovedOut = true; \
+                    break; \
+                } \
+                struct Params(HASHTABLE_ENTRYNAME) _temp = (Table).entries[_curr_index]; \
+                (Table).entries[_curr_index] = (Table).entries[_next_index]; \
+                (Table).entries[_next_index] = _temp; \
+            } \
+            assert(_i < (Table).size && "unexpectedly could finish removal"); \
+        } \
+    } while(0)
+
+#define hashtable_resize(Params, Table, NewSize) \
+    do { \
+        uint32_t _new_size = (NewSize); \
+        assert(_new_size > 0); \
+        uint32_t _old_used = (Table).used; \
+        uint32_t _old_size = (Table).size; \
+        struct Params(HASHTABLE_ENTRYNAME) *_old_entries = (Table).entries; \
+        (Table).used = 0; \
+        (Table).size = _new_size; \
+        (Table).entries = allocate((Table).alloc, sizeof(struct Params(HASHTABLE_ENTRYNAME)) * _new_size); \
+        if (_old_used) { \
+            assert(_old_used <= _new_size); \
+            for (uint32_t _i = 0; _i < _old_size; ++_i) { \
+                struct Params(HASHTABLE_ENTRYNAME) *_slot = _old_entries + _i; \
+                if (_slot->hash) { \
+                    hashtable_putentry(Params, Table, *_slot); \
+                } \
+            } \
+            deallocate((Table).alloc, _old_entries, sizeof(struct Params(HASHTABLE_ENTRYNAME)) * _old_size); \
+        } \
+    } while(0)
+
+#define hashtable_get(Params, Table, Key, ValueOut, FoundOut) \
+    do { \
+        uint32_t _index; \
+        hashtable_find(Params, Table, Key, _index, FoundOut); \
+        if (FoundOut) { \
+            ValueOut = (Table).entries[_index].value; \
+        } \
+    } while(0)
+
+#define hashtable_put(Params, Table, Key, Value) \
+    do { \
+        struct Params(HASHTABLE_ENTRYNAME) _new_entry; \
+        if (!(Table).size || (float)(Table).used / (Table).size > 0.85f) { \
+            hashtable_resize(Params, Table, (Table).size ? (Table).size * 2 : 16); \
+        } \
+        _new_entry.key = Key; \
+        _new_entry.value = Value; \
+        _new_entry.hash = Params(HASHTABLE_HASHFUNC)(_new_entry.key); \
+        hashtable_putentry(Params, Table, _new_entry); \
+    } while(0)
+
+#define hashtable_init(Params, Table, Allocator, InitialSize) \
+    do { \
+        (Table).alloc = Allocator; \
+        (Table).used = 0; \
+        (Table).size = 0; \
+        (Table).entries = NULL; \
+        if ((InitialSize) > 0) { \
+            hashtable_resize(Params, Table, InitialSize); \
+        } \
+    } while(0)
+
+#define hashtable_cleanup(Params, Table) \
+    do { \
+        deallocate((Table).alloc, (Table).entries, sizeof(struct Params(HASHTABLE_ENTRYNAME)) * (Table).size); \
+        (Table).used = 0; \
+        (Table).size = 0; \
+        (Table).entries = NULL; \
+    } while(0)
+
+#define hashtable_clear(Params, Table) \
+    do { \
+        for (uint32_t i = 0; i < (Table).size; ++i) (Table).entries[i].hash = 0; \
+        (Table).used = 0; \
+    } while(0)
+
+static inline uint32_t _hashtable_dist_to_start(uint32_t table_size, uint32_t hash, uint32_t index_stored) {
+    assert(hash);
+    uint32_t start_index = hash & (table_size - 1);
+    if (start_index <= index_stored) {
+        return index_stored - start_index;
+    }
+    return index_stored + (table_size - start_index);
+}
+
+static uint32_t calc_uint32_hash(uint32_t key) {
     key = (key ^ 61) ^ (key >> 16);
     key = key + (key << 3);
     key = key ^ (key >> 4);
@@ -76,7 +183,7 @@ static uint32_t hashutil_uint32_mix(uint32_t key) {
     return key;
 }
 
-static uint32_t hashutil_ptr_hash(void *ptr) {
+static uint32_t calc_ptr_hash(void *ptr) {
     uint32_t val = (uint32_t)(intptr_t)ptr;
     val = ~val + (val << 15);
     val = val ^ (val >> 12);
@@ -87,182 +194,6 @@ static uint32_t hashutil_ptr_hash(void *ptr) {
     return val;
 }
 
-static uint32_t hashutil_next_pow2(uint32_t v) {
-    v--;
-    v |= v >> 1;
-    v |= v >> 2;
-    v |= v >> 4;
-    v |= v >> 8;
-    v |= v >> 16;
-    v++;
-    return v;
-}
+#define VALUE_EQ(X, Y) ((X) == (Y))
 
-static uint32_t hashutil_dist_to_start(uint32_t table_size, uint32_t hash, uint32_t index_stored) {
-    assert(hash);
-    uint32_t start_index = hash & (table_size - 1);
-    if (start_index <= index_stored) {
-        return index_stored - start_index;
-    }
-    return index_stored + (table_size - start_index);
-}
-
-#endif /* HASH_TABLE_COMMON */
-
-
-LINKAGE void NAMESPACED(clear)(struct NAME *table) {
-    for (uint32_t i = 0; i < table->size; ++i) {
-        table->entries[i].hash = 0;
-    }
-    table->used = 0;
-}
-
-static uint32_t NAMESPACED(calc_hash)(KEY_TYPE key) {
-    uint32_t hash = HASH_FUNC(key);
-    return hash ? hash : 1;
-}
-
-LINKAGE int NAMESPACED(find)(struct NAME *table, KEY_TYPE key, uint32_t *index_out) {
-    assert(table->used <= table->size);
-    if (table->used == 0) {
-        return 0;
-    }
-    uint32_t hash = NAMESPACED(calc_hash)(key);
-    uint32_t start_index = hash & (table->size - 1);
-    for (uint32_t i = 0; i < table->size; ++i) {
-        uint32_t index = (start_index + i) & (table->size - 1);
-        struct NAMESPACED(entry) *slot = table->entries + index;
-        if (slot->hash == hash && EQUAL_FUNC(slot->key, key)) {
-            *index_out = index;
-            return 1;
-        }
-        if (slot->hash == 0) {
-            break;
-        }
-        uint32_t d = hashutil_dist_to_start(table->size, slot->hash, index);
-        if (i > d) {
-            break;
-        }
-    }
-    return 0;
-}
-
-static void NAMESPACED(put_entry)(struct NAME *table, struct NAMESPACED(entry) entry) {
-    uint32_t start_index = entry.hash & (table->size - 1);
-    uint32_t probe = 0;
-    for (uint32_t i = 0; i < table->size; ++i, ++probe) {
-        uint32_t index = (start_index + i) & (table->size - 1);
-        struct NAMESPACED(entry) *slot = table->entries + index;
-        if (slot->hash == 0) {
-            ++table->used;
-            *slot = entry;
-            return;
-        }
-        if (slot->hash == entry.hash && EQUAL_FUNC(slot->key, entry.key)) {
-            slot->value = entry.value;
-            return;
-        }
-        uint32_t slot_probe = hashutil_dist_to_start(table->size, slot->hash, index);
-        if (probe > slot_probe) {
-            struct NAMESPACED(entry) temp = entry;
-            entry = *slot;
-            *slot = temp;
-            probe = slot_probe;
-        }
-    }
-    assert(0 && "control flow should not get here");
-}
-
-LINKAGE int NAMESPACED(remove)(struct NAME *table, KEY_TYPE key) {
-    struct NAMESPACED(entry) temp;
-    uint32_t index;
-    if (!NAMESPACED(find)(table, key, &index)) {
-        return 0;
-    }
-    for (uint32_t i = 0; i < table->size; ++i) {
-        uint32_t curr_index = (index + i) & (table->size - 1);
-        uint32_t next_index = (index + i + 1) & (table->size - 1);
-        uint32_t next_hash = table->entries[next_index].hash;
-        if (next_hash == 0 || hashutil_dist_to_start(table->size, next_hash, next_index) == 0) {
-            table->entries[curr_index].hash = 0;
-            --table->used;
-            return 1;
-        }
-        temp = table->entries[curr_index];
-        table->entries[curr_index] = table->entries[next_index];
-        table->entries[next_index] = temp;
-    }
-    assert(0 && "control flow should not get here");
-    return 0;
-}
-
-static void NAMESPACED(resize)(struct NAME *table, uint32_t new_size) {
-    assert(new_size > 0);
-    uint32_t old_used = table->used;
-    uint32_t old_size = table->size;
-    struct NAMESPACED(entry) *old_entries = table->entries;
-    table->used = 0;
-    table->size = new_size;
-    table->entries = allocate(table->alloc, sizeof(struct NAMESPACED(entry)) * new_size);
-    if (old_used) {
-        assert(old_used <= new_size);
-        for (uint32_t i = 0; i < old_size; ++i) {
-            struct NAMESPACED(entry) *slot = old_entries + i;
-            if (slot->hash) {
-                NAMESPACED(put_entry)(table, *slot);
-            }
-        }
-        deallocate(table->alloc, old_entries, sizeof(struct NAMESPACED(entry)) * old_size);
-    }
-}
-
-LINKAGE int NAMESPACED(get)(struct NAME *table, KEY_TYPE key, VALUE_TYPE *value_out) {
-    uint32_t index;
-    if (NAMESPACED(find)(table, key, &index)) {
-        *value_out = table->entries[index].value;
-        return 1;
-    }
-    return 0;
-}
-
-LINKAGE void NAMESPACED(put)(struct NAME *table, KEY_TYPE key, VALUE_TYPE value) {
-    struct NAMESPACED(entry) entry;
-    if (!table->size || (float)table->used / table->size > 0.85f) {
-        NAMESPACED(resize)(table, table->size ? table->size * 2 : 16);
-    }
-    entry.hash = NAMESPACED(calc_hash)(key);
-    entry.key = key;
-    entry.value = value;
-    NAMESPACED(put_entry)(table, entry);
-}
-
-LINKAGE void NAMESPACED(init)(struct NAME *table, struct allocator *a, uint32_t initial_size) {
-    table->alloc = a;
-    table->used = 0;
-    table->size = 0;
-    table->entries = NULL;
-    if (initial_size > 0) {
-        NAMESPACED(resize)(table, initial_size);
-    }
-}
-
-LINKAGE void NAMESPACED(cleanup)(struct NAME *table) {
-    deallocate(table->alloc, table->entries, sizeof(struct NAMESPACED(entry)) * table->size);
-    table->used = 0;
-    table->size = 0;
-    table->entries = NULL;
-}
-
-#endif /* EXPAND_IMPLEMENTATION */
-
-
-#undef CONCAT_SYMBOLS
-#undef CONCAT_SYMBOLS2
-#undef NAMESPACED
-
-#undef NAME
-#undef KEY_TYPE
-#undef VALUE_TYPE
-#undef HASH_FUNC
-#undef EQUAL_FUNC
-#undef LINKAGE
+#endif

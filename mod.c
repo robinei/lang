@@ -38,7 +38,9 @@ struct module_ctx *module_load(struct global_ctx *global_ctx, struct module_ctx 
     path = normalize_path(global_ctx, path);
 
     struct module_ctx *new_mod_ctx;
-    if (slice_table_get(&global_ctx->modules, path, (void **)&new_mod_ctx)) {
+    bool found_module;
+    hashtable_get(MODULE_HASHTABLE, global_ctx->modules, path, new_mod_ctx, found_module);
+    if (found_module) {
         if (!new_mod_ctx->module_type) {
             printf("circular dependency detected while importing: %.*s\n", path.len, path.ptr);
             return NULL;
@@ -49,7 +51,7 @@ struct module_ctx *module_load(struct global_ctx *global_ctx, struct module_ctx 
     new_mod_ctx = allocate(&global_ctx->alloc.a, sizeof(struct module_ctx));
     tracking_allocator_init(&new_mod_ctx->alloc, &global_ctx->alloc.a);
     arena_allocator_init(&new_mod_ctx->arena, &new_mod_ctx->alloc.a, DEFAULT_ARENA_BUFFER_SIZE);
-    pointer_table_init(&new_mod_ctx->functions, &new_mod_ctx->alloc.a, 0);
+    hashtable_init(FUNCTION_HASHTABLE, new_mod_ctx->functions, &new_mod_ctx->alloc.a, 0);
     new_mod_ctx->global_ctx = global_ctx;
     new_mod_ctx->source_text = read_file(path.ptr, &new_mod_ctx->arena.a);
     if (!new_mod_ctx->source_text.ptr) {
@@ -86,12 +88,14 @@ struct module_ctx *module_load(struct global_ctx *global_ctx, struct module_ctx 
         return NULL;
     }
 
-    slice_table_put(&global_ctx->modules, path, new_mod_ctx);
+    hashtable_put(MODULE_HASHTABLE, global_ctx->modules, path, new_mod_ctx);
 
     struct expr *struct_expr = peval(&peval_ctx, new_mod_ctx->struct_expr);
     if (struct_expr->kind != EXPR_CONST || struct_expr->c.tag != &type_type || struct_expr->c.type->kind != TYPE_STRUCT) {
         printf("expected struct expr to become a type\n");
-        slice_table_remove(&global_ctx->modules, path);
+        bool removed;
+        hashtable_remove(MODULE_HASHTABLE, global_ctx->modules, path, removed);
+        assert(removed);
         module_free(new_mod_ctx);
         return NULL;
     }
@@ -100,6 +104,7 @@ struct module_ctx *module_load(struct global_ctx *global_ctx, struct module_ctx 
 }
 
 void module_free(struct module_ctx *mod_ctx) {
+    hashtable_cleanup(FUNCTION_HASHTABLE, mod_ctx->functions);
     tracking_allocator_cleanup(&mod_ctx->alloc);
     deallocate(&mod_ctx->global_ctx->alloc.a, mod_ctx, sizeof(struct module_ctx));
 }
