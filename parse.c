@@ -440,10 +440,14 @@ static struct expr *parse_expr_seq_and_wrap_in_block(struct parse_ctx *ctx) {
     return maybe_wrap_in_block(ctx, body, start);
 }
 static struct expr *parse_do(struct parse_ctx *ctx, char *start) {
+    skip_whitespace(ctx);
+    expect_char(ctx, ':', "after 'do'");
     struct expr *body = parse_expr_seq(ctx);
     return maybe_wrap_in_block(ctx, body, start);
 }
 static struct expr *parse_struct(struct parse_ctx *ctx, char *start) {
+    skip_whitespace(ctx);
+    expect_char(ctx, ':', "after 'struct'");
     struct expr *body = parse_expr_seq(ctx);
     struct expr *result = expr_create(ctx, EXPR_STRUCT, start);
     result->struc.body_expr = body;
@@ -489,13 +493,16 @@ static struct expr *parse_fun(struct parse_ctx *ctx, bool is_type, char *start) 
     struct expr *return_type_expr = NULL, *body_expr = NULL;
     struct expr_decl *params = NULL;
 
-    skip_whitespace(ctx);
-    expect_char(ctx, '(', "after 'fun'");
     bool prev_skip_newline = ctx->skip_newline;
     ctx->skip_newline = true;
     skip_whitespace(ctx);
-    if (ctx->ptr[0] != ')' && !(ctx->ptr[0] == '-' && ctx->ptr[1] == '>')) {
-        params = parse_decls(ctx);
+    if (match_char(ctx, '(')) {
+        skip_whitespace(ctx);
+        if (ctx->ptr[0] != ')' && !(ctx->ptr[0] == '-' && ctx->ptr[1] == '>')) {
+            params = parse_decls(ctx);
+            skip_whitespace(ctx);
+        }
+        expect_char(ctx, ')', "after parameter list");
         skip_whitespace(ctx);
     }
     if (match_str(ctx, "->")) {
@@ -503,9 +510,9 @@ static struct expr *parse_fun(struct parse_ctx *ctx, bool is_type, char *start) 
         return_type_expr = parse_expr(ctx);
         skip_whitespace(ctx);
     }
-    expect_char(ctx, ')', "after parameter list");
     ctx->skip_newline = prev_skip_newline;
     if (!is_type) {
+        expect_char(ctx, ':', "before 'fun' body");
         skip_whitespace(ctx);
         body_expr = parse_expr_seq_and_wrap_in_block(ctx);
     } else {
@@ -566,7 +573,7 @@ static struct expr *parse_if(struct parse_ctx *ctx, bool is_elif, char *start) {
     skip_whitespace(ctx);
     struct expr *pred_expr = parse_expr(ctx);
     skip_whitespace(ctx);
-    expect_keyword(ctx, "then", "after 'if' condition");
+    expect_char(ctx, ':', "after 'if' condition");
     int then_indent = ctx->current_indent;
     struct expr *then_expr = parse_expr_seq_and_wrap_in_block(ctx);
     char *after_then = ctx->ptr;
@@ -577,6 +584,8 @@ static struct expr *parse_if(struct parse_ctx *ctx, bool is_elif, char *start) {
     }
     struct expr *else_expr;
     if (ctx->current_indent == then_indent && match_keyword(ctx, "else")) {
+        skip_whitespace(ctx);
+        expect_char(ctx, ':', "after 'else'");
         else_expr = parse_expr_seq_and_wrap_in_block(ctx);
     } else if (ctx->current_indent == then_indent && match_keyword(ctx, "elif")) {
         else_expr = parse_if(ctx, true, after_then);
