@@ -3,7 +3,7 @@
 
 static int bool_value(struct peval_ctx *ctx, struct expr *e) {
     assert(e->kind == EXPR_CONST);
-    if (e->c.tag->kind != TYPE_BOOL) {
+    if (e->t->kind != TYPE_BOOL) {
         PEVAL_ERR(e, "expected bool");
     }
     return e->c.boolean;
@@ -11,10 +11,10 @@ static int bool_value(struct peval_ctx *ctx, struct expr *e) {
 
 static bool const_eq(struct peval_ctx *ctx, struct expr *a, struct expr *b) {
     assert(a->kind == EXPR_CONST && b->kind == EXPR_CONST);
-    if (a->c.tag != b->c.tag) {
+    if (a->t != b->t) {
         return false;
     }
-    switch (a->c.tag->kind) {
+    switch (a->t->kind) {
     case TYPE_TYPE:
         return a->c.type == b->c.type;
     case TYPE_UNIT:
@@ -42,7 +42,7 @@ static void splice_visitor(struct expr_visit_ctx *visit_ctx, struct expr *e) {
         if (expr->kind != EXPR_CONST) {
             PEVAL_ERR(e, "splice argument not computable at compile time");
         }
-        if (expr->c.tag->kind != TYPE_EXPR) {
+        if (expr->t->kind != TYPE_EXPR) {
             PEVAL_ERR(e, "can only splice Expr values");
         }
         *e = *expr->c.expr;
@@ -61,7 +61,7 @@ static void splice_visitor(struct expr_visit_ctx *visit_ctx, struct expr *e) {
 
 #define RETURN_CONST(type_ptr, value_field, value_expression) \
     struct expr *res = expr_create(ctx, EXPR_CONST, e); \
-    res->c.tag = type_ptr; \
+    res->t = type_ptr; \
     res->c.value_field = value_expression; \
     return res;
 
@@ -79,27 +79,27 @@ static void splice_visitor(struct expr_visit_ctx *visit_ctx, struct expr *e) {
 
 #define HANDLE_BOOL_UNOP(op) \
     BEGIN_UNOP_HANDLER() \
-        if(ARG(0)->c.tag == &type_bool) { RETURN_CONST(&type_bool, boolean, UNOP(op, boolean)) } \
+        if(ARG(0)->t == &type_bool) { RETURN_CONST(&type_bool, boolean, UNOP(op, boolean)) } \
     END_UNOP_HANDLER()
     
 #define HANDLE_INT_UINT_UNOP(op) \
     BEGIN_UNOP_HANDLER() \
-        if(ARG(0)->c.tag == &type_int) { RETURN_CONST(&type_int, integer, UNOP(op, integer)) } \
-        if(ARG(0)->c.tag == &type_uint) { RETURN_CONST(&type_uint, uinteger, UNOP(op, uinteger)) } \
+        if(ARG(0)->t == &type_int) { RETURN_CONST(&type_int, integer, UNOP(op, integer)) } \
+        if(ARG(0)->t == &type_uint) { RETURN_CONST(&type_uint, uinteger, UNOP(op, uinteger)) } \
     END_UNOP_HANDLER()
 
 #define HANDLE_INT_UINT_REAL_UNOP(op) \
     BEGIN_UNOP_HANDLER() \
-        if(ARG(0)->c.tag == &type_int) { RETURN_CONST(&type_int, integer, UNOP(op, integer)) } \
-        if(ARG(0)->c.tag == &type_uint) { RETURN_CONST(&type_uint, uinteger, UNOP(op, uinteger)) } \
-        if(ARG(0)->c.tag == &type_real) { RETURN_CONST(&type_real, real, UNOP(op, real)) } \
+        if(ARG(0)->t == &type_int) { RETURN_CONST(&type_int, integer, UNOP(op, integer)) } \
+        if(ARG(0)->t == &type_uint) { RETURN_CONST(&type_uint, uinteger, UNOP(op, uinteger)) } \
+        if(ARG(0)->t == &type_real) { RETURN_CONST(&type_real, real, UNOP(op, real)) } \
     END_UNOP_HANDLER()
 
 
 #define BEGIN_BINOP_HANDLER() \
     PEVAL_ARGS(); \
     if (ARGS_CONST()) { \
-        if (ARG(0)->c.tag != ARG(1)->c.tag) { \
+        if (ARG(0)->t != ARG(1)->t) { \
             PEVAL_ERR(e, "type mismatch"); \
         }
 
@@ -112,36 +112,36 @@ static void splice_visitor(struct expr_visit_ctx *visit_ctx, struct expr *e) {
 
 #define HANDLE_INT_UINT_REAL_BINOP(op) \
     BEGIN_BINOP_HANDLER() \
-        if (ARG(0)->c.tag == &type_int) { RETURN_CONST(&type_int, integer, BINOP(op, integer)); } \
-        if (ARG(0)->c.tag == &type_uint) { RETURN_CONST(&type_uint, uinteger, BINOP(op, uinteger)); } \
-        if (ARG(0)->c.tag == &type_real) { RETURN_CONST(&type_real, real, BINOP(op, real)); } \
+        if (ARG(0)->t == &type_int) { RETURN_CONST(&type_int, integer, BINOP(op, integer)); } \
+        if (ARG(0)->t == &type_uint) { RETURN_CONST(&type_uint, uinteger, BINOP(op, uinteger)); } \
+        if (ARG(0)->t == &type_real) { RETURN_CONST(&type_real, real, BINOP(op, real)); } \
     END_BINOP_HANDLER()
 
 #define HANDLE_INT_UINT_BINOP(op) \
     BEGIN_BINOP_HANDLER() \
-        if (ARG(0)->c.tag == &type_int) { RETURN_CONST(&type_int, integer, BINOP(op, integer)); } \
-        if (ARG(0)->c.tag == &type_uint) { RETURN_CONST(&type_uint, uinteger, BINOP(op, uinteger)); } \
+        if (ARG(0)->t == &type_int) { RETURN_CONST(&type_int, integer, BINOP(op, integer)); } \
+        if (ARG(0)->t == &type_uint) { RETURN_CONST(&type_uint, uinteger, BINOP(op, uinteger)); } \
     END_BINOP_HANDLER()
 
 #define HANDLE_CMP_BINOP(op) \
     BEGIN_BINOP_HANDLER() \
-        if (ARG(0)->c.tag == &type_int) { RETURN_CONST(&type_bool, boolean, BINOP(op, integer)); } \
-        if (ARG(0)->c.tag == &type_uint) { RETURN_CONST(&type_bool, boolean, BINOP(op, uinteger)); } \
-        if (ARG(0)->c.tag == &type_real) { RETURN_CONST(&type_bool, boolean, BINOP(op, real)); } \
+        if (ARG(0)->t == &type_int) { RETURN_CONST(&type_bool, boolean, BINOP(op, integer)); } \
+        if (ARG(0)->t == &type_uint) { RETURN_CONST(&type_bool, boolean, BINOP(op, uinteger)); } \
+        if (ARG(0)->t == &type_real) { RETURN_CONST(&type_bool, boolean, BINOP(op, real)); } \
     END_BINOP_HANDLER()
 
 #define HANDLE_SHIFT_BINOP(op) \
     PEVAL_ARGS(); \
     if (ARGS_CONST()) { \
-        if (ARG(1)->c.tag == &type_int) { \
+        if (ARG(1)->t == &type_int) { \
             if (ARG(1)->c.integer < 0) { PEVAL_ERR(ARG(1), "can't shift by negative number"); } \
-        } else if (ARG(1)->c.tag != &type_uint) { \
+        } else if (ARG(1)->t != &type_uint) { \
             PEVAL_ERR(ARG(1), "can't shift by non-integer"); \
         } \
-        if (ARG(0)->c.tag == &type_int) { \
+        if (ARG(0)->t == &type_int) { \
             if (ARG(0)->c.integer < 0) { PEVAL_ERR(ARG(0), "can't shift negative number"); } \
             RETURN_CONST(&type_int, integer, BINOP(op, integer)); \
-        } else if (ARG(0)->c.tag == &type_uint) { \
+        } else if (ARG(0)->t == &type_uint) { \
             RETURN_CONST(&type_uint, uinteger, BINOP(op, uinteger)); \
         } else { \
             PEVAL_ERR(ARG(0), "can't shift non-integer"); \
@@ -179,7 +179,7 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
                 PEVAL_ERR(field, "expected symbol");
             }
             struct expr *target = peval(ctx, ARG(0)->prim.arg_exprs[0]);
-            if (target->kind != EXPR_CONST || target->c.tag != &type_type || target->c.type->kind != TYPE_STRUCT) {
+            if (target->kind != EXPR_CONST || target->t != &type_type || target->c.type->kind != TYPE_STRUCT) {
                 PEVAL_ERR(field, "invalid assignment target");
             }
             struct type *type = target->c.type;
@@ -228,7 +228,7 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
         }
         PEVAL_ARG(0);
         if (ARG_CONST(0)) {
-            if (ARG(0)->c.tag != &type_type) {
+            if (ARG(0)->t != &type_type) {
                 PEVAL_ERR(ARG(0), "expected type");
             }
             struct expr *sym = ARG(1);
@@ -256,7 +256,7 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
     case PRIM_QUOTE:
         if (ctx->force_full_expansion) {
             struct expr *res = expr_create(ctx, EXPR_CONST, e);
-            res->c.tag = &type_expr;
+            res->t = &type_expr;
             res->c.expr = expr_run_visitor(ARG(0), splice_visitor, ctx, ctx->arena);
             return res;
         }
@@ -269,7 +269,7 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
         if (!ARG_CONST(0)) {
             PEVAL_ERR(e, "'splice' expected compile-time computable argument");
         }
-        if (ARG(0)->c.tag->kind != TYPE_EXPR) {
+        if (ARG(0)->t->kind != TYPE_EXPR) {
             PEVAL_ERR(e, "'splice' expected argument of type 'Expr'");
         }
         return peval(ctx, ARG(0)->c.expr);
@@ -288,7 +288,7 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
             if (!ARG_CONST(0)) {
                 PEVAL_ERR(e, "'import' expected compile-time computable argument");
             }
-            if (ARG(0)->c.tag->kind != TYPE_STRING) {
+            if (ARG(0)->t->kind != TYPE_STRING) {
                 PEVAL_ERR(e, "'import' expected argument of type 'String'");
             }
             slice_t path = ARG(0)->c.string;
@@ -298,7 +298,7 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
             }
             // TODO: modules should be in a global registry
             struct expr *res = expr_create(ctx, EXPR_CONST, e);
-            res->c.tag = &type_type;
+            res->t = &type_type;
             res->c.type = mod_ctx->module_type;
             return res;
         }

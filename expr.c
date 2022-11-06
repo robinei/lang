@@ -211,7 +211,7 @@ static void print_cond(struct print_ctx *ctx, struct expr *e, bool is_elif) {
     print_indent(ctx);
     if (e->cond.else_expr->kind == EXPR_COND) {
         print_cond(ctx, e->cond.else_expr, true);
-    } else if (e->cond.else_expr->kind == EXPR_CONST && e->cond.else_expr->c.tag == &type_unit) {
+    } else if (e->cond.else_expr->kind == EXPR_CONST && e->t == &type_unit) {
         print_colored(ctx, KEYWORD_COLOR, "end");
     } else {
         print_colored(ctx, KEYWORD_COLOR, "else\n");
@@ -231,7 +231,7 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
     }
     switch (e->kind) {
     case EXPR_CONST:
-        switch (e->c.tag->kind) {
+        switch (e->t->kind) {
         case TYPE_EXPR:
             print_colored(ctx, COLOR_NORMAL, "Expr<");
             print_expr(ctx, e->c.expr);
@@ -269,10 +269,10 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
             print_colored(ctx, STRING_COLOR, "\"%.*s\"", e->c.string.len, e->c.string.ptr);
             break;
         case TYPE_FUN:
-            print_colored(ctx, COLOR_NORMAL, "<fun:%s>", e->c.fun.func->name->data);
+            print_colored(ctx, COLOR_NORMAL, "<fun:%s>", e->c.fun->name->data);
             break;
         default:
-            print_colored(ctx, COLOR_NORMAL, "<const:%s>", type_names[e->c.tag->kind]);
+            print_colored(ctx, COLOR_NORMAL, "<const:%s>", type_names[e->t->kind]);
             break;
         }
         break;

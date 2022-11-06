@@ -81,25 +81,18 @@ enum {
     EXPR_FLAG_DEF_VAR = 2,
 };
 
-struct value {
-    union {
-        struct {
-            struct function *func;
-        } fun;
-        struct expr *expr;
-        struct type *type;
-        bool boolean;
-        int64_t integer;
-        uint64_t uinteger;
-        double real;
-        slice_t string;
-    };
-    struct type *tag;
-};
-
 struct expr {
     union {
-        struct value c; /* const */
+        union {
+            struct function *fun;
+            struct expr *expr;
+            struct type *type;
+            bool boolean;
+            int64_t integer;
+            uint64_t uinteger;
+            double real;
+            slice_t string;
+        } c; /* const */
 
         struct symbol *sym;
 
@@ -139,6 +132,8 @@ struct expr {
             struct expr_link *args;
         } call;
     };
+
+    struct type *t;
 
     uint source_pos;
     uint flags : 16;

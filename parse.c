@@ -58,7 +58,7 @@ static struct expr *expr_create(struct parse_ctx *ctx, uint expr_type, char *sta
 }
 static struct expr *bool_create(struct parse_ctx *ctx, bool bool_value, char *start) {
     struct expr *e = expr_create(ctx, EXPR_CONST, start);
-    e->c.tag = &type_bool;
+    e->t = &type_bool;
     e->c.boolean = bool_value;
     return e;
 }
@@ -69,7 +69,7 @@ static struct expr *symbol_create(struct parse_ctx *ctx, char *start) {
 }
 static struct expr *unit_create(struct parse_ctx *ctx, char *start) {
     struct expr *e = expr_create(ctx, EXPR_CONST, start);
-    e->c.tag = &type_unit;
+    e->t = &type_unit;
     return e;
 }
 static struct expr *prim_create_bin(struct parse_ctx *ctx, int prim, struct expr *lhs, struct expr *rhs, char *start) {
@@ -322,7 +322,7 @@ static struct expr *parse_string(struct parse_ctx *ctx) {
             // TODO: handle escape sequences
             (void)has_escapes;
             struct expr *result = expr_create(ctx, EXPR_CONST, start);
-            result->c.tag = &type_string;
+            result->t = &type_string;
             result->c.string = slice_from_str_len(start + 1, ctx->ptr - start - 2);
             return result;
         case '\0':
@@ -347,10 +347,10 @@ static struct expr *parse_number(struct parse_ctx *ctx) {
         }
         struct expr *result = expr_create(ctx, EXPR_CONST, start);
         if (value <= INT64_MAX) {
-            result->c.tag = &type_int;
+            result->t = &type_int;
             result->c.integer = (int64_t)value;
         } else {
-            result->c.tag = &type_uint;
+            result->t = &type_uint;
             result->c.uinteger = value;
         }
         return result;
@@ -363,7 +363,7 @@ static struct expr *parse_number(struct parse_ctx *ctx) {
             PARSE_ERR("illegal number suffix");
         }
         struct expr *result = expr_create(ctx, EXPR_CONST, start);
-        result->c.tag = &type_real;
+        result->t = &type_real;
         result->c.real = real;
         return result;
     }

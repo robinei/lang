@@ -91,7 +91,7 @@ struct module_ctx *module_load(struct global_ctx *global_ctx, struct module_ctx 
     hashtable_put(MODULE_HASHTABLE, global_ctx->modules, path, new_mod_ctx);
 
     struct expr *struct_expr = peval(&peval_ctx, new_mod_ctx->struct_expr);
-    if (struct_expr->kind != EXPR_CONST || struct_expr->c.tag != &type_type || struct_expr->c.type->kind != TYPE_STRUCT) {
+    if (struct_expr->kind != EXPR_CONST || struct_expr->t != &type_type || struct_expr->c.type->kind != TYPE_STRUCT) {
         printf("expected struct expr to become a type\n");
         bool removed;
         hashtable_remove(MODULE_HASHTABLE, global_ctx->modules, path, removed);

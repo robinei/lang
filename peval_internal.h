@@ -17,7 +17,7 @@ static struct expr *expr_create(struct peval_ctx *ctx, uint expr_type, struct ex
 }
 static struct expr *unit_create(struct peval_ctx *ctx, struct expr *antecedent) {
     struct expr *e = expr_create(ctx, EXPR_CONST, antecedent);
-    e->c.tag = &type_unit;
+    e->t = &type_unit;
     return e;
 }
 

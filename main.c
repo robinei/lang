@@ -37,11 +37,11 @@ static void run_tests(char *filename) {
             printf("\n(skip) value not const: %s\n", name->data);
             continue;
         }
-        if (e->c.tag->kind != TYPE_FUN) {
+        if (e->t->kind != TYPE_FUN) {
             printf("\n(skip) value not a function: %s\n", name->data);
             continue;
         }
-        struct function *func = e->c.fun.func;
+        struct function *func = e->c.fun;
         if (func->fun_expr->fun.params) {
             printf("\n(skip) function is not zero argument: %s\n", name->data);
             continue;
