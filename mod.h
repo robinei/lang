@@ -2,16 +2,19 @@
 #define MOD_H
 
 #include "global.h"
-#include "expr.h"
 #include "error.h"
+
+#define SPECIALIZED_ARGS_HASH(A) const_args_hash(A, FNV_SEED)
+#define SPECIALIZED_ARGS_EQ(A, B) const_args_eq(ctx, A, B)
+#define SPECIALIZATIONS_TABLE(X) X(specializations_table, struct expr_link *, struct function *, SPECIALIZED_ARGS_HASH, SPECIALIZED_ARGS_EQ)
+DECLARE_HASHTABLE(SPECIALIZATIONS_TABLE)
 
 struct function {
     struct symbol *name;
+    struct scope *env;
     struct expr *fun_expr;
+    struct specializations_table specializations;
 };
-
-#define FUNCTION_HASHTABLE(X) X(function_hashtable, struct symbol *, struct function *, calc_ptr_hash, VALUE_EQ)
-DECLARE_HASHTABLE(FUNCTION_HASHTABLE)
 
 struct module_ctx {
     struct tracking_allocator alloc;
@@ -19,8 +22,6 @@ struct module_ctx {
 
     struct global_ctx *global_ctx;
     struct error_ctx err_ctx;
-
-    struct function_hashtable functions;
 
     slice_t source_text; /* buffer is owned */
     struct expr *struct_expr; /* parsed representation */

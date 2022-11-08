@@ -103,10 +103,11 @@
         assert(_new_size > 0); \
         uint32_t _old_used = (Table).used; \
         uint32_t _old_size = (Table).size; \
+        struct allocator *_alloc = (Table).alloc ? (Table).alloc : default_allocator; \
         struct Params(HASHTABLE_ENTRYNAME) *_old_entries = (Table).entries; \
         (Table).used = 0; \
         (Table).size = _new_size; \
-        (Table).entries = allocate((Table).alloc, sizeof(struct Params(HASHTABLE_ENTRYNAME)) * _new_size); \
+        (Table).entries = allocate(_alloc, sizeof(struct Params(HASHTABLE_ENTRYNAME)) * _new_size); \
         if (_old_used) { \
             assert(_old_used <= _new_size); \
             for (uint32_t _i = 0; _i < _old_size; ++_i) { \
@@ -115,7 +116,7 @@
                     hashtable_putentry(Params, Table, *_slot); \
                 } \
             } \
-            deallocate((Table).alloc, _old_entries, sizeof(struct Params(HASHTABLE_ENTRYNAME)) * _old_size); \
+            deallocate(_alloc, _old_entries, sizeof(struct Params(HASHTABLE_ENTRYNAME)) * _old_size); \
         } \
     } while(0)
 

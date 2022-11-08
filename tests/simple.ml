@@ -59,7 +59,6 @@ Self.testUnit = fun:
     assert(x == ())
 
 Self.testMutual = fun:
-    const static odd: Fun(n: Int) -> Bool // forward declare must be static
     const even = fun(n: Int) -> Bool:
         if n == 0: true else: odd(n - 1)
     const odd = fun(n):
@@ -68,8 +67,7 @@ Self.testMutual = fun:
     assert(not even(5))
 
 
-// declare type to allow recursion (top level implicitly static)
-const exp: Fun(x, n: Int) -> Int = fun(x, n):
+const exp = fun(x, n):
     if n == 0: 1 else: x * exp(x, n - 1)
 const pow2 = fun(n: Int) -> Int: exp(2, n)
 Self.testExp = fun:
@@ -85,7 +83,6 @@ Self.testTypeExpr = fun:
         x
     assert(test() == 123)
 
-const fibHelp: Fun(a, b, n: Int) -> Int
 const fibHelp = fun(a, b, n):
     if n == 0: a else: fibHelp(b, a+b, n-1)
 const fib = fun(n: Int) -> Int: fibHelp(0, 1, n)

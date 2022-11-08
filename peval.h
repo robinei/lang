@@ -5,31 +5,12 @@
 #include "mod.h"
 #include <setjmp.h>
 
-enum scope_kind {
-    SCOPE_STRUCT,
-    SCOPE_FUNCTION,
-    SCOPE_BLOCK
-};
-
-struct scope {
-    struct scope *outer_scope;
-
-    struct expr_decl *decls;
-    struct expr_decl **last_decl_ptr;
-
-    struct type *self;
-
-    uint free_var_count;
-    enum scope_kind kind;
-};
-
 struct peval_ctx {
     struct allocator *arena;
     struct global_ctx *global_ctx;
     struct module_ctx *mod_ctx;
     struct error_ctx *err_ctx;
 
-    struct scope root_scope;
     struct scope *scope;
 
     uint force_full_expansion;

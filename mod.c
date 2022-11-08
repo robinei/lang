@@ -51,7 +51,6 @@ struct module_ctx *module_load(struct global_ctx *global_ctx, struct module_ctx 
     new_mod_ctx = allocate(&global_ctx->alloc.a, sizeof(struct module_ctx));
     tracking_allocator_init(&new_mod_ctx->alloc, &global_ctx->alloc.a);
     arena_allocator_init(&new_mod_ctx->arena, &new_mod_ctx->alloc.a, DEFAULT_ARENA_BUFFER_SIZE);
-    hashtable_init(FUNCTION_HASHTABLE, new_mod_ctx->functions, &new_mod_ctx->alloc.a, 0);
     new_mod_ctx->global_ctx = global_ctx;
     new_mod_ctx->source_text = read_file(path.ptr, &new_mod_ctx->arena.a);
     if (!new_mod_ctx->source_text.ptr) {
@@ -69,6 +68,7 @@ struct module_ctx *module_load(struct global_ctx *global_ctx, struct module_ctx 
         module_free(new_mod_ctx);
         return NULL;
     }
+
     printf("parsed module:\n");
     pretty_print(new_mod_ctx->struct_expr);
     {
@@ -104,7 +104,6 @@ struct module_ctx *module_load(struct global_ctx *global_ctx, struct module_ctx 
 }
 
 void module_free(struct module_ctx *mod_ctx) {
-    hashtable_cleanup(FUNCTION_HASHTABLE, mod_ctx->functions);
     tracking_allocator_cleanup(&mod_ctx->alloc);
     deallocate(&mod_ctx->global_ctx->alloc.a, mod_ctx, sizeof(struct module_ctx));
 }

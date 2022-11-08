@@ -393,9 +393,9 @@ static struct expr *parse_expr_seq_at_indent(struct parse_ctx *ctx, int indent_t
         if (!result) {
             result = e;
         } else if (!last_seq) {
-            result = last_seq = prim_create_bin(ctx, PRIM_SEQ, result, e, ctx->mod_ctx->source_text.ptr + e->source_pos);
+            result = last_seq = prim_create_bin(ctx, PRIM_SEQ, result, e, ctx->mod_ctx->source_text.ptr + result->source_pos);
         } else {
-            last_seq = last_seq->prim.arg_exprs[1] = prim_create_bin(ctx, PRIM_SEQ, last_seq->prim.arg_exprs[1], e, ctx->mod_ctx->source_text.ptr + e->source_pos);
+            last_seq = last_seq->prim.arg_exprs[1] = prim_create_bin(ctx, PRIM_SEQ, last_seq->prim.arg_exprs[1], e, ctx->mod_ctx->source_text.ptr + last_seq->prim.arg_exprs[1]->source_pos);
         }
     }
 out:

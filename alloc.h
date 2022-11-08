@@ -2,6 +2,7 @@
 #define ALLOC_H
 
 #include "defs.h"
+#include <string.h>
 
 
 
@@ -20,7 +21,9 @@ struct allocator {
 };
 
 static inline void *allocate(struct allocator *a, uint size) {
-    return a->alloc_func(a, size);
+    void *ptr = a->alloc_func(a, size);
+    memset(ptr, 0, size); // extra precaution
+    return ptr;
 }
 static inline void deallocate(struct allocator *a, void *ptr, uint size) {
     a->dealloc_func(a, ptr, size);

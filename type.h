@@ -4,6 +4,7 @@
 #include "sym.h"
 
 #define FOR_ALL_TYPES(X) \
+    X(ANY) \
     X(EXPR) \
     X(TYPE) \
     X(UNIT) \
@@ -36,6 +37,7 @@ struct type {
 void type_set_attr(struct type *type, struct symbol *name, struct expr *val);
 struct expr *type_get_attr(struct type *type, struct symbol *name);
 
+extern struct type type_any;
 extern struct type type_expr;
 extern struct type type_type;
 extern struct type type_unit;

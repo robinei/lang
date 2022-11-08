@@ -9,32 +9,6 @@ static int bool_value(struct peval_ctx *ctx, struct expr *e) {
     return e->c.boolean;
 }
 
-static bool const_eq(struct peval_ctx *ctx, struct expr *a, struct expr *b) {
-    assert(a->kind == EXPR_CONST && b->kind == EXPR_CONST);
-    if (a->t != b->t) {
-        return false;
-    }
-    switch (a->t->kind) {
-    case TYPE_TYPE:
-        return a->c.type == b->c.type;
-    case TYPE_UNIT:
-        return true;
-    case TYPE_BOOL:
-        return a->c.boolean == b->c.boolean;
-    case TYPE_INT:
-        return a->c.integer == b->c.integer;
-    case TYPE_UINT:
-        return a->c.uinteger == b->c.uinteger;
-    case TYPE_REAL:
-        return a->c.real == b->c.real;
-    case TYPE_STRING:
-        return slice_equals(a->c.string, b->c.string);
-    default:
-        PEVAL_ERR(a, "equality not implemented for type");
-        return false;
-    }
-}
-
 static void splice_visitor(struct expr_visit_ctx *visit_ctx, struct expr *e) {
     if (e->kind == EXPR_PRIM && e->prim.kind == PRIM_SPLICE) {
         struct peval_ctx *ctx = visit_ctx->ctx;

@@ -18,7 +18,6 @@ const char *expr_names[] = {
 };
 
 
-
 struct expr *expr_visit(struct expr_visit_ctx *ctx, struct expr *e) {
     if (!e) {
         return NULL;
@@ -233,7 +232,7 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
     case EXPR_CONST:
         switch (e->t->kind) {
         case TYPE_EXPR:
-            print_colored(ctx, COLOR_NORMAL, "Expr<");
+            print_colored(ctx, COLOR_NORMAL, "<Expr:");
             print_expr(ctx, e->c.expr);
             print_colored(ctx, COLOR_NORMAL, ">");
             break;
@@ -244,7 +243,7 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
             case TYPE_UNIT: print_colored(ctx, COLOR_NORMAL, "<Unit>"); break;
             case TYPE_BOOL: print_colored(ctx, COLOR_NORMAL, "<Bool>"); break;
             case TYPE_INT: print_colored(ctx, COLOR_NORMAL, "<Int>"); break;
-            case TYPE_FUN: print_colored(ctx, COLOR_NORMAL, "<Fn>"); break;
+            case TYPE_FUN: print_colored(ctx, COLOR_NORMAL, "<Fun>"); break;
             case TYPE_STRUCT: print_colored(ctx, COLOR_NORMAL, "<Struct>"); break;
             default:
                 print_colored(ctx, COLOR_NORMAL, "<type:%s>", type_names[e->c.type->kind]); break;
@@ -410,7 +409,6 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
     }
     }
 }
-
 
 void pretty_print_indented(struct expr *e, uint indent) {
     struct print_ctx print_ctx = { indent, };

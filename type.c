@@ -14,6 +14,7 @@ struct expr *type_get_attr(struct type *type, struct symbol *name) {
     return result;
 }
 
+struct type type_any = { .kind = TYPE_ANY };
 struct type type_expr = { .kind = TYPE_EXPR };
 struct type type_type = { .kind = TYPE_TYPE };
 struct type type_unit = { .kind = TYPE_UNIT };
