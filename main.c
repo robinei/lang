@@ -42,7 +42,7 @@ static void run_tests(char *filename) {
             continue;
         }
         struct function *func = e->c.fun;
-        if (func->fun_expr->fun.params) {
+        if (func->fun_expr->fun_param_count) {
             printf("\n(skip) function is not zero argument: %s\n", name->data);
             continue;
         }

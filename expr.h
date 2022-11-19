@@ -62,23 +62,12 @@ enum expr_kind { FOR_ALL_EXPRS(DECL_EXPR_ENUM) };
 
 extern const char *expr_names[];
 
+#define MAX_PARAM 128
 
-struct expr_link {
-    struct expr *expr;
-    struct expr_link *next;
-};
-
-struct expr_decl {
+struct fun_param {
     struct expr *name_expr;
     struct expr *type_expr;
-    struct expr *value_expr;
-    struct expr_decl *next;
-    bool is_static : 1;
-};
-
-enum {
-    EXPR_FLAG_DEF_STATIC = 1,
-    EXPR_FLAG_DEF_VAR = 2,
+    bool is_static;
 };
 
 struct expr {
@@ -97,7 +86,7 @@ struct expr {
         struct symbol *sym;
 
         struct {
-            struct expr_decl *params;
+            struct fun_param *params;
             struct expr *return_type_expr;
             struct expr *body_expr; /* NULL for fun type declaration */
         } fun;
@@ -129,14 +118,18 @@ struct expr {
         
         struct {
             struct expr *callable_expr;
-            struct expr_link *args;
+            struct expr **args;
+            uint arg_count;
         } call;
     };
 
     struct type *t;
 
     uint source_pos;
-    uint flags : 16;
+
+    bool def_is_static : 1;
+    bool def_is_var : 1;
+    uint fun_param_count : 14;
     enum expr_kind kind : 16;
 };
 
@@ -157,24 +150,5 @@ struct expr *expr_run_visitor(struct expr *e, expr_visitor_t visitor, void *ctx,
 
 void pretty_print_indented(struct expr *e, uint indent);
 void pretty_print(struct expr *e);
-
-
-static uint decl_list_length(struct expr_decl *decl) {
-    uint count = 0;
-    while (decl) {
-        ++count;
-        decl = decl->next;
-    }
-    return count;
-}
-
-static uint expr_list_length(struct expr_link *link) {
-    uint count = 0;
-    while (link) {
-        ++count;
-        link = link->next;
-    }
-    return count;
-}
 
 #endif

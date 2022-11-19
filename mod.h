@@ -4,9 +4,8 @@
 #include "global.h"
 #include "error.h"
 
-#define SPECIALIZED_ARGS_HASH(A) const_args_hash(A, FNV_SEED)
-#define SPECIALIZED_ARGS_EQ(A, B) const_args_eq(ctx, A, B)
-#define SPECIALIZATIONS_TABLE(X) X(specializations_table, struct expr_link *, struct function *, SPECIALIZED_ARGS_HASH, SPECIALIZED_ARGS_EQ)
+struct arg_array;
+#define SPECIALIZATIONS_TABLE(X) X(specializations_table, struct arg_array *, struct function *, arg_array_hash, arg_array_eq)
 DECLARE_HASHTABLE(SPECIALIZATIONS_TABLE)
 
 struct function {

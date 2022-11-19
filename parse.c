@@ -455,71 +455,62 @@ static struct expr *parse_struct(struct parse_ctx *ctx, char *start) {
 }
 
 
-static struct expr_decl *parse_decls(struct parse_ctx *ctx) {
-    skip_whitespace(ctx);
-    char *start = ctx->ptr;
-    struct expr_decl *d = allocate(ctx->arena, sizeof(struct expr_decl));
-    expect_ident(ctx, "in declaration");
-    d->name_expr = symbol_create(ctx, start);
-    skip_whitespace(ctx);
-    if (match_char(ctx, ',')) {
-        d->next = parse_decls(ctx);
-        d->type_expr = d->next->type_expr;
-        d->value_expr = d->next->value_expr;
-        d->is_static = d->next->is_static;
-    }
-    else {
-        if (match_char(ctx, ':')) {
-            skip_whitespace(ctx);
-            if (match_keyword(ctx, "static")) {
-                d->is_static = true;
-                skip_whitespace(ctx);
-            }
-            d->type_expr = parse_expr(ctx);
-        }
-        if (match_char(ctx, '=')) {
-            skip_whitespace(ctx);
-            d->value_expr = parse_expr(ctx);
-        }
-        if (match_char(ctx, ';')) {
-            skip_whitespace(ctx);
-            d->next = parse_decls(ctx);
-        }
-    }
-    return d;
-}
-
 static struct expr *parse_fun(struct parse_ctx *ctx, bool is_type, char *start) {
     struct expr *return_type_expr = NULL, *body_expr = NULL;
-    struct expr_decl *params = NULL;
+    struct fun_param params[MAX_PARAM];
+    uint param_count = 0;
+    uint type_count = 0;
 
     bool prev_skip_newline = ctx->skip_newline;
     ctx->skip_newline = true;
     skip_whitespace(ctx);
+
     if (match_char(ctx, '(')) {
         skip_whitespace(ctx);
-        if (ctx->ptr[0] != ')' && !(ctx->ptr[0] == '-' && ctx->ptr[1] == '>')) {
-            params = parse_decls(ctx);
+
+        while (!match_char(ctx, ')')) {
+            struct fun_param *param = &params[param_count++];
+            memset(param, 0, sizeof(*param));
+            
+            char *sym_start = ctx->ptr;
+            expect_ident(ctx, "in parameter list");
+            param->name_expr = symbol_create(ctx, sym_start);
+            skip_whitespace(ctx);
+
+            if (match_char(ctx, ':')) {
+                skip_whitespace(ctx);
+                if (match_keyword(ctx, "static")) {
+                    param->is_static = true;
+                    skip_whitespace(ctx);
+                }
+                param->type_expr = parse_expr(ctx);
+                ++type_count;
+            }
+
+            if (!match_char(ctx, ',')) {
+                expect_char(ctx, ')', "after argument list");
+                break;
+            }
             skip_whitespace(ctx);
         }
-        expect_char(ctx, ')', "after parameter list");
+
         skip_whitespace(ctx);
     }
+
     if (match_str(ctx, "->")) {
         skip_whitespace(ctx);
         return_type_expr = parse_expr(ctx);
         skip_whitespace(ctx);
     }
+
     ctx->skip_newline = prev_skip_newline;
     if (!is_type) {
         expect_char(ctx, ':', "before 'fun' body");
         skip_whitespace(ctx);
         body_expr = parse_expr_seq_and_wrap_in_block(ctx);
     } else {
-        for (struct expr_decl *p = params; p; p = p->next) {
-            if (!p->type_expr) {
-                PARSE_ERR("incomplete parameter types in preceding function type definition");
-            }
+        if (type_count != param_count) {
+            PARSE_ERR("incomplete parameter types in preceding function type definition");
         }
         if (!return_type_expr) {
             PARSE_ERR("missing return type in preceding function type definition");
@@ -527,20 +518,19 @@ static struct expr *parse_fun(struct parse_ctx *ctx, bool is_type, char *start) 
     }
 
     struct expr *result = expr_create(ctx, EXPR_FUN, start);
-    result->fun.params = params;
+    result->fun.params = allocate(ctx->arena, sizeof(struct fun_param) * param_count);
+    memcpy(result->fun.params, params, sizeof(struct fun_param) * param_count);
+    result->fun_param_count = param_count;
     result->fun.return_type_expr = return_type_expr;
     result->fun.body_expr = body_expr;
     return result;
 }
 
 static struct expr *parse_def(struct parse_ctx *ctx, bool is_const, char *start) {
-    unsigned int flags = 0;
-    if (!is_const) {
-        flags |= EXPR_FLAG_DEF_VAR;
-    }
+    bool is_static = false;
     skip_whitespace(ctx);
     if (match_keyword(ctx, "static")) {
-        flags |= EXPR_FLAG_DEF_STATIC;
+        is_static = true;
         skip_whitespace(ctx);
     }
     char *sym_start = ctx->ptr;
@@ -560,7 +550,8 @@ static struct expr *parse_def(struct parse_ctx *ctx, bool is_const, char *start)
     }
 
     struct expr *e = expr_create(ctx, EXPR_DEF, start);
-    e->flags = flags;
+    e->def_is_var = !is_const;
+    e->def_is_static = is_static;
     e->def.name_expr = name_expr;
     e->def.type_expr = type_expr;
     e->def.value_expr = value_expr;
@@ -748,49 +739,45 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
 
 
 
-static struct expr_link *parse_args(struct parse_ctx *ctx) {
-    if (match_char(ctx, ')')) {
-        return NULL;
-    }
-    struct expr_link *a = allocate(ctx->arena, sizeof(struct expr_link));
-    a->expr = parse_expr(ctx);
-    skip_whitespace(ctx);
-    if (match_char(ctx, ',')) {
-        skip_whitespace(ctx);
-        a->next = parse_args(ctx);
-    } else {
-        expect_char(ctx, ')', "after argument list");
-    }
-    return a;
-}
 static struct expr *parse_call(struct parse_ctx *ctx, struct expr *callable_expr) {
     char *start = ctx->ptr - 1;
     bool prev_skip_newline = ctx->skip_newline;
     ctx->skip_newline = true;
     skip_whitespace(ctx);
-    struct expr_link *args = parse_args(ctx);
+    struct expr *args[MAX_PARAM];
+    uint arg_count = 0;
+    while (!match_char(ctx, ')')) {
+        args[arg_count++] = parse_expr(ctx);
+        skip_whitespace(ctx);
+        if (!match_char(ctx, ',')) {
+            expect_char(ctx, ')', "after argument list");
+            break;
+        }
+        skip_whitespace(ctx);
+    }
     ctx->skip_newline = prev_skip_newline;
     struct expr *result = expr_create(ctx, EXPR_CALL, start);
     result->call.callable_expr = callable_expr;
-    result->call.args = args;
+    result->call.args = allocate(ctx->arena, sizeof(struct expr *) * arg_count);
+    memcpy(result->call.args, args, sizeof(struct expr *) * arg_count);
+    result->call.arg_count = arg_count;
     return result;
 }
 
-static void quote_args(struct parse_ctx *ctx, struct expr_link *arg) {
-    if (!arg) {
-        return;
+static void quote_args(struct parse_ctx *ctx, struct expr **args, uint arg_count) {
+    for (uint i = 0; i < arg_count; ++i) {
+        struct expr *arg = args[i];
+        struct expr *e = expr_create(ctx, EXPR_PRIM, ctx->mod_ctx->source_text.ptr + arg->source_pos);
+        e->prim.kind = PRIM_QUOTE;
+        e->prim.arg_exprs[0] = arg;
+        args[i] = e;
     }
-    struct expr *e = expr_create(ctx, EXPR_PRIM, ctx->mod_ctx->source_text.ptr + arg->expr->source_pos);
-    e->prim.kind = PRIM_QUOTE;
-    e->prim.arg_exprs[0] = arg->expr;
-    arg->expr = e;
-    quote_args(ctx, arg->next);
 }
 static struct expr *macroify(struct parse_ctx *ctx, struct expr *call_expr) {
     struct expr *e = expr_create(ctx, EXPR_PRIM, ctx->mod_ctx->source_text.ptr + call_expr->source_pos);
     e->prim.kind = PRIM_SPLICE;
     e->prim.arg_exprs[0] = call_expr;
-    quote_args(ctx, call_expr->call.args);
+    quote_args(ctx, call_expr->call.args, call_expr->call.arg_count);
     return e;
 }
 

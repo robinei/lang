@@ -71,7 +71,8 @@ static void splice_visitor(struct expr_visit_ctx *visit_ctx, struct expr *e) {
 
 
 #define BEGIN_BINOP_HANDLER() \
-    PEVAL_ARGS(); \
+    PEVAL_ARG(0); \
+    PEVAL_ARG(1); \
     if (ARGS_CONST()) { \
         if (ARG(0)->t != ARG(1)->t) { \
             PEVAL_ERR(e, "type mismatch"); \
@@ -105,7 +106,8 @@ static void splice_visitor(struct expr_visit_ctx *visit_ctx, struct expr *e) {
     END_BINOP_HANDLER()
 
 #define HANDLE_SHIFT_BINOP(op) \
-    PEVAL_ARGS(); \
+    PEVAL_ARG(0); \
+    PEVAL_ARG(1); \
     if (ARGS_CONST()) { \
         if (ARG(1)->t == &type_int) { \
             if (ARG(1)->c.integer < 0) { PEVAL_ERR(ARG(1), "can't shift by negative number"); } \
@@ -136,7 +138,8 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
     case PRIM_BITWISE_NOT: HANDLE_INT_UINT_UNOP(~)
 
     case PRIM_SEQ:
-        PEVAL_ARGS();
+        PEVAL_ARG(0);
+        PEVAL_ARG(1);
         if (ARG_CONST(0)) {
             return ARG(1);
         }
@@ -179,8 +182,20 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
     case PRIM_BITWISE_XOR: HANDLE_INT_UINT_BINOP(^)
     case PRIM_BITWISE_AND: HANDLE_INT_UINT_BINOP(&)
 
-    case PRIM_EQ:  PEVAL_ARGS(); if (ARGS_CONST()) { RETURN_CONST(&type_bool, boolean,  const_eq(ctx, ARG(0), ARG(1))) }
-    case PRIM_NEQ: PEVAL_ARGS(); if (ARGS_CONST()) { RETURN_CONST(&type_bool, boolean, !const_eq(ctx, ARG(0), ARG(1))) }
+    case PRIM_EQ:
+        PEVAL_ARG(0);
+        PEVAL_ARG(1);
+        if (ARGS_CONST()) {
+            RETURN_CONST(&type_bool, boolean,  const_eq(ARG(0), ARG(1)))
+        }
+        break;
+    case PRIM_NEQ:
+        PEVAL_ARG(0);
+        PEVAL_ARG(1);
+        if (ARGS_CONST()) {
+            RETURN_CONST(&type_bool, boolean, !const_eq(ARG(0), ARG(1)))
+        }
+        break;
 
     case PRIM_LT:   HANDLE_CMP_BINOP(<)
     case PRIM_GT:   HANDLE_CMP_BINOP(>)

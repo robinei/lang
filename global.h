@@ -4,6 +4,9 @@
 #include "expr.h"
 
 
+#define SCOPE_HASHTABLE(X) X(scope_hashtable, struct symbol *, struct expr *, calc_ptr_hash, VALUE_EQ)
+DECLARE_HASHTABLE(SCOPE_HASHTABLE)
+
 enum scope_kind {
     SCOPE_STRUCT,
     SCOPE_FUNCTION,
@@ -11,17 +14,15 @@ enum scope_kind {
 };
 
 struct scope {
-    struct scope *parent;
-
-    struct expr_decl *decls;
-    struct expr_decl **last_decl_ptr;
-
-    struct type *self;
-
     enum scope_kind kind;
+    struct scope *parent;
+    struct type *self;
+    struct scope_hashtable table;
 };
 
-struct scope *scope_create(struct allocator *allocator, struct scope *parent, enum scope_kind kind);
+struct scope *scope_create(struct allocator *alloc, struct scope *parent, enum scope_kind kind);
+void scope_define(struct scope *scope, struct symbol *sym, struct expr *e);
+struct expr *scope_lookup(struct scope *scope, struct symbol *sym);
 
 
 #define MODULE_HASHTABLE(X) X(module_hashtable, slice_t, struct module_ctx *, slice_hash_fnv1a, slice_equals)

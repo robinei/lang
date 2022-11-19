@@ -129,7 +129,7 @@ Self.testOps = fun:
 
 
 
-const when = fun(cond, body: Expr) -> Expr:
+const when = fun(cond: Expr, body: Expr) -> Expr:
     quote(if splice(cond): splice(body) else: ())
 
 Self.testWhenRaw = fun:
@@ -160,6 +160,6 @@ Self.testCallArg = fun:
 
 
 // this will require changes to how functions are handled:
-//Self.testStaticArgAsReturnType = fun:
-//    const test = fun(t: static Type; x: t) -> t: x
-//    assert(test(Int, 123) == 123)
+Self.testStaticArgAsReturnType = fun:
+    const test = fun(t: static Type, x: t) -> t: x
+    assert(test(Int, 123) == 123)

@@ -5,6 +5,12 @@
 #include <string.h>
 
 
+enum allocator_type {
+    ALLOCATOR_TYPE_DEFAULT,
+    ALLOCATOR_TYPE_TRACKING,
+    ALLOCATOR_TYPE_ARENA,
+};
+
 
 /*
  * An allocator just provides an interface for alloc and a dealloc functions.
@@ -16,6 +22,7 @@ typedef void *(*alloc_func_t)(struct allocator *a, uint size);
 typedef void (*dealloc_func_t)(struct allocator *a, void *ptr, uint size);
 
 struct allocator {
+    enum allocator_type type;
     alloc_func_t alloc_func;
     dealloc_func_t dealloc_func;
 };
@@ -27,6 +34,11 @@ static inline void *allocate(struct allocator *a, uint size) {
 }
 static inline void deallocate(struct allocator *a, void *ptr, uint size) {
     a->dealloc_func(a, ptr, size);
+}
+static inline void *dup_memory(struct allocator *a, void *from_ptr, uint size) {
+    void *ptr = a->alloc_func(a, size);
+    memcpy(ptr, from_ptr, size);
+    return ptr;
 }
 
 /* this is a wrapper around the stdlib allocator */
@@ -96,6 +108,14 @@ void arena_allocator_cleanup(struct arena_allocator *arena);
 struct arena_mark arena_allocator_mark(struct arena_allocator *arena);
 void arena_allocator_reset(struct arena_allocator *arena, struct arena_mark mark);
 
+
+static inline struct allocator *free_capable_allocator(struct allocator *a) {
+    if (a->type != ALLOCATOR_TYPE_ARENA) {
+        return a;
+    }
+    struct arena_allocator *arena = (struct arena_allocator *)a;
+    return arena->base_allocator;
+}
 
 
 #endif

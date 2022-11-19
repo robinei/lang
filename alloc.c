@@ -14,6 +14,7 @@ static void default_dealloc(struct allocator *a, void *ptr, uint size) {
 }
 
 struct allocator _default_allocator = {
+    .type = ALLOCATOR_TYPE_DEFAULT,
     .alloc_func = default_alloc,
     .dealloc_func = default_dealloc
 };
@@ -57,6 +58,7 @@ void tracking_allocator_destroy(struct tracking_allocator *ta) {
 }
 
 void tracking_allocator_init(struct tracking_allocator *ta, struct allocator *base_allocator) {
+    ta->a.type = ALLOCATOR_TYPE_TRACKING;
     ta->a.alloc_func = tracking_alloc;
     ta->a.dealloc_func = tracking_dealloc;
     ta->base_allocator = base_allocator;
@@ -121,6 +123,7 @@ void arena_allocator_destroy(struct arena_allocator *arena) {
 }
 
 void arena_allocator_init(struct arena_allocator *arena, struct allocator *base_allocator, uint buffer_size) {
+    arena->a.type = ALLOCATOR_TYPE_ARENA;
     arena->a.alloc_func = arena_alloc;
     arena->a.dealloc_func = arena_dealloc;
     arena->base_allocator = base_allocator;

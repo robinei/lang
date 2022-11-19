@@ -32,35 +32,30 @@ struct expr *expr_visit(struct expr_visit_ctx *ctx, struct expr *e) {
     return e;
 }
 
-static struct expr_decl *expr_decl_visit(struct expr_visit_ctx *ctx, struct expr_decl *decl) {
-    if (!decl) {
-        return NULL;
+static void expr_visit_fun_children(struct expr_visit_ctx *ctx, struct expr *e) {
+    assert(e->kind == EXPR_FUN);
+    e->fun.return_type_expr = expr_visit(ctx, e->fun.return_type_expr);
+    e->fun.body_expr = expr_visit(ctx, e->fun.body_expr);
+    struct fun_param params[MAX_PARAM];
+    for (uint i = 0; i < e->fun_param_count; ++i) {
+        params[i] = e->fun.params[i];
+        params[i].type_expr = expr_visit(ctx, e->fun.params[i].type_expr);
     }
-    struct expr_decl decl_new = *decl;
-    decl_new.next = expr_decl_visit(ctx, decl_new.next);
-    decl_new.type_expr = expr_visit(ctx, decl_new.type_expr);
-    decl_new.value_expr = expr_visit(ctx, decl_new.value_expr);
-    if (memcmp(&decl_new, decl, sizeof(struct expr_decl))) {
-        struct expr_decl *decl_copy = allocate(ctx->arena, sizeof(struct expr_decl));
-        *decl_copy = decl_new;
-        return decl_copy;
+    if (memcmp(params, e->fun.params, sizeof(struct fun_param) * e->fun_param_count)) {
+        e->fun.params = dup_memory(ctx->arena, params, sizeof(struct fun_param) * e->fun_param_count);
     }
-    return decl;
 }
 
-static struct expr_link *expr_call_arg_visit(struct expr_visit_ctx *ctx, struct expr_link *arg) {
-    if (!arg) {
-        return NULL;
+static void expr_visit_call_children(struct expr_visit_ctx *ctx, struct expr *e) {
+    assert(e->kind == EXPR_CALL);
+    e->call.callable_expr = expr_visit(ctx, e->call.callable_expr);
+    struct expr *args[MAX_PARAM];
+    for (uint i = 0; i < e->call.arg_count; ++i) {
+        args[i] = expr_visit(ctx, e->call.args[i]);
     }
-    struct expr_link arg_new = *arg;
-    arg_new.next = expr_call_arg_visit(ctx, arg_new.next);
-    arg_new.expr = expr_visit(ctx, arg_new.expr);
-    if (memcmp(&arg_new, arg, sizeof(struct expr_link))) {
-        struct expr_link *arg_copy = allocate(ctx->arena, sizeof(struct expr_link));
-        *arg_copy = arg_new;
-        return arg_copy;
+    if (memcmp(args, e->call.args, sizeof(struct expr *) * e->call.arg_count)) {
+        e->call.args = dup_memory(ctx->arena, args, sizeof(struct expr *) * e->call.arg_count);
     }
-    return arg;
 }
 
 void expr_visit_children(struct expr_visit_ctx *ctx, struct expr *e) {
@@ -69,9 +64,7 @@ void expr_visit_children(struct expr_visit_ctx *ctx, struct expr *e) {
     case EXPR_SYM:
         break;
     case EXPR_FUN:
-        e->fun.params = expr_decl_visit(ctx, e->fun.params);
-        e->fun.return_type_expr = expr_visit(ctx, e->fun.return_type_expr);
-        e->fun.body_expr = expr_visit(ctx, e->fun.body_expr);
+        expr_visit_fun_children(ctx, e);
         break;
     case EXPR_BLOCK:
         e->block.body_expr = expr_visit(ctx, e->block.body_expr);
@@ -95,8 +88,7 @@ void expr_visit_children(struct expr_visit_ctx *ctx, struct expr *e) {
         e->prim.arg_exprs[1] = expr_visit(ctx, e->prim.arg_exprs[1]);
         break;
     case EXPR_CALL:
-        e->call.callable_expr = expr_visit(ctx, e->call.callable_expr);
-        e->call.args = expr_call_arg_visit(ctx, e->call.args);
+        expr_visit_call_children(ctx, e);
         break;
     default:
         assert(NULL && "unexpected expr type");
@@ -282,7 +274,8 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         print_colored(ctx, KEYWORD_COLOR, "fun");
         if (e->fun.params) {
             print_colored(ctx, PAREN_COLOR, "(");
-            for (struct expr_decl *p = e->fun.params; p; p = p->next) {
+            for (uint i = 0; i < e->fun_param_count; ++i) {
+                struct fun_param *p = e->fun.params + i;
                 print_colored(ctx, SYMBOL_COLOR, "%s", p->name_expr->sym->data);
                 if (p->type_expr) {
                     print_colored(ctx, OPERATOR_COLOR, ": ");
@@ -291,8 +284,8 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
                     }
                     print_expr(ctx, p->type_expr);
                 }
-                if (p->next) {
-                    print_colored(ctx, OPERATOR_COLOR, "; ");
+                if (i + 1 < e->fun_param_count) {
+                    print_colored(ctx, OPERATOR_COLOR, ", ");
                 }
             }
             print_colored(ctx, PAREN_COLOR, ")");
@@ -333,12 +326,12 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         print_colored(ctx, KEYWORD_COLOR, "end");
         break;
     case EXPR_DEF:
-        if (e->flags & EXPR_FLAG_DEF_VAR) {
+        if (e->def_is_var) {
             print_colored(ctx, KEYWORD_COLOR, "var ");
         } else {
             print_colored(ctx, KEYWORD_COLOR, "const ");
         }
-        if (e->flags & EXPR_FLAG_DEF_STATIC) {
+        if (e->def_is_static) {
             print_colored(ctx, KEYWORD_COLOR, "static ");
         }
         print_expr(ctx, e->def.name_expr);
@@ -395,12 +388,11 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         }
         break;
     case EXPR_CALL: {
-        struct expr_link *arg;
         print_expr(ctx, e->call.callable_expr);
         print_colored(ctx, PAREN_COLOR, "(");
-        for (arg = e->call.args; arg; arg = arg->next) {
-            print_expr(ctx, arg->expr);
-            if (arg->next) {
+        for (uint i = 0; i < e->call.arg_count; ++i) {
+            print_expr(ctx, e->call.args[i]);
+            if (i + 1 < e->call.arg_count) {
                 print_colored(ctx, OPERATOR_COLOR, ", ");
             }
         }

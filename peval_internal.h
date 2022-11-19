@@ -9,9 +9,9 @@
     } while(0)
 
 
-static struct expr *expr_create(struct peval_ctx *ctx, uint expr_type, struct expr *antecedent) {
+static struct expr *expr_create(struct peval_ctx *ctx, enum expr_kind kind, struct expr *antecedent) {
     struct expr *e = allocate(ctx->arena, sizeof(struct expr));
-    e->kind = expr_type;
+    e->kind = kind;
     e->source_pos = antecedent ? antecedent->source_pos : 0;
     return e;
 }
@@ -27,18 +27,8 @@ static struct expr *dup_expr(struct peval_ctx *ctx, struct expr *e, struct expr 
     e_copy->source_pos = antecedent ? antecedent->source_pos : 0;
     return e_copy;
 }
-static struct expr_decl *dup_decl(struct peval_ctx *ctx, struct expr_decl *f) {
-    struct expr_decl *copy = allocate(ctx->arena, sizeof(struct expr_decl));
-    *copy = *f;
-    return copy;
-}
-static struct expr_link *dup_link(struct peval_ctx *ctx, struct expr_link *a) {
-    struct expr_link *copy = allocate(ctx->arena, sizeof(struct expr_link));
-    *copy = *a;
-    return copy;
-}
 
-static bool const_eq(struct peval_ctx *ctx, struct expr *a, struct expr *b) {
+static bool const_eq(struct expr *a, struct expr *b) {
     assert(a->kind == EXPR_CONST && b->kind == EXPR_CONST);
     if (a->t != b->t) {
         return false;
@@ -59,7 +49,7 @@ static bool const_eq(struct peval_ctx *ctx, struct expr *a, struct expr *b) {
     case TYPE_STRING:
         return slice_equals(a->c.string, b->c.string);
     default:
-        PEVAL_ERR(a, "equality not implemented for type");
+        assert(0 && "equality not implemented for type");
         return false;
     }
 }
