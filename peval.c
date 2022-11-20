@@ -1,10 +1,71 @@
 #include "peval.h"
-#include "peval_internal.h"
+#include "error.h"
 #include "fnv.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
+#include <assert.h>
 
-struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e);
+#define PEVAL_ERR(exp, ...) \
+    do { \
+        error_emit(ctx->err_ctx, ERROR_CATEGORY_ERROR, (exp)->source_pos, __VA_ARGS__); \
+        longjmp(ctx->error_jmp_buf, 1); \
+    } while(0)
+
+
+static struct expr *expr_create(struct peval_ctx *ctx, enum expr_kind kind, struct expr *antecedent) {
+    struct expr *e = allocate(ctx->arena, sizeof(struct expr));
+    e->kind = kind;
+    e->source_pos = antecedent ? antecedent->source_pos : 0;
+    return e;
+}
+static struct expr *unit_create(struct peval_ctx *ctx, struct expr *antecedent) {
+    struct expr *e = expr_create(ctx, EXPR_CONST, antecedent);
+    e->t = &type_unit;
+    return e;
+}
+
+static struct expr *dup_expr(struct peval_ctx *ctx, struct expr *e, struct expr *antecedent) {
+    struct expr *e_copy = allocate(ctx->arena, sizeof(struct expr));
+    *e_copy = *e;
+    e_copy->source_pos = antecedent ? antecedent->source_pos : 0;
+    return e_copy;
+}
+
+static bool const_eq(struct expr *a, struct expr *b) {
+    assert(a->kind == EXPR_CONST && b->kind == EXPR_CONST);
+    if (a->t != b->t) {
+        return false;
+    }
+    switch (a->t->kind) {
+    case TYPE_TYPE:
+        return a->c.type == b->c.type;
+    case TYPE_UNIT:
+        return true;
+    case TYPE_BOOL:
+        return a->c.boolean == b->c.boolean;
+    case TYPE_INT:
+        return a->c.integer == b->c.integer;
+    case TYPE_UINT:
+        return a->c.uinteger == b->c.uinteger;
+    case TYPE_REAL:
+        return a->c.real == b->c.real;
+    case TYPE_STRING:
+        return slice_equals(a->c.string, b->c.string);
+    default:
+        assert(0 && "equality not implemented for type");
+        return false;
+    }
+}
+
+static bool bool_value(struct peval_ctx *ctx, struct expr *e) {
+    assert(e->kind == EXPR_CONST);
+    if (e->t->kind != TYPE_BOOL) {
+        PEVAL_ERR(e, "expected bool");
+    }
+    return e->c.boolean;
+}
+
 
 
 static struct expr *peval_type(struct peval_ctx *ctx, struct expr *e) {
@@ -377,6 +438,315 @@ static struct expr *peval_if(struct peval_ctx *ctx, struct expr *e) {
 }
 
 
+
+
+
+
+
+#define ARG(N) (e_new.prim.arg_exprs[N])
+#define PEVAL_ARG(N) ARG(N) = peval(ctx, ARG(N))
+#define ARG_CONST(N) (ARG(N)->kind == EXPR_CONST)
+#define ARGS_CONST() ARG_CONST(0) && ARG_CONST(1)
+
+#define RETURN_CONST(type_ptr, value_field, value_expression) \
+    struct expr *res = expr_create(ctx, EXPR_CONST, e); \
+    res->t = type_ptr; \
+    res->c.value_field = value_expression; \
+    return res;
+
+#define RETURN_MODIFIED() return ARG(0) != e->prim.arg_exprs[0] || ARG(1) != e->prim.arg_exprs[1] ? dup_expr(ctx, &e_new, e) : e;
+
+#define BEGIN_UNOP_HANDLER() \
+    struct expr e_new = *e; \
+    PEVAL_ARG(0); \
+    if (ARG_CONST(0)) {
+
+#define END_UNOP_HANDLER() \
+        PEVAL_ERR(e, "bad type"); \
+    } \
+    RETURN_MODIFIED()
+
+#define UNOP(op, field) op ARG(0)->c.field
+
+#define HANDLE_BOOL_UNOP(op) \
+    BEGIN_UNOP_HANDLER() \
+        if(ARG(0)->t == &type_bool) { RETURN_CONST(&type_bool, boolean, UNOP(op, boolean)) } \
+    END_UNOP_HANDLER()
+    
+#define HANDLE_INT_UINT_UNOP(op) \
+    BEGIN_UNOP_HANDLER() \
+        if(ARG(0)->t == &type_int) { RETURN_CONST(&type_int, integer, UNOP(op, integer)) } \
+        if(ARG(0)->t == &type_uint) { RETURN_CONST(&type_uint, uinteger, UNOP(op, uinteger)) } \
+    END_UNOP_HANDLER()
+
+#define HANDLE_INT_UINT_REAL_UNOP(op) \
+    BEGIN_UNOP_HANDLER() \
+        if(ARG(0)->t == &type_int) { RETURN_CONST(&type_int, integer, UNOP(op, integer)) } \
+        if(ARG(0)->t == &type_uint) { RETURN_CONST(&type_uint, uinteger, UNOP(op, uinteger)) } \
+        if(ARG(0)->t == &type_real) { RETURN_CONST(&type_real, real, UNOP(op, real)) } \
+    END_UNOP_HANDLER()
+
+
+#define BEGIN_BINOP_HANDLER() \
+    struct expr e_new = *e; \
+    PEVAL_ARG(0); \
+    PEVAL_ARG(1); \
+    if (ARGS_CONST()) { \
+        if (ARG(0)->t != ARG(1)->t) { \
+            PEVAL_ERR(e, "type mismatch"); \
+        }
+
+#define END_BINOP_HANDLER() \
+        PEVAL_ERR(e, "bad types"); \
+    } \
+    RETURN_MODIFIED()
+
+#define BINOP(op, field) ARG(0)->c.field op ARG(1)->c.field
+
+#define HANDLE_INT_UINT_REAL_BINOP(op) \
+    BEGIN_BINOP_HANDLER() \
+        if (ARG(0)->t == &type_int) { RETURN_CONST(&type_int, integer, BINOP(op, integer)); } \
+        if (ARG(0)->t == &type_uint) { RETURN_CONST(&type_uint, uinteger, BINOP(op, uinteger)); } \
+        if (ARG(0)->t == &type_real) { RETURN_CONST(&type_real, real, BINOP(op, real)); } \
+    END_BINOP_HANDLER()
+
+#define HANDLE_INT_UINT_BINOP(op) \
+    BEGIN_BINOP_HANDLER() \
+        if (ARG(0)->t == &type_int) { RETURN_CONST(&type_int, integer, BINOP(op, integer)); } \
+        if (ARG(0)->t == &type_uint) { RETURN_CONST(&type_uint, uinteger, BINOP(op, uinteger)); } \
+    END_BINOP_HANDLER()
+
+#define HANDLE_CMP_BINOP(op) \
+    BEGIN_BINOP_HANDLER() \
+        if (ARG(0)->t == &type_int) { RETURN_CONST(&type_bool, boolean, BINOP(op, integer)); } \
+        if (ARG(0)->t == &type_uint) { RETURN_CONST(&type_bool, boolean, BINOP(op, uinteger)); } \
+        if (ARG(0)->t == &type_real) { RETURN_CONST(&type_bool, boolean, BINOP(op, real)); } \
+    END_BINOP_HANDLER()
+
+#define HANDLE_SHIFT_BINOP(op) \
+    struct expr e_new = *e; \
+    PEVAL_ARG(0); \
+    PEVAL_ARG(1); \
+    if (ARGS_CONST()) { \
+        if (ARG(1)->t == &type_int) { \
+            if (ARG(1)->c.integer < 0) { PEVAL_ERR(ARG(1), "can't shift by negative number"); } \
+        } else if (ARG(1)->t != &type_uint) { \
+            PEVAL_ERR(ARG(1), "can't shift by non-integer"); \
+        } \
+        if (ARG(0)->t == &type_int) { \
+            if (ARG(0)->c.integer < 0) { PEVAL_ERR(ARG(0), "can't shift negative number"); } \
+            RETURN_CONST(&type_int, integer, BINOP(op, integer)); \
+        } else if (ARG(0)->t == &type_uint) { \
+            RETURN_CONST(&type_uint, uinteger, BINOP(op, uinteger)); \
+        } else { \
+            PEVAL_ERR(ARG(0), "can't shift non-integer"); \
+        } \
+    } \
+    RETURN_MODIFIED()
+
+
+static struct expr *peval_plus(struct peval_ctx *ctx, struct expr *e) { HANDLE_INT_UINT_REAL_UNOP(+) }
+static struct expr *peval_negate(struct peval_ctx *ctx, struct expr *e) { HANDLE_INT_UINT_REAL_UNOP(-) }
+static struct expr *peval_logi_not(struct peval_ctx *ctx, struct expr *e) { HANDLE_BOOL_UNOP(!) }
+static struct expr *peval_bitwise_not(struct peval_ctx *ctx, struct expr *e) { HANDLE_INT_UINT_UNOP(~) }
+
+static struct expr *peval_assign(struct peval_ctx *ctx, struct expr *e) {
+    struct expr e_new = *e;
+    PEVAL_ARG(1);
+    if (ARG_CONST(1)) {
+        if (ARG(0)->kind != EXPR_PRIM || ARG(0)->prim.kind != PRIM_DOT) {
+            PEVAL_ERR(ARG(0), "invalid assignment target");
+        }
+        struct expr *field = ARG(0)->prim.arg_exprs[1];
+        if (field->kind != EXPR_SYM) {
+            PEVAL_ERR(field, "expected symbol");
+        }
+        struct expr *target = peval(ctx, ARG(0)->prim.arg_exprs[0]);
+        if (target->kind != EXPR_CONST || target->t != &type_type || target->c.type->kind != TYPE_STRUCT) {
+            PEVAL_ERR(field, "invalid assignment target");
+        }
+        struct type *type = target->c.type;
+        type_set_attr(type, field->sym, ARG(1));
+        return unit_create(ctx, e);
+    }
+    RETURN_MODIFIED()
+}
+
+static struct expr *peval_logi_or(struct peval_ctx *ctx, struct expr *e) {
+    struct expr e_new = *e;
+    PEVAL_ARG(0);
+    if (ARG_CONST(0)) {
+        return !bool_value(ctx, ARG(0)) ? peval(ctx, ARG(1)) : ARG(0);
+    }
+    RETURN_MODIFIED()
+}
+static struct expr *peval_logi_and(struct peval_ctx *ctx, struct expr *e) {
+    struct expr e_new = *e;
+    PEVAL_ARG(0);
+    if (ARG_CONST(0)) {
+        return bool_value(ctx, ARG(0)) ? peval(ctx, ARG(1)) : ARG(0);
+    }
+    RETURN_MODIFIED()
+}
+
+static struct expr *peval_bitwise_or(struct peval_ctx *ctx, struct expr *e) { HANDLE_INT_UINT_BINOP(|) }
+static struct expr *peval_bitwise_xor(struct peval_ctx *ctx, struct expr *e) { HANDLE_INT_UINT_BINOP(^) }
+static struct expr *peval_bitwise_and(struct peval_ctx *ctx, struct expr *e) { HANDLE_INT_UINT_BINOP(&) }
+
+static struct expr *peval_eq(struct peval_ctx *ctx, struct expr *e) {
+    struct expr e_new = *e;
+    PEVAL_ARG(0);
+    PEVAL_ARG(1);
+    if (ARGS_CONST()) {
+        RETURN_CONST(&type_bool, boolean,  const_eq(ARG(0), ARG(1)))
+    }
+    RETURN_MODIFIED()
+}
+static struct expr *peval_neq(struct peval_ctx *ctx, struct expr *e) {
+    struct expr e_new = *e;
+    PEVAL_ARG(0);
+    PEVAL_ARG(1);
+    if (ARGS_CONST()) {
+        RETURN_CONST(&type_bool, boolean, !const_eq(ARG(0), ARG(1)))
+    }
+    RETURN_MODIFIED()
+}
+
+static struct expr *peval_lt(struct peval_ctx *ctx, struct expr *e) { HANDLE_CMP_BINOP(<) }
+static struct expr *peval_gt(struct peval_ctx *ctx, struct expr *e) { HANDLE_CMP_BINOP(>) }
+static struct expr *peval_lteq(struct peval_ctx *ctx, struct expr *e) { HANDLE_CMP_BINOP(<=) }
+static struct expr *peval_gteq(struct peval_ctx *ctx, struct expr *e) { HANDLE_CMP_BINOP(>=) }
+
+static struct expr *peval_bitwise_lsh(struct peval_ctx *ctx, struct expr *e) { HANDLE_SHIFT_BINOP(<<) }
+static struct expr *peval_bitwise_rsh(struct peval_ctx *ctx, struct expr *e) { HANDLE_SHIFT_BINOP(>>) }
+
+static struct expr *peval_add(struct peval_ctx *ctx, struct expr *e) { HANDLE_INT_UINT_REAL_BINOP(+) }
+static struct expr *peval_sub(struct peval_ctx *ctx, struct expr *e) { HANDLE_INT_UINT_REAL_BINOP(-) }
+static struct expr *peval_mul(struct peval_ctx *ctx, struct expr *e) { HANDLE_INT_UINT_REAL_BINOP(*) }
+static struct expr *peval_div(struct peval_ctx *ctx, struct expr *e) { HANDLE_INT_UINT_REAL_BINOP(/) }
+static struct expr *peval_mod(struct peval_ctx *ctx, struct expr *e) { HANDLE_INT_UINT_BINOP(%) }
+
+static struct expr *peval_dot(struct peval_ctx *ctx, struct expr *e) {
+    struct expr e_new = *e;
+    if (ARG(1)->kind != EXPR_SYM) {
+        PEVAL_ERR(ARG(1), "expected symbol");
+    }
+    PEVAL_ARG(0);
+    if (ARG_CONST(0)) {
+        if (ARG(0)->t != &type_type) {
+            PEVAL_ERR(ARG(0), "expected type");
+        }
+        struct expr *sym = ARG(1);
+        struct type *type = ARG(0)->c.type;
+        struct expr *res = type_get_attr(type, sym->sym);
+        if (!res) {
+            PEVAL_ERR(sym, "non-existing attribute: %s", sym->sym->data);
+        }
+        return dup_expr(ctx, res, e);
+    }
+    RETURN_MODIFIED()
+}
+
+static struct expr *peval_assert(struct peval_ctx *ctx, struct expr *e) {
+    struct expr e_new = *e;
+    PEVAL_ARG(0);
+    if (ARG_CONST(0)) {
+        ++ctx->mod_ctx->asserts_hit;
+        if (!bool_value(ctx, ARG(0))) {
+            ++ctx->mod_ctx->asserts_failed;
+            PEVAL_ERR(e, "assertion failure!");
+        }
+        return unit_create(ctx, e);
+    }
+    RETURN_MODIFIED()
+}
+
+static void splice_visitor(struct expr_visit_ctx *visit_ctx, struct expr *e) {
+    if (e->kind == EXPR_PRIM && e->prim.kind == PRIM_SPLICE) {
+        struct peval_ctx *ctx = visit_ctx->ctx;
+        struct expr *expr = peval(ctx, e->prim.arg_exprs[0]);
+        if (expr->kind != EXPR_CONST) {
+            PEVAL_ERR(e, "splice argument not computable at compile time");
+        }
+        if (expr->t->kind != TYPE_EXPR) {
+            PEVAL_ERR(e, "can only splice Expr values");
+        }
+        *e = *expr->c.expr;
+    }
+    else {
+        expr_visit_children(visit_ctx, e);
+    }
+}
+static struct expr *peval_quote(struct peval_ctx *ctx, struct expr *e) {
+    struct expr e_new = *e;
+    if (ctx->force_full_expansion) {
+        struct expr *res = expr_create(ctx, EXPR_CONST, e);
+        res->t = &type_expr;
+        res->c.expr = expr_run_visitor(ARG(0), splice_visitor, ctx, ctx->arena);
+        return res;
+    }
+    RETURN_MODIFIED()
+}
+
+static struct expr *peval_splice(struct peval_ctx *ctx, struct expr *e) {
+    struct expr e_new = *e;
+    ++ctx->force_full_expansion;
+    PEVAL_ARG(0);
+    --ctx->force_full_expansion;
+    if (!ARG_CONST(0)) {
+        PEVAL_ERR(e, "'splice' expected compile-time computable argument");
+    }
+    if (ARG(0)->t->kind != TYPE_EXPR) {
+        PEVAL_ERR(e, "'splice' expected argument of type 'Expr'");
+    }
+    return peval(ctx, ARG(0)->c.expr);
+}
+
+static struct expr *peval_print(struct peval_ctx *ctx, struct expr *e) {
+    struct expr e_new = *e;
+    PEVAL_ARG(0);
+    if (ctx->force_full_expansion) {
+        pretty_print(ARG(0));
+        return unit_create(ctx, e);
+    }
+    RETURN_MODIFIED()
+}
+
+static struct expr *peval_import(struct peval_ctx *ctx, struct expr *e) {
+    struct expr e_new = *e;
+    if (ctx->force_full_expansion) {
+        PEVAL_ARG(0);
+        if (!ARG_CONST(0)) {
+            PEVAL_ERR(e, "'import' expected compile-time computable argument");
+        }
+        if (ARG(0)->t->kind != TYPE_STRING) {
+            PEVAL_ERR(e, "'import' expected argument of type 'String'");
+        }
+        slice_t path = ARG(0)->c.string;
+        struct module_ctx *mod_ctx = module_load(ctx->global_ctx, ctx->mod_ctx, path);
+        if (!mod_ctx) {
+            PEVAL_ERR(e, "error importing module '%.*s'", path.len, path.ptr);
+        }
+        // TODO: modules should be in a global registry
+        struct expr *res = expr_create(ctx, EXPR_CONST, e);
+        res->t = &type_type;
+        res->c.type = mod_ctx->module_type;
+        return res;
+    }
+    RETURN_MODIFIED()
+}
+
+static struct expr *peval_static(struct peval_ctx *ctx, struct expr *e) {
+    struct expr e_new = *e;
+    ++ctx->force_full_expansion;
+    PEVAL_ARG(0);
+    --ctx->force_full_expansion;
+    return ARG(0);
+    RETURN_MODIFIED()
+}
+
+
+
 struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
     assert(ctx);
     assert(ctx->scope);
@@ -392,9 +762,43 @@ struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
     case EXPR_FUN:      result = peval_fun(ctx, e); break;
     case EXPR_BLOCK:    result = peval_block(ctx, e); break;
     case EXPR_DEF:      result = peval_def(ctx, e); break;
-    case EXPR_PRIM:     result = peval_prim(ctx, e); break;
     case EXPR_CALL:     result = peval_call(ctx, e); break;
     case EXPR_COND:     result = peval_if(ctx, e); break;
+    case EXPR_PRIM:
+        switch (e->prim.kind) {
+        case PRIM_PLUS:         result = peval_plus(ctx, e); break;
+        case PRIM_NEGATE:       result = peval_negate(ctx, e); break;
+        case PRIM_LOGI_NOT:     result = peval_logi_not(ctx, e); break;
+        case PRIM_BITWISE_NOT:  result = peval_bitwise_not(ctx, e); break;
+        case PRIM_ASSIGN:       result = peval_assign(ctx, e); break;
+        case PRIM_LOGI_OR:      result = peval_logi_or(ctx, e); break;
+        case PRIM_LOGI_AND:     result = peval_logi_and(ctx, e); break;
+        case PRIM_BITWISE_OR:   result = peval_bitwise_or(ctx, e); break;
+        case PRIM_BITWISE_XOR:  result = peval_bitwise_xor(ctx, e); break;
+        case PRIM_BITWISE_AND:  result = peval_bitwise_and(ctx, e); break;
+        case PRIM_EQ:           result = peval_eq(ctx, e); break;
+        case PRIM_NEQ:          result = peval_neq(ctx, e); break;
+        case PRIM_LT:           result = peval_lt(ctx, e); break;
+        case PRIM_GT:           result = peval_gt(ctx, e); break;
+        case PRIM_LTEQ:         result = peval_lteq(ctx, e); break;
+        case PRIM_GTEQ:         result = peval_gteq(ctx, e); break;
+        case PRIM_BITWISE_LSH:  result = peval_bitwise_lsh(ctx, e); break;
+        case PRIM_BITWISE_RSH:  result = peval_bitwise_rsh(ctx, e); break;
+        case PRIM_ADD:          result = peval_add(ctx, e); break;
+        case PRIM_SUB:          result = peval_sub(ctx, e); break;
+        case PRIM_MUL:          result = peval_mul(ctx, e); break;
+        case PRIM_DIV:          result = peval_div(ctx, e); break;
+        case PRIM_MOD:          result = peval_mod(ctx, e); break;
+        case PRIM_DOT:          result = peval_dot(ctx, e); break;
+        case PRIM_ASSERT:       result = peval_assert(ctx, e); break;
+        case PRIM_QUOTE:        result = peval_quote(ctx, e); break;
+        case PRIM_SPLICE:       result = peval_splice(ctx, e); break;
+        case PRIM_PRINT:        result = peval_print(ctx, e); break;
+        case PRIM_IMPORT:       result = peval_import(ctx, e); break;
+        case PRIM_STATIC:       result = peval_static(ctx, e); break;
+        default: assert(0 && "unknown primitive kind"); break;
+        }
+        break;
     default:
         assert(0 && "unknown expression kind");
         break;
@@ -404,6 +808,8 @@ struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
     }
     return result;
 }
+
+
 
 void peval_ctx_init(struct peval_ctx *ctx, struct module_ctx *mod_ctx) {
     memset(ctx, 0, sizeof(struct peval_ctx));

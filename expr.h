@@ -4,58 +4,53 @@
 #include "type.h"
 #include "slice.h"
 
-#define FOR_ALL_PRIMS(X) \
-    X(PLUS) \
-    X(NEGATE) \
-    X(LOGI_NOT) \
-    X(BITWISE_NOT) \
-    X(ASSIGN) \
-    X(LOGI_OR) \
-    X(LOGI_AND) \
-    X(BITWISE_OR) \
-    X(BITWISE_XOR) \
-    X(BITWISE_AND) \
-    X(EQ) \
-    X(NEQ) \
-    X(LT) \
-    X(GT) \
-    X(LTEQ) \
-    X(GTEQ) \
-    X(BITWISE_LSH) \
-    X(BITWISE_RSH) \
-    X(ADD) \
-    X(SUB) \
-    X(MUL) \
-    X(DIV) \
-    X(MOD) \
-    X(DOT) \
-    X(ASSERT) \
-    X(QUOTE) \
-    X(SPLICE) \
-    X(PRINT) \
-    X(IMPORT) \
-    X(STATIC)
 
-#define DECL_PRIM_ENUM(name) PRIM_##name,
-enum prim_kind { FOR_ALL_PRIMS(DECL_PRIM_ENUM) };
-#undef DECL_PRIM_ENUM
+enum prim_kind {
+    PRIM_PLUS,
+    PRIM_NEGATE,
+    PRIM_LOGI_NOT,
+    PRIM_BITWISE_NOT,
+    PRIM_ASSIGN,
+    PRIM_LOGI_OR,
+    PRIM_LOGI_AND,
+    PRIM_BITWISE_OR,
+    PRIM_BITWISE_XOR,
+    PRIM_BITWISE_AND,
+    PRIM_EQ,
+    PRIM_NEQ,
+    PRIM_LT,
+    PRIM_GT,
+    PRIM_LTEQ,
+    PRIM_GTEQ,
+    PRIM_BITWISE_LSH,
+    PRIM_BITWISE_RSH,
+    PRIM_ADD,
+    PRIM_SUB,
+    PRIM_MUL,
+    PRIM_DIV,
+    PRIM_MOD,
+    PRIM_DOT,
+    PRIM_ASSERT,
+    PRIM_QUOTE,
+    PRIM_SPLICE,
+    PRIM_PRINT,
+    PRIM_IMPORT,
+    PRIM_STATIC,
+};
 
 
-#define FOR_ALL_EXPRS(X) \
-    X(CONST) \
-    X(SYM) \
-    X(FUN) \
-    X(DEF) \
-    X(BLOCK) \
-    X(STRUCT) \
-    X(SELF) \
-    X(COND) \
-    X(PRIM) \
-    X(CALL)
-
-#define DECL_EXPR_ENUM(name) EXPR_##name,
-enum expr_kind { FOR_ALL_EXPRS(DECL_EXPR_ENUM) };
-#undef DECL_EXPR_ENUM
+enum expr_kind {
+    EXPR_CONST,
+    EXPR_SYM,
+    EXPR_FUN,
+    EXPR_DEF,
+    EXPR_BLOCK,
+    EXPR_STRUCT,
+    EXPR_SELF,
+    EXPR_COND,
+    EXPR_CALL,
+    EXPR_PRIM,
+};
 
 
 #define MAX_PARAM 128
