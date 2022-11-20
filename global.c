@@ -1,11 +1,6 @@
 #include "global.h"
-#include "mod.h"
 #include "expr.h"
 #include <string.h>
-
-static bool is_const_fun(struct expr *e) {
-    return e && e->kind == EXPR_CONST && e->t->kind == TYPE_FUN;
-}
 
 static struct scope *scope_create_root(struct allocator *alloc) {
     struct scope *scope = allocate(alloc, sizeof(struct scope));
@@ -24,9 +19,6 @@ struct scope *scope_create(struct allocator *alloc, struct scope *parent) {
 
 void scope_define(struct scope *scope, struct symbol *sym, struct expr *e) {
     hashtable_put(SCOPE_HASHTABLE, scope->table, sym, e);
-    if (is_const_fun(e) && !e->c.fun->name) {
-        e->c.fun->name = sym;
-    }
 }
 
 struct expr *scope_lookup(struct scope *scope, struct symbol *sym) {

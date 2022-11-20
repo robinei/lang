@@ -241,7 +241,6 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
         check_type(ctx, body_expr, return_type_expr);
 
         new_func = create_function(ctx);
-        new_func->name = func->name;
         new_func->env = func->env;
         new_func->fun_expr = expr_create(ctx, EXPR_FUN, fun_expr);
         new_func->fun_expr->fun.params = dup_memory(ctx->arena, params, sizeof(struct fun_param) * remaining_arg_count);
@@ -395,7 +394,6 @@ static struct expr *peval_fun(struct peval_ctx *ctx, struct expr *e) {
         result->c.type = &type_fun;
     } else {
         struct function *func = create_function(ctx);
-        func->name = ctx->sym_lambda;
         func->fun_expr = e;
         func->env = ctx->scope;
 
@@ -818,7 +816,6 @@ void peval_ctx_init(struct peval_ctx *ctx, struct module_ctx *mod_ctx) {
     ctx->global_ctx = mod_ctx->global_ctx;
     ctx->mod_ctx = mod_ctx;
     ctx->err_ctx = &mod_ctx->err_ctx;
-    ctx->sym_lambda = intern_string(&mod_ctx->global_ctx->symbol_table, "lambda");
     ctx->scope = mod_ctx->global_ctx->global_scope;
     assert(ctx->scope);
 }

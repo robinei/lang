@@ -261,7 +261,7 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
             print_colored(ctx, STRING_COLOR, "\"%.*s\"", e->c.string.len, e->c.string.ptr);
             break;
         case TYPE_FUN:
-            print_colored(ctx, COLOR_NORMAL, "<fun:%s>", e->c.fun->name->data);
+            print_colored(ctx, COLOR_NORMAL, "<fun>");
             break;
         default:
             print_colored(ctx, COLOR_NORMAL, "<const:%s>", type_names[e->t->kind]);

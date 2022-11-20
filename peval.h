@@ -16,8 +16,6 @@ struct peval_ctx {
     uint force_full_expansion;
 
     jmp_buf error_jmp_buf;
-
-    struct symbol *sym_lambda;
 };
 
 void peval_ctx_init(struct peval_ctx *ctx, struct module_ctx *mod_ctx);

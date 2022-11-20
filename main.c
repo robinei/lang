@@ -51,7 +51,7 @@ static void run_tests(char *filename) {
         memset(&call_expr, 0, sizeof(struct expr));
         call_expr.kind = EXPR_CALL;
         call_expr.call.callable_expr = e;
-        printf("\nrunning test function: %s\n", func->name->data);
+        printf("\nrunning test function: %s\n", name->data);
         fflush(stdout);
         pretty_print_indented(func->fun_expr, 1);
 
