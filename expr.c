@@ -7,16 +7,6 @@
 #include <assert.h>
 #include <inttypes.h>
 
-#define DECL_PRIM_NAME(name) #name,
-const char *prim_names[] = {
-    FOR_ALL_PRIMS(DECL_PRIM_NAME)
-};
-
-#define DECL_EXPR_NAME(name) #name,
-const char *expr_names[] = {
-    FOR_ALL_EXPRS(DECL_EXPR_NAME)
-};
-
 
 struct expr *expr_visit(struct expr_visit_ctx *ctx, struct expr *e) {
     if (!e) {
@@ -46,6 +36,17 @@ static void expr_visit_fun_children(struct expr_visit_ctx *ctx, struct expr *e) 
     }
 }
 
+static void expr_visit_block_children(struct expr_visit_ctx *ctx, struct expr *e) {
+    assert(e->kind == EXPR_BLOCK);
+    struct expr *exprs[MAX_PARAM];
+    for (uint i = 0; i < e->block.expr_count; ++i) {
+        exprs[i] = expr_visit(ctx, e->block.exprs[i]);
+    }
+    if (memcmp(exprs, e->block.exprs, sizeof(struct expr *) * e->block.expr_count)) {
+        e->block.exprs = dup_memory(ctx->arena, exprs, sizeof(struct expr *) * e->block.expr_count);
+    }
+}
+
 static void expr_visit_call_children(struct expr_visit_ctx *ctx, struct expr *e) {
     assert(e->kind == EXPR_CALL);
     e->call.callable_expr = expr_visit(ctx, e->call.callable_expr);
@@ -67,7 +68,7 @@ void expr_visit_children(struct expr_visit_ctx *ctx, struct expr *e) {
         expr_visit_fun_children(ctx, e);
         break;
     case EXPR_BLOCK:
-        e->block.body_expr = expr_visit(ctx, e->block.body_expr);
+        expr_visit_block_children(ctx, e);
         break;
     case EXPR_DEF:
         e->def.type_expr = expr_visit(ctx, e->def.type_expr);
@@ -318,9 +319,11 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
     case EXPR_BLOCK:
         print_colored(ctx, KEYWORD_COLOR, "begin\n");
         ++ctx->indent;
-        print_indent(ctx);
-        print_expr(ctx, e->block.body_expr);
-        print(ctx, "\n");
+        for (uint i = 0; i < e->block.expr_count; ++i) {
+            print_indent(ctx);
+            print_expr(ctx, e->block.exprs[i]);
+            print(ctx, "\n");
+        }
         --ctx->indent;
         print_indent(ctx);
         print_colored(ctx, KEYWORD_COLOR, "end");
@@ -353,12 +356,6 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         case PRIM_NEGATE: print_unop(ctx, "-", e); break;
         case PRIM_LOGI_NOT: print_unop(ctx, "not ", e); break;
         case PRIM_BITWISE_NOT: print_unop(ctx, "~", e); break;
-        case PRIM_SEQ:
-            print_expr(ctx, e->prim.arg_exprs[0]);
-            print_colored(ctx, OPERATOR_COLOR, ";\n");
-            print_indent(ctx);
-            print_expr(ctx, e->prim.arg_exprs[1]);
-            break;
         case PRIM_ASSIGN: print_binop(ctx, " = ", e); break;
         case PRIM_LOGI_OR: print_binop(ctx, " or ", e); break;
         case PRIM_LOGI_AND: print_binop(ctx, " and ", e); break;

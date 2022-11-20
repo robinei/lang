@@ -50,9 +50,9 @@ enum {
 static struct expr *parse_infix(struct parse_ctx *ctx, int min_precedence);
 
 
-static struct expr *expr_create(struct parse_ctx *ctx, uint expr_type, char *start) {
+static struct expr *expr_create(struct parse_ctx *ctx, enum expr_kind kind, char *start) {
     struct expr *e = allocate(ctx->arena, sizeof(struct expr));
-    e->kind = expr_type;
+    e->kind = kind;
     e->source_pos = start - ctx->mod_ctx->source_text.ptr;
     return e;
 }
@@ -370,8 +370,9 @@ static struct expr *parse_number(struct parse_ctx *ctx) {
 }
 
 static struct expr *parse_expr_seq_at_indent(struct parse_ctx *ctx, int indent_to_keep) {
-    struct expr *result = NULL;
-    struct expr *last_seq = NULL;
+    char *start = ctx->ptr;
+    struct expr *exprs[MAX_BLOCK];
+    uint expr_count = 0;
     for (;;) {
         skip_whitespace(ctx);
         switch (*ctx->ptr) {
@@ -389,19 +390,21 @@ static struct expr *parse_expr_seq_at_indent(struct parse_ctx *ctx, int indent_t
         if (ctx->current_indent < indent_to_keep) {
             break;
         }
-        struct expr *e = parse_infix(ctx, PREC_LOWEST); /* allow '=' */
-        if (!result) {
-            result = e;
-        } else if (!last_seq) {
-            result = last_seq = prim_create_bin(ctx, PRIM_SEQ, result, e, ctx->mod_ctx->source_text.ptr + result->source_pos);
-        } else {
-            last_seq = last_seq->prim.arg_exprs[1] = prim_create_bin(ctx, PRIM_SEQ, last_seq->prim.arg_exprs[1], e, ctx->mod_ctx->source_text.ptr + last_seq->prim.arg_exprs[1]->source_pos);
+        if (expr_count == MAX_BLOCK) {
+            PARSE_ERR("too many expressions in block");
         }
+        exprs[expr_count++] = parse_infix(ctx, PREC_LOWEST); /* allow '=' */
     }
 out:
-    if (!result) {
+    if (expr_count == 0) {
         PARSE_ERR("expected block expression");
     }
+    if (expr_count == 1 && exprs[0]->kind != EXPR_DEF) {
+        return exprs[0];
+    }
+    struct expr *result = expr_create(ctx, EXPR_BLOCK, start);
+    result->block.exprs = dup_memory(ctx->arena, exprs, sizeof(struct expr *) * expr_count);
+    result->block.expr_count = expr_count;
     return result;
 }
 static struct expr *parse_expr_seq(struct parse_ctx *ctx) {
@@ -412,7 +415,11 @@ static struct expr *parse_expr_seq(struct parse_ctx *ctx) {
         // if an expression starts on the same line as a "block starter",
         // then expect a single-line expression for this block
         ctx->skip_newline = prev_skip_newline;
-        return parse_expr(ctx);
+        struct expr *result = parse_expr(ctx);
+        if (result->kind == EXPR_DEF) {
+            PARSE_ERR("definition not expected");
+        }
+        return result;
     }
     int initial_indent = ctx->current_indent;
     move_to_next_line(ctx);
@@ -423,27 +430,10 @@ static struct expr *parse_expr_seq(struct parse_ctx *ctx) {
     ctx->skip_newline = prev_skip_newline;
     return result;
 }
-static struct expr *maybe_wrap_in_block(struct parse_ctx *ctx, struct expr *e, char *start) {
-    if (e->kind == EXPR_BLOCK) {
-        return e; /* avoid redundant block in block */
-    }
-    if (e->kind != EXPR_DEF && (e->kind != EXPR_PRIM || e->prim.kind != PRIM_SEQ)) {
-        return e; /* avoid redundant wrapping of single non-def expression */
-    }
-    struct expr *result = expr_create(ctx, EXPR_BLOCK, start);
-    result->block.body_expr = e;
-    return result;
-}
-static struct expr *parse_expr_seq_and_wrap_in_block(struct parse_ctx *ctx) {
-    char *start = ctx->ptr;
-    struct expr *body = parse_expr_seq(ctx);
-    return maybe_wrap_in_block(ctx, body, start);
-}
 static struct expr *parse_do(struct parse_ctx *ctx, char *start) {
     skip_whitespace(ctx);
     expect_char(ctx, ':', "after 'do'");
-    struct expr *body = parse_expr_seq(ctx);
-    return maybe_wrap_in_block(ctx, body, start);
+    return parse_expr_seq(ctx);
 }
 static struct expr *parse_struct(struct parse_ctx *ctx, char *start) {
     skip_whitespace(ctx);
@@ -469,6 +459,9 @@ static struct expr *parse_fun(struct parse_ctx *ctx, bool is_type, char *start) 
         skip_whitespace(ctx);
 
         while (!match_char(ctx, ')')) {
+            if (param_count == MAX_PARAM) {
+                PARSE_ERR("too many parameters");
+            }
             struct fun_param *param = &params[param_count++];
             memset(param, 0, sizeof(*param));
             
@@ -507,7 +500,7 @@ static struct expr *parse_fun(struct parse_ctx *ctx, bool is_type, char *start) 
     if (!is_type) {
         expect_char(ctx, ':', "before 'fun' body");
         skip_whitespace(ctx);
-        body_expr = parse_expr_seq_and_wrap_in_block(ctx);
+        body_expr = parse_expr_seq(ctx);
     } else {
         if (type_count != param_count) {
             PARSE_ERR("incomplete parameter types in preceding function type definition");
@@ -566,7 +559,7 @@ static struct expr *parse_if(struct parse_ctx *ctx, bool is_elif, char *start) {
     skip_whitespace(ctx);
     expect_char(ctx, ':', "after 'if' condition");
     int then_indent = ctx->current_indent;
-    struct expr *then_expr = parse_expr_seq_and_wrap_in_block(ctx);
+    struct expr *then_expr = parse_expr_seq(ctx);
     char *after_then = ctx->ptr;
     skip_whitespace(ctx);
     ctx->skip_newline = prev_skip_newline;
@@ -577,7 +570,7 @@ static struct expr *parse_if(struct parse_ctx *ctx, bool is_elif, char *start) {
     if (ctx->current_indent == then_indent && match_keyword(ctx, "else")) {
         skip_whitespace(ctx);
         expect_char(ctx, ':', "after 'else'");
-        else_expr = parse_expr_seq_and_wrap_in_block(ctx);
+        else_expr = parse_expr_seq(ctx);
     } else if (ctx->current_indent == then_indent && match_keyword(ctx, "elif")) {
         else_expr = parse_if(ctx, true, after_then);
     } else {
@@ -747,6 +740,9 @@ static struct expr *parse_call(struct parse_ctx *ctx, struct expr *callable_expr
     struct expr *args[MAX_PARAM];
     uint arg_count = 0;
     while (!match_char(ctx, ')')) {
+        if (arg_count == MAX_PARAM) {
+            PARSE_ERR("too many arguments");
+        }
         args[arg_count++] = parse_expr(ctx);
         skip_whitespace(ctx);
         if (!match_char(ctx, ',')) {

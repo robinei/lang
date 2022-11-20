@@ -137,14 +137,6 @@ struct expr *peval_prim(struct peval_ctx *ctx, struct expr *e) {
     case PRIM_LOGI_NOT: HANDLE_BOOL_UNOP(!)
     case PRIM_BITWISE_NOT: HANDLE_INT_UINT_UNOP(~)
 
-    case PRIM_SEQ:
-        PEVAL_ARG(0);
-        PEVAL_ARG(1);
-        if (ARG_CONST(0)) {
-            return ARG(1);
-        }
-        break;
-
     case PRIM_ASSIGN:
         PEVAL_ARG(1);
         if (ARG_CONST(1)) {

@@ -9,7 +9,6 @@
     X(NEGATE) \
     X(LOGI_NOT) \
     X(BITWISE_NOT) \
-    X(SEQ) \
     X(ASSIGN) \
     X(LOGI_OR) \
     X(LOGI_AND) \
@@ -41,8 +40,6 @@
 enum prim_kind { FOR_ALL_PRIMS(DECL_PRIM_ENUM) };
 #undef DECL_PRIM_ENUM
 
-extern const char *prim_names[];
-
 
 #define FOR_ALL_EXPRS(X) \
     X(CONST) \
@@ -60,9 +57,9 @@ extern const char *prim_names[];
 enum expr_kind { FOR_ALL_EXPRS(DECL_EXPR_ENUM) };
 #undef DECL_EXPR_ENUM
 
-extern const char *expr_names[];
 
 #define MAX_PARAM 128
+#define MAX_BLOCK 1024
 
 struct fun_param {
     struct expr *name_expr;
@@ -92,7 +89,9 @@ struct expr {
         } fun;
 
         struct {
-            struct expr *body_expr;
+            struct expr **exprs;
+            uint expr_count;
+            bool creates_scope;
         } block;
 
         struct {

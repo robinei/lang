@@ -289,26 +289,34 @@ static struct expr *peval_def(struct peval_ctx *ctx, struct expr *e) {
 static struct expr *peval_block(struct peval_ctx *ctx, struct expr *e) {
     assert(e->kind == EXPR_BLOCK);
 
-    struct expr e_new = *e;
-    bool changed;
-
     struct scope *prev_scope = ctx->scope;
     assert(prev_scope);
     struct scope *scope = ctx->scope = scope_create(ctx->arena, ctx->scope, SCOPE_BLOCK);
 
-    struct expr *body = e_new.block.body_expr = peval(ctx, e->block.body_expr);
-    if (body->kind != EXPR_DEF && (body->kind != EXPR_PRIM || body->prim.kind != PRIM_SEQ)) {
-        e_new = *body;
-        changed = true;
-    } else {
-        changed = body != e->block.body_expr;
+    bool changed = false;
+    struct expr *exprs[MAX_BLOCK];
+    uint expr_count = 0;
+    for (uint i = 0; i < e->block.expr_count; ++i) {
+        exprs[expr_count] = peval(ctx, e->block.exprs[i]);
+        if (exprs[expr_count]->kind != EXPR_CONST || i + 1 == e->block.expr_count) {
+            changed = changed || exprs[expr_count] != e->block.exprs[i];
+            ++expr_count;
+        } else {
+            changed = true;
+        }
     }
 
     assert(ctx->scope == scope);
     assert(prev_scope == ctx->scope->parent);
     ctx->scope = prev_scope;
 
+    if (expr_count == 1 && exprs[0]->kind != EXPR_DEF) {
+        return exprs[0];
+    }
     if (changed) {
+        struct expr e_new = *e;
+        e_new.block.exprs = dup_memory(ctx->arena, exprs, sizeof(struct expr *) * expr_count);
+        e_new.block.expr_count = expr_count;
         return dup_expr(ctx, &e_new, e);
     }
     return e;
