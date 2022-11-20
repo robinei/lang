@@ -7,20 +7,13 @@
 #define SCOPE_HASHTABLE(X) X(scope_hashtable, struct symbol *, struct expr *, calc_ptr_hash, VALUE_EQ)
 DECLARE_HASHTABLE(SCOPE_HASHTABLE)
 
-enum scope_kind {
-    SCOPE_STRUCT,
-    SCOPE_FUNCTION,
-    SCOPE_BLOCK
-};
-
 struct scope {
-    enum scope_kind kind;
     struct scope *parent;
     struct type *self;
     struct scope_hashtable table;
 };
 
-struct scope *scope_create(struct allocator *alloc, struct scope *parent, enum scope_kind kind);
+struct scope *scope_create(struct allocator *alloc, struct scope *parent);
 void scope_define(struct scope *scope, struct symbol *sym, struct expr *e);
 struct expr *scope_lookup(struct scope *scope, struct symbol *sym);
 

@@ -9,16 +9,14 @@ static bool is_const_fun(struct expr *e) {
 
 static struct scope *scope_create_root(struct allocator *alloc) {
     struct scope *scope = allocate(alloc, sizeof(struct scope));
-    scope->kind = SCOPE_BLOCK;
     scope->parent = NULL;
     hashtable_init(SCOPE_HASHTABLE, scope->table, free_capable_allocator(alloc), 0);
     return scope;
 }
 
-struct scope *scope_create(struct allocator *alloc, struct scope *parent, enum scope_kind kind) {
+struct scope *scope_create(struct allocator *alloc, struct scope *parent) {
     assert(parent);
     struct scope *scope = allocate(alloc, sizeof(struct scope));
-    scope->kind = kind;
     scope->parent = parent;
     hashtable_init(SCOPE_HASHTABLE, scope->table, free_capable_allocator(alloc), 0);
     return scope;

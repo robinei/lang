@@ -120,7 +120,7 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
     
     struct scope *prev_scope = ctx->scope;
     assert(prev_scope);
-    struct scope *scope = ctx->scope = scope_create(ctx->arena, func->env, SCOPE_FUNCTION);
+    struct scope *scope = ctx->scope = scope_create(ctx->arena, func->env);
 
     union {
         struct arg_array specialized_args;
@@ -219,7 +219,7 @@ static struct expr *peval_struct(struct peval_ctx *ctx, struct expr *e) {
 
     struct scope *prev_scope = ctx->scope;
     assert(prev_scope);
-    struct scope *scope = ctx->scope = scope_create(ctx->arena, ctx->scope, SCOPE_STRUCT);
+    struct scope *scope = ctx->scope = scope_create(ctx->arena, ctx->scope);
 
     struct type *self = allocate(ctx->arena, sizeof(struct type));
     hashtable_init(TYPEATTR_HASHTABLE, self->attrs, &ctx->mod_ctx->alloc.a, 0);
@@ -291,7 +291,7 @@ static struct expr *peval_block(struct peval_ctx *ctx, struct expr *e) {
 
     struct scope *prev_scope = ctx->scope;
     assert(prev_scope);
-    struct scope *scope = ctx->scope = scope_create(ctx->arena, ctx->scope, SCOPE_BLOCK);
+    struct scope *scope = ctx->scope = scope_create(ctx->arena, ctx->scope);
 
     bool changed = false;
     struct expr *exprs[MAX_BLOCK];
