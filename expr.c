@@ -52,10 +52,10 @@ static void expr_visit_call_children(struct expr_visit_ctx *ctx, struct expr *e)
     e->call.callable_expr = expr_visit(ctx, e->call.callable_expr);
     struct expr *args[MAX_PARAM];
     for (uint i = 0; i < e->call.arg_count; ++i) {
-        args[i] = expr_visit(ctx, e->call.args[i]);
+        args[i] = expr_visit(ctx, e->call.arg_exprs[i]);
     }
-    if (memcmp(args, e->call.args, sizeof(struct expr *) * e->call.arg_count)) {
-        e->call.args = dup_memory(ctx->arena, args, sizeof(struct expr *) * e->call.arg_count);
+    if (memcmp(args, e->call.arg_exprs, sizeof(struct expr *) * e->call.arg_count)) {
+        e->call.arg_exprs = dup_memory(ctx->arena, args, sizeof(struct expr *) * e->call.arg_count);
     }
 }
 
@@ -277,7 +277,7 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
             print_colored(ctx, PAREN_COLOR, "(");
             for (uint i = 0; i < e->fun_param_count; ++i) {
                 struct fun_param *p = e->fun.params + i;
-                print_colored(ctx, SYMBOL_COLOR, "%s", p->name_expr->sym->data);
+                print_colored(ctx, SYMBOL_COLOR, "%s", p->name->data);
                 if (p->type_expr) {
                     print_colored(ctx, OPERATOR_COLOR, ": ");
                     if (p->is_static) {
@@ -337,7 +337,7 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         if (e->def_is_static) {
             print_colored(ctx, KEYWORD_COLOR, "static ");
         }
-        print_expr(ctx, e->def.name_expr);
+        print_colored(ctx, SYMBOL_COLOR, "%s", e->def.name->data);
         if (e->def.type_expr) {
             print_colored(ctx, OPERATOR_COLOR, ": ");
             print_expr(ctx, e->def.type_expr);
@@ -388,7 +388,7 @@ void print_expr(struct print_ctx *ctx, struct expr *e) {
         print_expr(ctx, e->call.callable_expr);
         print_colored(ctx, PAREN_COLOR, "(");
         for (uint i = 0; i < e->call.arg_count; ++i) {
-            print_expr(ctx, e->call.args[i]);
+            print_expr(ctx, e->call.arg_exprs[i]);
             if (i + 1 < e->call.arg_count) {
                 print_colored(ctx, OPERATOR_COLOR, ", ");
             }

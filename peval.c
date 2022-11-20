@@ -98,12 +98,14 @@ static void check_type(struct peval_ctx *ctx, struct expr *e, struct expr *e_typ
     }
 }
 
-#define FNV1A(location, seed) fnv1a((unsigned char *)&(location), sizeof(location), seed)
+
 
 struct arg_array {
     uint arg_count;
     struct expr *args[0];
 };
+
+#define FNV1A(location, seed) fnv1a((unsigned char *)&(location), sizeof(location), seed)
 
 static uint arg_array_hash(struct arg_array *a) {
     uint hash = FNV_SEED;
@@ -145,25 +147,23 @@ static struct function *create_function(struct peval_ctx *ctx) {
 static struct expr *create_new_call(struct peval_ctx *ctx, struct expr *orig_call, struct expr *callable, struct expr **args, uint arg_count) {
     bool changed = callable != orig_call->call.callable_expr || arg_count != orig_call->call.arg_count;
     for (int i = 0; !changed && i < arg_count; ++i) {
-        changed = args[i] != orig_call->call.args[i];
+        changed = args[i] != orig_call->call.arg_exprs[i];
     }
     if (!changed) {
         return orig_call;
     }
     struct expr temp = *orig_call;
     temp.call.callable_expr = callable;
-    temp.call.args = dup_memory(ctx->arena, args, sizeof(*args) * arg_count);
+    temp.call.arg_exprs = dup_memory(ctx->arena, args, sizeof(*args) * arg_count);
     return dup_memory(ctx->arena, &temp, sizeof(temp));
 }
 
 static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
-    assert(e->kind == EXPR_CALL);
-
     struct expr *callable = peval(ctx, e->call.callable_expr);
     uint arg_count = e->call.arg_count;
     struct expr *args[MAX_PARAM];
     for (uint i = 0; i < arg_count; ++i) {
-        args[i] = peval(ctx, e->call.args[i]);
+        args[i] = peval(ctx, e->call.arg_exprs[i]);
     }
 
     if (callable->kind != EXPR_CONST) {
@@ -204,16 +204,15 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
                 PEVAL_ERR(a, "expected static argument");
             }
             params_changed = true;
-            u.specialized_args.args[u.specialized_args.arg_count++] = args[i];
+            u.specialized_args.args[u.specialized_args.arg_count++] = a;
         } else {
-            args[remaining_arg_count] = args[i];
+            args[remaining_arg_count] = a;
             params[remaining_arg_count] = *p;
             params[remaining_arg_count].type_expr = type_expr;
             ++remaining_arg_count;
         }
 
-        assert(p->name_expr->kind == EXPR_SYM);
-        scope_define(ctx->scope, p->name_expr->sym, a);
+        scope_define(ctx->scope, p->name, a);
     }
 
     if (ctx->force_full_expansion) {
@@ -262,7 +261,6 @@ static struct expr *peval_call(struct peval_ctx *ctx, struct expr *e) {
 }
 
 static struct expr *peval_sym(struct peval_ctx *ctx, struct expr *e) {
-    assert(e->kind == EXPR_SYM);
     struct expr *val = scope_lookup(ctx->scope, e->sym);
     if (!val) {
         PEVAL_ERR(e, "symbol not in scope");
@@ -274,7 +272,6 @@ static struct expr *peval_sym(struct peval_ctx *ctx, struct expr *e) {
 }
 
 static struct expr *peval_struct(struct peval_ctx *ctx, struct expr *e) {
-    assert(e->kind == EXPR_STRUCT);
     struct expr *result = e;
 
     struct scope *prev_scope = ctx->scope;
@@ -302,7 +299,6 @@ static struct expr *peval_struct(struct peval_ctx *ctx, struct expr *e) {
 }
 
 static struct expr *peval_self(struct peval_ctx *ctx, struct expr *e) {
-    assert(e->kind == EXPR_SELF);
     assert(ctx->scope);
     struct type *self = NULL;
     for (struct scope *scope = ctx->scope; scope; scope = scope->parent) {
@@ -319,9 +315,6 @@ static struct expr *peval_self(struct peval_ctx *ctx, struct expr *e) {
 }
 
 static struct expr *peval_def(struct peval_ctx *ctx, struct expr *e) {
-    assert(e->kind == EXPR_DEF);
-    assert(e->def.name_expr);
-    assert(e->def.name_expr->kind == EXPR_SYM);
     assert(e->def.value_expr);
 
     struct expr e_new = *e;
@@ -330,7 +323,7 @@ static struct expr *peval_def(struct peval_ctx *ctx, struct expr *e) {
 
     bool changed;
     if (e_new.def.value_expr->kind == EXPR_CONST) {
-        scope_define(ctx->scope, e_new.def.name_expr->sym, e_new.def.value_expr);
+        scope_define(ctx->scope, e_new.def.name, e_new.def.value_expr);
         memset(&e_new, 0, sizeof(struct expr));
         e_new.kind = EXPR_CONST;
         e_new.t = &type_unit;
@@ -347,8 +340,6 @@ static struct expr *peval_def(struct peval_ctx *ctx, struct expr *e) {
 }
 
 static struct expr *peval_block(struct peval_ctx *ctx, struct expr *e) {
-    assert(e->kind == EXPR_BLOCK);
-
     struct scope *prev_scope = ctx->scope;
     assert(prev_scope);
     struct scope *scope = ctx->scope = scope_create(ctx->arena, ctx->scope);
@@ -383,7 +374,6 @@ static struct expr *peval_block(struct peval_ctx *ctx, struct expr *e) {
 }
 
 static struct expr *peval_fun(struct peval_ctx *ctx, struct expr *e) {
-    assert(e->kind == EXPR_FUN);
     struct expr *result;
 
     if (!e->fun.body_expr) {
@@ -405,8 +395,7 @@ static struct expr *peval_fun(struct peval_ctx *ctx, struct expr *e) {
     return result;
 }
 
-static struct expr *peval_if(struct peval_ctx *ctx, struct expr *e) {
-    assert(e->kind == EXPR_COND);
+static struct expr *peval_cond(struct peval_ctx *ctx, struct expr *e) {
     struct expr e_new = *e;
 
     struct expr *pred_expr = e_new.cond.pred_expr = peval(ctx, e->cond.pred_expr);
@@ -761,7 +750,7 @@ struct expr *peval(struct peval_ctx *ctx, struct expr *e) {
     case EXPR_BLOCK:    result = peval_block(ctx, e); break;
     case EXPR_DEF:      result = peval_def(ctx, e); break;
     case EXPR_CALL:     result = peval_call(ctx, e); break;
-    case EXPR_COND:     result = peval_if(ctx, e); break;
+    case EXPR_COND:     result = peval_cond(ctx, e); break;
     case EXPR_PRIM:
         switch (e->prim.kind) {
         case PRIM_PLUS:         result = peval_plus(ctx, e); break;

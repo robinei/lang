@@ -57,7 +57,7 @@ enum expr_kind {
 #define MAX_BLOCK 1024
 
 struct fun_param {
-    struct expr *name_expr;
+    struct symbol *name;
     struct expr *type_expr;
     bool is_static;
 };
@@ -90,7 +90,7 @@ struct expr {
         } block;
 
         struct {
-            struct expr *name_expr;
+            struct symbol *name;
             struct expr *type_expr;
             struct expr *value_expr;
         } def;
@@ -112,7 +112,7 @@ struct expr {
         
         struct {
             struct expr *callable_expr;
-            struct expr **args;
+            struct expr **arg_exprs;
             uint arg_count;
         } call;
     };

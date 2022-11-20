@@ -62,11 +62,6 @@ static struct expr *bool_create(struct parse_ctx *ctx, bool bool_value, char *st
     e->c.boolean = bool_value;
     return e;
 }
-static struct expr *symbol_create(struct parse_ctx *ctx, char *start) {
-    struct expr *e = expr_create(ctx, EXPR_SYM, start);
-    e->sym = intern_slice(&ctx->global_ctx->symbol_table, slice_from_str_len(start, ctx->ptr - start));
-    return e;
-}
 static struct expr *unit_create(struct parse_ctx *ctx, char *start) {
     struct expr *e = expr_create(ctx, EXPR_CONST, start);
     e->t = &type_unit;
@@ -78,6 +73,9 @@ static struct expr *prim_create_bin(struct parse_ctx *ctx, int prim, struct expr
     e->prim.arg_exprs[0] = lhs;
     e->prim.arg_exprs[1] = rhs;
     return e;
+}
+static struct symbol *symbol_create(struct parse_ctx *ctx, char *start) {
+    return intern_slice(&ctx->global_ctx->symbol_table, slice_from_str_len(start, ctx->ptr - start));
 }
 
 
@@ -467,7 +465,7 @@ static struct expr *parse_fun(struct parse_ctx *ctx, bool is_type, char *start) 
             
             char *sym_start = ctx->ptr;
             expect_ident(ctx, "in parameter list");
-            param->name_expr = symbol_create(ctx, sym_start);
+            param->name = symbol_create(ctx, sym_start);
             skip_whitespace(ctx);
 
             if (match_char(ctx, ':')) {
@@ -528,7 +526,7 @@ static struct expr *parse_def(struct parse_ctx *ctx, bool is_const, char *start)
     }
     char *sym_start = ctx->ptr;
     expect_ident(ctx, "in declaration");
-    struct expr *name_expr = symbol_create(ctx, sym_start);
+    struct symbol *name = symbol_create(ctx, sym_start);
     skip_whitespace(ctx);
     struct expr *type_expr = NULL;
     if (match_char(ctx, ':')) {
@@ -545,7 +543,7 @@ static struct expr *parse_def(struct parse_ctx *ctx, bool is_const, char *start)
     struct expr *e = expr_create(ctx, EXPR_DEF, start);
     e->def_is_var = !is_const;
     e->def_is_static = is_static;
-    e->def.name_expr = name_expr;
+    e->def.name = name;
     e->def.type_expr = type_expr;
     e->def.value_expr = value_expr;
     return e;
@@ -724,7 +722,9 @@ static struct expr *parse_atom(struct parse_ctx *ctx) {
     }
     
     if (match_ident(ctx)) {
-        return symbol_create(ctx, start);
+        struct expr *result = expr_create(ctx, EXPR_SYM, start);
+        result->sym = symbol_create(ctx, start);
+        return result;
     }
     PARSE_ERR("unexpected input while parsing atom");
 }
@@ -754,8 +754,8 @@ static struct expr *parse_call(struct parse_ctx *ctx, struct expr *callable_expr
     ctx->skip_newline = prev_skip_newline;
     struct expr *result = expr_create(ctx, EXPR_CALL, start);
     result->call.callable_expr = callable_expr;
-    result->call.args = allocate(ctx->arena, sizeof(struct expr *) * arg_count);
-    memcpy(result->call.args, args, sizeof(struct expr *) * arg_count);
+    result->call.arg_exprs = allocate(ctx->arena, sizeof(struct expr *) * arg_count);
+    memcpy(result->call.arg_exprs, args, sizeof(struct expr *) * arg_count);
     result->call.arg_count = arg_count;
     return result;
 }
@@ -773,7 +773,7 @@ static struct expr *macroify(struct parse_ctx *ctx, struct expr *call_expr) {
     struct expr *e = expr_create(ctx, EXPR_PRIM, ctx->mod_ctx->source_text.ptr + call_expr->source_pos);
     e->prim.kind = PRIM_SPLICE;
     e->prim.arg_exprs[0] = call_expr;
-    quote_args(ctx, call_expr->call.args, call_expr->call.arg_count);
+    quote_args(ctx, call_expr->call.arg_exprs, call_expr->call.arg_count);
     return e;
 }
 
